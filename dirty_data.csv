@@ -1,0 +1,12 @@
+Customer ID , Age , Gender , Purchase Amount (USD) , Location , Date , Active , Review Rating
+001 , 25 , Male , $1,200.50 , New York , 2024-01-01 , yes , 4.5
+002 ,  thirty , Female , 850 , los angeles , 01/15/2024 , YES , 5
+003 , 45 , male , €950,30 , Chicago , 2024/02/01 , no , 3.8
+004 , , Female , 1.200,00 , Houston , March 5 2024 , 1 , 
+005 , 29 , FEMALE , $- , Miami , 2024-13-01 , 0 , 4.2
+006 , 120 , Male , 999999 , Unknown , 2024-02-30 , true , 10
+007 , 35 , male , $300 , new york , 2024-03-01 , false , 3.5
+007 , 35 , male , $300 , new york , 2024-03-01 , false , 3.5
+008 , 27 , Female , $450.75 , San Francisco , 2024-03-10 , Yes , NaN
+009 , -5 , Male , $700 , Chicago , 2024-03-15 , No , 2
+010 , 40 , , $1,000 , Boston , invalid_date , yes , 4
