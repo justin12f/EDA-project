@@ -3,6 +3,7 @@ from abc import ABC , abstractmethod
 import numpy as np
 import pandas as pd
 from evaluation.score import Score
+from algorithms.optimizers.gradient_descent import GradientDescent
 
 
 class BaseLinearRegressionModel(ABC):
@@ -136,18 +137,118 @@ class MultipleLinearRegression(BaseLinearRegressionModel):
         return Score().get_score(y_true , self._y_pred)
 
 
+class BaseGradientDescentLinearRegression(BaseLinearRegressionModel):
+    """Base class for gradient descent linear regression models"""
+    def __init__(self) -> None :
+        self._x_matrix : np.ndarray = None
+        self._y_true : np.ndarray = None
+        self._y_pred : np.ndarray = None
+        self._loss_history : list[float] = None
+        self._iteration : int = None
+        self._converged : bool = None
+        self._coefficients : np.ndarray = None
+
+    @abstractmethod
+    def gradient_function(self,
+     x : np.ndarray,
+     y_true : np.ndarray,
+     beta : np.ndarray
+     ) -> np.ndarray:
+        """Calculate the gradient of the loss function"""
+
+    def fit(self , x : list[pd.Series] , y : pd.DataFrame[str]) -> None:
+        x_matrix = BuildDesignMatrix().build_design_matrix(x)
+        gradient_output = GradientDescent().optimize(self.gradient_function , x_matrix , y)
+        self._coefficients = gradient_output[0]
+        self._loss_history = gradient_output[1]
+        self._iteration = gradient_output[2]
+        self._converged = gradient_output[3]
+        self._y_true = y
+
+    def predict(self ,
+     x : np.ndarray | pd.DataFrame[str] | list[pd.Series]
+     ) -> np.ndarray:
+        """predict the y value"""
+        if self._coefficients is None :
+            raise ValueError("The model must be fitted before prediction")
+        x_matrix = BuildDesignMatrix().build_design_matrix(x)
+        y_pred = x_matrix @ self._coefficients
+        self._y_pred = y_pred
+        return y_pred
+
+    def score(self,
+     y_true : np.ndarray | pd.Series | list[pd.Series]
+     )-> dict[str, float]:
+        """calculate the score of the model"""
+        return Score().get_score(y_true , self._y_pred)
 
 
+class GradientDescentLinearRegression(BaseGradientDescentLinearRegression):
+    """Gradient descent linear regression model"""
+    def gradient_function(self,
+     x : np.ndarray,
+     y_true : np.ndarray,
+     beta : np.ndarray
+     ) -> np.ndarray:
+        """Calculate the gradient of the loss function"""
+        y_pred = x @ beta
+        gradient = np.mean((y_pred - y_true)* x , axis = 0)
+        return gradient
 
 
+class GradientDescentMultipleLinearRegression(BaseGradientDescentLinearRegression):
+    """Multiple Linear regresion using gradient descent"""
+    def gradient_function(self,
+     x : np.ndarray | pd.DataFrame[str] | list[pd.Series] ,
+     y_true : np.ndarray | pd.DataFrame[str] | list[pd.Series] , beta : np.ndarray
+     ) -> np.ndarray:
+        """Calculate the gradient of the loss function"""
+        y_pred = x @ beta
+        gradient = x.T @ (y_pred - y_true) / (len(y_true))
+        return gradient
+
+class SelectLinearRegression:
+    """Select the type of linear regression"""
+    def select(self ,
+     type_of_prediction : str = "gradient_descent" ,
+     complexity : str = "simple"
+     ) -> BaseLinearRegressionModel:
+        """Select the type of linear regression"""
+        match type_of_prediction , complexity:
+
+            case "gradient_descent" , "simple":
+                return GradientDescentLinearRegression()
+
+            case "gradient_descent" , "multiple":
+                return GradientDescentMultipleLinearRegression()
+
+            case "analytical" , "simple":
+                return AnalyticalLinearRegresion()
+
+            case "analytical" , "multiple":
+                return MultipleLinearRegression()
+
+            case _:
+                raise ValueError("Invalid type of linear regression")
 
 
+class LinearRegression:
+    """Dependency Injection for linear regression"""
+    def __init__ (self ,
+     type_of_prediction : str = "gradient_descent" ,
+     complexity : str = "simple"
+     ) -> None:
+        self._model = SelectLinearRegression().select(type_of_prediction , complexity)
 
+    def fit(self , x : list[pd.Series] , y : pd.DataFrame[str]) -> None:
+        """fit de  linear regresion"""
+        self._model.fit(x , y)
 
+    def predict(self , x : np.ndarray | pd.DataFrame[str] | list[pd.Series]) -> np.ndarray:
+        """predict the y value"""
+        return self._model.predict(x)
 
+    def score(self , y_true : np.ndarray | pd.Series | list[pd.Series]) -> dict[str,float]:
+        """calculate the score of the model"""
+        return self._model.score(y_true)
 
-
-
-
-
-    

@@ -97,8 +97,9 @@ class AnalyseDataSample(BaseDataAnalysis):
 #("trend_analysis", AnalyseTrendPatterns)      # Tendencia temporal
 class AnalyseTrendPatterns(BaseDataAnalysis):
     """Analyse the trend patterns of the dataframe"""
-    def analyse ( self ) :
+    def analyze (self):
         """return the trend patterns of the data frame"""
+        
 #("seasonality", AnalyseSeasonality)           # Patrones estacionales
 #("volatility", AnalyseVolatility)             # Volatilidad en series
 #("momentum", AnalyseMomentum)                 # Cambios acelerados
