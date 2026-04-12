@@ -44,7 +44,7 @@ class Interception:
         return beta0
 
 
-class AnalyticalLinearRegresion(BaseLinearRegressionModel):
+class AnalyticalLinearRegression(BaseLinearRegressionModel):
     """Linear regression model"""
     def __init__(self) -> None:
         self._slope : float = None
@@ -104,7 +104,7 @@ class OrdinaryLeastSquares:
         beta = np.linalg.solve(x.T @ x , x.T @ y)
         return beta
 
-class MultipleLinearRegression(BaseLinearRegressionModel):
+class AnalyticalMultipleLinearRegression(BaseLinearRegressionModel):
     """Multiple linear regression model"""
     def __init__(self) -> None:
         self._x_matrix : np.ndarray = None
@@ -207,38 +207,57 @@ class GradientDescentMultipleLinearRegression(BaseGradientDescentLinearRegressio
         gradient = x.T @ (y_pred - y_true) / (len(y_true))
         return gradient
 
-class SelectLinearRegression:
-    """Select the type of linear regression"""
-    def select(self ,
-     type_of_prediction : str = "gradient_descent" ,
-     complexity : str = "simple"
-     ) -> BaseLinearRegressionModel:
-        """Select the type of linear regression"""
-        match type_of_prediction , complexity:
+class LinearRegressionFactory:
+    """Factory for linear regression models"""
+    _registry : dict[ str , tuple[str , str , type[BaseLinearRegressionModel]]] = {}
 
-            case "gradient_descent" , "simple":
-                return GradientDescentLinearRegression()
+    @classmethod
+    def register(cls ,
+        type_of_prediction : str ,
+        complexity : str ,
+        model : BaseLinearRegressionModel
+        ) -> None:
+        """Register a new linear regression model"""
+        cls._registry[type_of_prediction , complexity] = model
 
-            case "gradient_descent" , "multiple":
-                return GradientDescentMultipleLinearRegression()
+    @classmethod
+    def create(cls ,
+        type_of_prediction : str
+        , complexity : str
+        ) -> BaseLinearRegressionModel:
+        """Create a linear regression model"""
+        model_data = cls._registry.get(type_of_prediction , complexity)
+        if model_data is None:
+            raise ValueError(
+                f"Linear regression model {type_of_prediction , complexity} not registered"
+                )
+        model = model_data
+        return model()
 
-            case "analytical" , "simple":
-                return AnalyticalLinearRegresion()
 
-            case "analytical" , "multiple":
-                return MultipleLinearRegression()
-
-            case _:
-                raise ValueError("Invalid type of linear regression")
-
+LinearRegressionFactory().register("gradient_descent"
+                                ,  "simple"
+                                ,  GradientDescentLinearRegression)
+LinearRegressionFactory().register("gradient_descent"
+                                ,  "multiple"
+                                ,  GradientDescentMultipleLinearRegression)
+LinearRegressionFactory().register("ordinary_least_squares"
+                                ,  "simple"
+                                ,  AnalyticalLinearRegression)
+LinearRegressionFactory().register("ordinary_least_squares"
+                                ,  "multiple"
+                                ,  AnalyticalMultipleLinearRegression)
 
 class LinearRegression:
     """Dependency Injection for linear regression"""
-    def __init__ (self ,
-     type_of_prediction : str = "gradient_descent" ,
-     complexity : str = "simple"
-     ) -> None:
-        self._model = SelectLinearRegression().select(type_of_prediction , complexity)
+    def __init__ (self,
+        type_of_prediction : str = "gradient_descent" ,
+        complexity : str = "simple"
+        ) -> None:
+        self._model = LinearRegressionFactory().create(
+            type_of_prediction
+            , complexity
+            )
 
     def fit(self , x : list[pd.Series] , y : pd.DataFrame[str]) -> None:
         """fit de  linear regresion"""
