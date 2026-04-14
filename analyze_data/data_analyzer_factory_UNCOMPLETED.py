@@ -2,6 +2,8 @@
 
 from abc import ABC, abstractmethod
 import pandas as pd
+import numpy as np
+from models.linear_regression import LinearRegression
 
 
 class BaseDataAnalysis(ABC):
@@ -11,15 +13,14 @@ class BaseDataAnalysis(ABC):
         self._data_frame = data_frame
 
     @abstractmethod
-    def analyze(self) -> any:
+    def analyze(self, **kwargs) -> any:
         """analyze the data frame and return the results"""
 
 
 class AnalyseDataTypes(BaseDataAnalysis):
     """Analyse the data types of the dataframe"""
 
-    @abstractmethod
-    def analyze(self) -> dict:
+    def analyze(self, **kwargs) -> dict:
         """Analyse the data type in the columns"""
         data_types: dict[tuple[str, str]] = {}
         for column in self._data_frame.columns:
@@ -31,7 +32,7 @@ class AnalyseDataTypes(BaseDataAnalysis):
 class AnalyseDataShape(BaseDataAnalysis):
     """Analyse the shape of the dataframe"""
 
-    def analyse(self) -> tuple[int, int]:
+    def analyze(self, **kwargs) -> tuple[int, int]:
         """Analyse the shape in the columns"""
         return self._data_frame.shape
 
@@ -39,7 +40,7 @@ class AnalyseDataShape(BaseDataAnalysis):
 class AnalyseDataInfo(BaseDataAnalysis):
     """Analyse the info of te data frame"""
 
-    def analyse(self) -> pd.DataFrame.info:
+    def analyze(self, **kwargs) -> pd.DataFrame.info:
         """return the summary of the dataframe info"""
         return self._data_frame.info
 
@@ -47,7 +48,7 @@ class AnalyseDataInfo(BaseDataAnalysis):
 class AnalyseDataDescribe(BaseDataAnalysis):
     """Analyse the describe of the dataframe"""
 
-    def analyse(self) -> pd.DataFrame.describe:
+    def analyze(self, **kwargs) -> pd.DataFrame.describe:
         """return the describe  of the data frame"""
         return self._data_frame.describe
 
@@ -55,7 +56,7 @@ class AnalyseDataDescribe(BaseDataAnalysis):
 class AnalyseDataColumns(BaseDataAnalysis):
     """Analyse the columns of the dataframe"""
 
-    def analyse(self) -> pd.DataFrame.columns:
+    def analyze(self, **kwargs) -> pd.DataFrame.columns:
         """return the columns of the data frame"""
         return self._data_frame.columns
 
@@ -63,7 +64,7 @@ class AnalyseDataColumns(BaseDataAnalysis):
 class AnalyseDataIndex(BaseDataAnalysis):
     """Analyse the index of the dataframe"""
 
-    def analyse(self) -> pd.DataFrame.index:
+    def analyze(self, **kwargs) -> pd.DataFrame.index:
         """return the index of the data frame"""
         return self._data_frame.index
 
@@ -71,7 +72,7 @@ class AnalyseDataIndex(BaseDataAnalysis):
 class AnalyseDataHead(BaseDataAnalysis):
     """Analyse the head of the dataframe"""
 
-    def analyse(self) -> pd.DataFrame.head:
+    def analyze(self, **kwargs) -> pd.DataFrame.head:
         """return the head of the data frame"""
         return self._data_frame.head
 
@@ -79,7 +80,7 @@ class AnalyseDataHead(BaseDataAnalysis):
 class AnalyseDataTail(BaseDataAnalysis):
     """Analyse the tail of the dataframe"""
 
-    def analyse(self) -> pd.DataFrame.tail:
+    def analyze(self, **kwargs) -> pd.DataFrame.tail:
         """return the tail of the data frame"""
         return self._data_frame.tail
 
@@ -87,60 +88,96 @@ class AnalyseDataTail(BaseDataAnalysis):
 class AnalyseDataSample(BaseDataAnalysis):
     """Analyse the sample of the dataframe"""
 
-    def analyse(self) -> pd.DataFrame.sample:
+    def analyze(self, **kwargs) -> pd.DataFrame:
         """return the sample of the data frame"""
         return self._data_frame.sample
 
+
 # ==================== ANALYZERS DE FEATURES ENGINEERING ====================
 
+
 # TENDENCIAS Y PATRONES
-#("trend_analysis", AnalyseTrendPatterns)      # Tendencia temporal
+# ("trend_analysis", AnalyseTrendPatterns)      # Tendencia temporal
 class AnalyseTrendPatterns(BaseDataAnalysis):
     """Analyse the trend patterns of the dataframe"""
-    def analyze (self):
+
+    def analyze(self, **kwargs):
         """return the trend patterns of the data frame"""
-        
-#("seasonality", AnalyseSeasonality)           # Patrones estacionales
-#("volatility", AnalyseVolatility)             # Volatilidad en series
-#("momentum", AnalyseMomentum)                 # Cambios acelerados
+
+        x_name = kwargs.get("x")
+        y_name = kwargs.get("y")
+
+        if x_name is None or y_name is None:
+            raise ValueError("x and y must be provided")
+
+        x = self._data_frame[x_name]
+        y = self._data_frame[y_name]
+
+        linear_regression_arguments = {
+            argument: kwargs.get(argument)
+            for argument in ["type_of_prediction", "complexity"]
+            if kwargs.get(argument) is not None
+        }
+
+        linear_regression_object = LinearRegression(**linear_regression_arguments)
+        linear_regression_object.fit(x, y, **kwargs)
+
+        inner_model = linear_regression_object.model
+
+        if hasattr(inner_model, "intercept_"):
+            intercept = inner_model.intercept_
+            slope = inner_model.slope_
+        else:
+            # For gradient descent or multiple linear regression that uses design matrix
+            intercept = inner_model.coefficients_[0]
+            slope = inner_model.coefficients_[1]
+
+        return_dictionary = {"trend_slope": slope, "trend_intercept": intercept}
+
+        return return_dictionary
+
+
+# ("seasonality", AnalyseSeasonality)           # Patrones estacionales
+# ("volatility", AnalyseVolatility)             # Volatilidad en series
+# ("momentum", AnalyseMomentum)                 # Cambios acelerados
 
 # RELACIONES Y DEPENDENCIAS
-#("correlation", AnalyseCorrelation)           # Correlaciones lineales
-#("causality", AnalyseCausality)               # Relaciones causa-efecto
-#("interaction_effects", AnalyseInteractions)  # Variables que se potencian
-#("multicollinearity", AnalyseMulticollinearity) # VIF, redundancias
+# ("correlation", AnalyseCorrelation)           # Correlaciones lineales
+# ("causality", AnalyseCausality)               # Relaciones causa-efecto
+# ("interaction_effects", AnalyseInteractions)  # Variables que se potencian
+# ("multicollinearity", AnalyseMulticollinearity) # VIF, redundancias
 
 # DISTRIBUCIONES (PARA TRANSFORMACIONES)
-#("distribution_type", AnalyseDistributionType) # Normal, exponencial, etc
-#("skewness_kurtosis", AnalyseSkewnessKurtosis) # Para normalizar
-#("normality_test", AnalyseNormalityTests)     # Shapiro, Anderson-Darling
+# ("distribution_type", AnalyseDistributionType) # Normal, exponencial, etc
+# ("skewness_kurtosis", AnalyseSkewnessKurtosis) # Para normalizar
+# ("normality_test", AnalyseNormalityTests)     # Shapiro, Anderson-Darling
 
 # INDICADORES FINANCIEROS / ECONÓMICOS
-#("financial_ratios", AnalyseFinancialRatios)  # ROE, ROA, etc
-#("risk_metrics", AnalyseRiskMetrics)          # VaR, sharpe ratio
-#("growth_rates", AnalyseGrowthRates)          # YoY, MoM
-#("moving_averages", AnalyseMovingAverages)    # MA50, MA200
+# ("financial_ratios", AnalyseFinancialRatios)  # ROE, ROA, etc
+# ("risk_metrics", AnalyseRiskMetrics)          # VaR, sharpe ratio
+# ("growth_rates", AnalyseGrowthRates)          # YoY, MoM
+# ("moving_averages", AnalyseMovingAverages)    # MA50, MA200
 
 # DETECTAR ANOMALÍAS (PARA MODELOS)
-#("anomaly_scores", AnalyseAnomalyScores)      # Isolation Forest, LOF
-#("change_points", AnalyseChangePoints)        # CUSUM, Pelt
-#("threshold_violations", AnalyseThresholds)   # % fuera de límites
+# ("anomaly_scores", AnalyseAnomalyScores)      # Isolation Forest, LOF
+# ("change_points", AnalyseChangePoints)        # CUSUM, Pelt
+# ("threshold_violations", AnalyseThresholds)   # % fuera de límites
 
 # AGREGACIONES Y PIVOTS (PARA FEATURES)
-#("group_statistics", AnalyseGroupStats)       # Agg por categoría
-#("rolling_features", AnalyseRollingFeatures)  # Media móvil, std móvil
-#("lag_features", AnalyseLagFeatures)          # t-1, t-2, t-n
-#("diff_features", AnalyseDiffFeatures)        # Diferencias periodo a periodo
+# ("group_statistics", AnalyseGroupStats)       # Agg por categoría
+# ("rolling_features", AnalyseRollingFeatures)  # Media móvil, std móvil
+# ("lag_features", AnalyseLagFeatures)          # t-1, t-2, t-n
+# ("diff_features", AnalyseDiffFeatures)        # Diferencias periodo a periodo
 
 # SEGMENTACIÓN Y CLUSTERS
-#("customer_segments", AnalyseSegmentation)    # RFM, K-means clusters
-#("cohort_analysis", AnalyseCohortAnalysis)    # Análisis por cohortes
-#("population_splits", AnalysePopulationSplits) # A/B ready
+# ("customer_segments", AnalyseSegmentation)    # RFM, K-means clusters
+# ("cohort_analysis", AnalyseCohortAnalysis)    # Análisis por cohortes
+# ("population_splits", AnalysePopulationSplits) # A/B ready
 
 # FEATURE IMPORTANCE (PREVIA A ML)
-#("feature_variance", AnalyseFeatureVariance)  # Qué variables varían más
-#("feature_selection", AnalyseFeatureSelection) # Mutual info, chi2
-#("information_content", AnalyseInformationContent) # Entropy, MI
+# ("feature_variance", AnalyseFeatureVariance)  # Qué variables varían más
+# ("feature_selection", AnalyseFeatureSelection) # Mutual info, chi2
+# ("information_content", AnalyseInformationContent) # Entropy, MI
 
 
 class AnalyzerFactory:
@@ -167,8 +204,6 @@ class AnalyzerFactory:
         if not analyzer:
             raise ValueError(f"Analyzer {name} not registered")
         return analyzer(data_frame)
-
-
 
 
 AnalyzerFactory.register("types", AnalyseDataTypes)

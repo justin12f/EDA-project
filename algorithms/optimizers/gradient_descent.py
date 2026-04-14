@@ -116,7 +116,8 @@ class GradientDescent:
         gradient_function : Callable ,
         x : np.ndarray | pd.Series | list[pd.Series] | list[np.ndarray],
         y : np.ndarray | pd.Series | list[pd.Series] | list[np.ndarray],
-        initial_beta : np.ndarray = None
+        initial_beta : np.ndarray = None,
+        batch_size : int = None
         ) -> tuple[np.ndarray , list[float], int]:
         """Optimize the parameters of a model using gradient descent"""
 
@@ -132,6 +133,7 @@ class GradientDescent:
             x_batch = x,
             y_batch = y,
             initial_beta = initial_beta,
+            batch_size = batch_size,
             learning_rate = learning_rate,
             max_iterations = max_iterations,
             tolerance = tolerance

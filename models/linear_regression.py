@@ -11,7 +11,8 @@ class BaseLinearRegressionModel(ABC):
     @abstractmethod
     def fit(self ,
      x : np.ndarray | pd.DataFrame[str] | list[pd.Series] ,
-     y : np.ndarray | pd.DataFrame[str] | list[pd.Series]
+     y : np.ndarray | pd.DataFrame[str] | list[pd.Series],
+     **kwargs
      ) -> None:
         """Fit the model to the data"""
 
@@ -47,19 +48,19 @@ class Interception:
 class AnalyticalLinearRegression(BaseLinearRegressionModel):
     """Linear regression model"""
     def __init__(self) -> None:
-        self._slope : float = None
-        self._intercept : float = None
+        self.slope_ : float = None
+        self.intercept_ : float = None
         self._x : np.ndarray = None
         self._y : np.ndarray = None
         self._y_true : np.ndarray = None
         self._y_pred : np.ndarray = None
 
-    def fit(self, x: np.ndarray , y: np.ndarray):
+    def fit(self, x: np.ndarray , y: np.ndarray , **kwargs):
         """fit de  analytical linear regresion"""
         slope = Slope().slope(x , y)
         intercept = Interception().interception(x , y , slope)
-        self._slope = slope
-        self._intercept = intercept
+        self.slope_ = slope
+        self.intercept_ = intercept
         self._x = x
         self._y_true = y
 
@@ -67,10 +68,10 @@ class AnalyticalLinearRegression(BaseLinearRegressionModel):
      x : np.ndarray | pd.DataFrame[str] | list[pd.Series]
      ) -> np.ndarray:
         """Predict the y value"""
-        if  self._intercept is None or self._slope is None :
+        if  self.intercept_ is None or self.slope_ is None :
             raise ValueError("The model must be Fitted before prediction")
-        interception = self._intercept
-        slope = self._slope
+        interception = self.intercept_
+        slope = self.slope_
         y_pred = interception + (slope * x )
         self._y_pred = y_pred
         return y_pred
@@ -110,23 +111,23 @@ class AnalyticalMultipleLinearRegression(BaseLinearRegressionModel):
         self._x_matrix : np.ndarray = None
         self._y_true : np.ndarray = None
         self._y_pred : np.ndarray = None
-        self._coefficients : np.ndarray = None
+        self.coefficients_ : np.ndarray = None
 
-    def fit (self , x : list[pd.Series] , y : pd.DataFrame[str]) -> None:
+    def fit (self , x : list[pd.Series] , y : pd.DataFrame[str] , **kwargs) -> None:
         """fit de  multiple linear regresion"""
         x_matrix = BuildDesignMatrix().build_design_matrix(x)
         coeffficients = OrdinaryLeastSquares().calculate_coefficients(x_matrix , y)
         self._y_true = y
-        self._coefficients = coeffficients
+        self.coefficients_ = coeffficients
 
     def predict(self ,
      x : np.ndarray | pd.DataFrame[str] | list[pd.Series]
      ) -> np.ndarray:
         """predict the y value"""
-        if  self._coefficients is None :
+        if  self.coefficients_ is None :
             raise ValueError("The model Must be Fitted before prediction")
         x_matrix = BuildDesignMatrix().build_design_matrix(x)
-        y_pred = x_matrix @ self._coefficients
+        y_pred = x_matrix @ self.coefficients_
         self._y_pred = y_pred
         return y_pred
 
@@ -143,10 +144,10 @@ class BaseGradientDescentLinearRegression(BaseLinearRegressionModel):
         self._x_matrix : np.ndarray = None
         self._y_true : np.ndarray = None
         self._y_pred : np.ndarray = None
-        self._loss_history : list[float] = None
-        self._iteration : int = None
-        self._converged : bool = None
-        self._coefficients : np.ndarray = None
+        self.loss_history_ : list[float] = None
+        self.iteration_ : int = None
+        self.converged_ : bool = None
+        self.coefficients_ : np.ndarray = None
 
     @abstractmethod
     def gradient_function(self,
@@ -156,23 +157,23 @@ class BaseGradientDescentLinearRegression(BaseLinearRegressionModel):
      ) -> np.ndarray:
         """Calculate the gradient of the loss function"""
 
-    def fit(self , x : list[pd.Series] , y : pd.DataFrame[str]) -> None:
+    def fit(self , x : list[pd.Series] , y : pd.DataFrame[str] , **kwargs) -> None:
         x_matrix = BuildDesignMatrix().build_design_matrix(x)
         gradient_output = GradientDescent().optimize(self.gradient_function , x_matrix , y)
-        self._coefficients = gradient_output[0]
-        self._loss_history = gradient_output[1]
-        self._iteration = gradient_output[2]
-        self._converged = gradient_output[3]
+        self.coefficients_ = gradient_output[0]
+        self.loss_history_ = gradient_output[1]
+        self.iteration_ = gradient_output[2]
+        self.converged_ = gradient_output[3]
         self._y_true = y
 
     def predict(self ,
      x : np.ndarray | pd.DataFrame[str] | list[pd.Series]
      ) -> np.ndarray:
         """predict the y value"""
-        if self._coefficients is None :
+        if self.coefficients_ is None :
             raise ValueError("The model must be fitted before prediction")
         x_matrix = BuildDesignMatrix().build_design_matrix(x)
-        y_pred = x_matrix @ self._coefficients
+        y_pred = x_matrix @ self.coefficients_
         self._y_pred = y_pred
         return y_pred
 
@@ -200,7 +201,8 @@ class GradientDescentMultipleLinearRegression(BaseGradientDescentLinearRegressio
     """Multiple Linear regresion using gradient descent"""
     def gradient_function(self,
      x : np.ndarray | pd.DataFrame[str] | list[pd.Series] ,
-     y_true : np.ndarray | pd.DataFrame[str] | list[pd.Series] , beta : np.ndarray
+     y_true : np.ndarray | pd.DataFrame[str] | list[pd.Series] ,
+     beta : np.ndarray
      ) -> np.ndarray:
         """Calculate the gradient of the loss function"""
         y_pred = x @ beta
@@ -248,20 +250,42 @@ LinearRegressionFactory().register("ordinary_least_squares"
                                 ,  "multiple"
                                 ,  AnalyticalMultipleLinearRegression)
 
-class LinearRegression:
+class LinearRegression(BaseLinearRegressionModel):
     """Dependency Injection for linear regression"""
     def __init__ (self,
         type_of_prediction : str = "gradient_descent" ,
         complexity : str = "simple"
         ) -> None:
-        self._model = LinearRegressionFactory().create(
+        self.model = LinearRegressionFactory().create(
             type_of_prediction
             , complexity
             )
 
-    def fit(self , x : list[pd.Series] , y : pd.DataFrame[str]) -> None:
+    def fit(self ,
+        x : list[pd.Series] , y : pd.DataFrame[str] ,
+        **kwargs
+        ) -> None:
         """fit de  linear regresion"""
-        self._model.fit(x , y)
+        fit_arguments = {
+            "x" : x,
+            "y" : y
+        }
+        if "batch_size" in kwargs:
+            fit_arguments["batch_size"] = kwargs["batch_size"]
+
+        if "initial_beta" in kwargs:
+            fit_arguments["initial_beta"] = kwargs["initial_beta"]
+
+        if "learning_rate" in kwargs:
+            fit_arguments["learning_rate"] = kwargs["learning_rate"]
+
+        if "max_iterations" in kwargs:
+            fit_arguments["max_iterations"] = kwargs["max_iterations"]
+
+        if "tolerance" in kwargs:
+            fit_arguments["tolerance"] = kwargs["tolerance"]
+
+        self._model.fit(**fit_arguments)
 
     def predict(self , x : np.ndarray | pd.DataFrame[str] | list[pd.Series]) -> np.ndarray:
         """predict the y value"""
@@ -270,4 +294,6 @@ class LinearRegression:
     def score(self , y_true : np.ndarray | pd.Series | list[pd.Series]) -> dict[str,float]:
         """calculate the score of the model"""
         return self._model.score(y_true)
+
+
 
