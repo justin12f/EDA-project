@@ -1,9 +1,11 @@
 """Data Cleaning Pipeline — generic, column-agnostic modular pipeline."""
 
 from typing import Optional
+
 import pandas as pd
-from data_cleaning.data_cleaning_step_factory import BaseStep, DataCleaningStepFactory
+
 from data_cleaning.data_cleaning_report import DataCleaningReport
+from data_cleaning.data_cleaning_step_factory import BaseStep, DataCleaningStepFactory
 from data_cleaning.wrapper_steps_with_logger import wrapper_steps_with_logger
 
 
@@ -12,10 +14,7 @@ class DataCleaningPipeline:
 
     def __init__(self, step_list: list[BaseStep]) -> None:
         self.report = DataCleaningReport()
-        self._step_list = [
-            wrapper_steps_with_logger(step, self.report)
-            for step in step_list
-        ]
+        self._step_list = [wrapper_steps_with_logger(step, self.report) for step in step_list]
 
     def run(self, data: pd.DataFrame) -> pd.DataFrame:
         """Run the data cleaning pipeline and return the cleaned DataFrame."""
@@ -118,13 +117,12 @@ def build_pipeline(
     for step_entry in configuration:
         for step_name, kwargs in step_entry.items():
             if kwargs:
-                step_list.append(
-                    DataCleaningStepFactory.create(step_name, data_frame, **kwargs)
-                )
+                step_list.append(DataCleaningStepFactory.create(step_name, data_frame, **kwargs))
             else:
                 step_list.append(DataCleaningStepFactory.create(step_name, data_frame))
 
     return DataCleaningPipeline(step_list)
+
 
 def build_pipeline_from_preset(
     data_frame: pd.DataFrame,

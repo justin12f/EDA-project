@@ -1,6 +1,7 @@
 """Module for the data cleaning report and metrics comparison."""
 
 import json
+
 import numpy as np
 from pandas import DataFrame
 
@@ -27,9 +28,7 @@ class DataCleaningReport:
 
             change_ratio = metrics.get("change_ratio", {})
             columns_changed = sum(1 for v in change_ratio.values() if v > 0)
-            avg_change = (
-                sum(change_ratio.values()) / len(change_ratio) if change_ratio else 0.0
-            )
+            avg_change = sum(change_ratio.values()) / len(change_ratio) if change_ratio else 0.0
 
             summary_data.append(
                 {
@@ -55,9 +54,7 @@ class DataCleaningReport:
 
             change_ratio = metrics.get("change_ratio", {})
             columns_changed = sum(1 for v in change_ratio.values() if v > 0)
-            avg_change = (
-                sum(change_ratio.values()) / len(change_ratio) if change_ratio else 0.0
-            )
+            avg_change = sum(change_ratio.values()) / len(change_ratio) if change_ratio else 0.0
 
             summary_data.append(
                 {
@@ -106,9 +103,7 @@ def compare_metrics(before: DataFrame, after: DataFrame) -> dict[str, dict]:
 
     col_changes: dict[str, float] = {}
 
-    if len(before) == len(before.index.unique()) and len(after) == len(
-        after.index.unique()
-    ):
+    if len(before) == len(before.index.unique()) and len(after) == len(after.index.unique()):
         # Unique indices — compare by aligned index intersection
         common_index = before.index.intersection(after.index)
         for column in changed_columns:
@@ -145,6 +140,4 @@ def _is_nan_array(arr) -> "np.ndarray":
     try:
         return np.isnan(arr.astype(float))
     except (ValueError, TypeError):
-        return np.array(
-            [x is None or (isinstance(x, float) and np.isnan(x)) for x in arr]
-        )
+        return np.array([x is None or (isinstance(x, float) and np.isnan(x)) for x in arr])
