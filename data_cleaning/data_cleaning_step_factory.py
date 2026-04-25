@@ -2,29 +2,24 @@
 
 import pandas as pd
 
-from .steps.base import BaseStep
-from .steps.implementations import (
-    AddAuditColumnsStep,
-    CapOutliersStep,
+from data_cleaning.steps.base import BaseStep
+from data_cleaning.steps.implementations import (
+    ColumnScopedStep,
     ColumnsTitlesStep,
-    CrossColumnValidationStep,
-    DropConstantColumnsStep,
-    DropHighMissingColumnsStep,
     EnforceSchemaStep,
-    FixBoolsColumnsStep,
-    FixColumnsTypesStep,
-    FixDatesColumnsStep,
-    FixNotNumericColumnsStep,
-    FixNumericColumnsStep,
-    FlagDataQualityStep,
-    HandleOutliersStep,
+    DropHighMissingColumnsStep,
+    DropConstantColumnsStep,
     HandleSentinelValuesStep,
     ImputeCategoricalStep,
-    NormalizeCategoriesStep,
-    RemoveDuplicatesRowsStep,
     SafeConversionStep,
-    TextStandardizationStep,
-    ValidateDomainRulesStep,
+    FixDatesColumnsStep,
+    FixBoolsColumnsStep,
+    FixColumnsTypesStep,
+    FixNumericColumnsStep,
+    IQROutlierStep,
+    ZScoreOutlierStep,
+    CapOutliersStep,
+    StandardScalerStep,
 )
 
 
@@ -49,30 +44,46 @@ class DataCleaningStepFactory:
             )
         return step_class(data_frame, **kwargs)
 
+    @classmethod
+    @classmethod
+    def create_scoped(
+        cls,
+        step_name: str,
+        data_frame: pd.DataFrame,
+        columns: list[str],
+        **kwargs,
+    ) -> BaseStep:
+        """
+        Instantiate a registered step wrapped in ColumnScopedStep.
+        """
+        inner_step = cls.create(step_name, data_frame, **kwargs)
+        return ColumnScopedStep(
+            inner_step=inner_step,
+            data_frame=data_frame,
+            columns=columns
+        )
 
-# Register all steps
+# ── CORE / ESTRUCTURA ─────────────────────────────────
 DataCleaningStepFactory.register("fix_columns_titles", ColumnsTitlesStep)
+DataCleaningStepFactory.register("enforce_schema", EnforceSchemaStep)
 DataCleaningStepFactory.register("handle_sentinel_values", HandleSentinelValuesStep)
-DataCleaningStepFactory.register("normalize_categories", NormalizeCategoriesStep)
+DataCleaningStepFactory.register("drop_high_missing_columns", DropHighMissingColumnsStep)
+DataCleaningStepFactory.register("drop_constant_columns", DropConstantColumnsStep)
+
+# ── CONVERSIÓN / TIPOS ────────────────────────────────
 DataCleaningStepFactory.register("safe_conversion", SafeConversionStep)
-DataCleaningStepFactory.register("fix_not_numeric_columns", FixNotNumericColumnsStep)
-DataCleaningStepFactory.register("remove_duplicates_rows", RemoveDuplicatesRowsStep)
-DataCleaningStepFactory.register("validate_domain_rules", ValidateDomainRulesStep)
 DataCleaningStepFactory.register("fix_numeric_columns", FixNumericColumnsStep)
-DataCleaningStepFactory.register("handle_outliers", HandleOutliersStep)
 DataCleaningStepFactory.register("fix_bools_columns", FixBoolsColumnsStep)
 DataCleaningStepFactory.register("fix_dates_columns", FixDatesColumnsStep)
-DataCleaningStepFactory.register("cross_column_validation", CrossColumnValidationStep)
-DataCleaningStepFactory.register("flag_data_quality", FlagDataQualityStep)
 DataCleaningStepFactory.register("fix_columns_types", FixColumnsTypesStep)
 
-# New steps
-DataCleaningStepFactory.register(
-    "drop_high_missing_columns", DropHighMissingColumnsStep
-)
-DataCleaningStepFactory.register("drop_constant_columns", DropConstantColumnsStep)
-DataCleaningStepFactory.register("text_standardization", TextStandardizationStep)
-DataCleaningStepFactory.register("cap_outliers", CapOutliersStep)
+# ── IMPUTACIÓN ────────────────────────────────────────
 DataCleaningStepFactory.register("impute_categorical", ImputeCategoricalStep)
-DataCleaningStepFactory.register("enforce_schema", EnforceSchemaStep)
-DataCleaningStepFactory.register("add_audit_columns", AddAuditColumnsStep)
+
+# ── OUTLIERS ──────────────────────────────────────────
+DataCleaningStepFactory.register("iqr_outlier", IQROutlierStep)
+DataCleaningStepFactory.register("zscore_outlier", ZScoreOutlierStep)
+DataCleaningStepFactory.register("cap_outliers", CapOutliersStep)
+
+# ── ML / SCALING ──────────────────────────────────────
+DataCleaningStepFactory.register("standard_scaler", StandardScalerStep)

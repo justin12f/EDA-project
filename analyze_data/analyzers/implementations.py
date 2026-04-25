@@ -4,20 +4,16 @@ from statistics.time_series_analysis.seasonal import SeasonalDecomposition
 
 import pandas as pd
 
+from analyze_data.analyzers.base import BaseDataAnalysis
 from models.linear_regression import LinearRegression
-
-from .base import BaseDataAnalysis
 
 
 class AnalyseDataTypes(BaseDataAnalysis):
     """Analyse the data types of the dataframe"""
 
-    def analyze(self, **kwargs) -> dict:
+    def analyze(self, **kwargs) -> dict[str, str]:
         """Analyse the data type in the columns"""
-        data_types: dict[tuple[str, str]] = {}
-        for column in self._data_frame.columns:
-            information = (column, self._data_frame[column].dtype)
-            data_types.update(information)
+        data_types: dict[str, str] = self._data_frame.dtypes.to_dict()
         return data_types
 
 
@@ -114,7 +110,9 @@ class AnalyseSeasonality(BaseDataAnalysis):
         #     )
 
         if target_column not in data_frame.columns:
-            raise KeyError(f"The column '{target_column}' does not exist in the data frame")
+            raise KeyError(
+                f"The column '{target_column}' does not exist in the data frame"
+            )
 
         seasonal_decomposition = SeasonalDecomposition().calculate(
             data_frame[target_column], window=period
@@ -132,6 +130,7 @@ class AnalyseSeasonality(BaseDataAnalysis):
 
 
 # ("volatility", AnalyseVolatility)             # Volatilidad en series
+
 # ("momentum", AnalyseMomentum)                 # Cambios acelerados
 
 # RELACIONES Y DEPENDENCIAS
@@ -204,12 +203,14 @@ class AnalyseTrendPatterns(BaseDataAnalysis):
         fit_kwargs = {
             k: v
             for k, v in kwargs.items()
-            if k not in ("x", "y", "type_of_prediction", "type_of_analysis", "complexity")
+            if k
+            not in ("x", "y", "type_of_prediction", "type_of_analysis", "complexity")
         }
 
         # Accept type_of_analysis or type_of_prediction
         prediction_type = kwargs.get(
-            "type_of_analysis", kwargs.get("type_of_prediction", "ordinary_least_squares")
+            "type_of_analysis",
+            kwargs.get("type_of_prediction", "ordinary_least_squares"),
         )
 
         linear_regression_arguments = {

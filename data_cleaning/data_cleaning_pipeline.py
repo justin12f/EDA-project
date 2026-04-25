@@ -7,6 +7,7 @@ import pandas as pd
 from data_cleaning.data_cleaning_report import DataCleaningReport
 from data_cleaning.data_cleaning_step_factory import BaseStep, DataCleaningStepFactory
 from data_cleaning.wrapper_steps_with_logger import wrapper_steps_with_logger
+from data_cleaning.steps.implementations import ColumnScopedStep  
 
 
 class DataCleaningPipeline:
@@ -14,7 +15,9 @@ class DataCleaningPipeline:
 
     def __init__(self, step_list: list[BaseStep]) -> None:
         self.report = DataCleaningReport()
-        self._step_list = [wrapper_steps_with_logger(step, self.report) for step in step_list]
+        self._step_list = [
+            wrapper_steps_with_logger(step, self.report) for step in step_list
+        ]
 
     def run(self, data: pd.DataFrame) -> pd.DataFrame:
         """Run the data cleaning pipeline and return the cleaned DataFrame."""
@@ -24,6 +27,45 @@ class DataCleaningPipeline:
         return data_frame
 
 
+class PipelineBuilder:
+    """
+    Build a DataCleaningPipeline from a declarative configuration.
+    """
+
+    def __init__(self, data_frame: pd.DataFrame) -> None:
+        self._data_frame = data_frame
+
+    def build(
+        self,
+        configuration: list[dict[str, Optional[dict]]],
+    ) -> DataCleaningPipeline:
+        """Build and return a DataCleaningPipeline."""
+        step_list = [self._build_step(entry) for entry in configuration]
+        return DataCleaningPipeline(step_list)
+
+    def _build_step(self, entry: dict[str, Optional[dict]]) -> BaseStep:
+        """Build and return a BaseStep."""
+        if len(entry) != 1:
+            raise ValueError(
+                f"Each entry must have exact one key. Received: {entry}"
+            )
+
+        step_name, kwargs = next(iter(entry.items()))
+        kwargs = (kwargs or {}).copy()
+
+        columns: list[str] | None = kwargs.pop("columns", None)
+
+        step = DataCleaningStepFactory.create(step_name, self._data_frame, **kwargs)
+
+        if columns is not None:
+            return ColumnScopedStep(
+                inner_step=step,
+                data_frame=self._data_frame,
+                columns=columns
+            )
+
+        return step
+
 # ---------------------------------------------------------------------------
 # Generic default configuration — NO hardcoded column names.
 # Every step uses auto-detection (columns=None) so it works with any dataset.
@@ -32,6 +74,7 @@ class DataCleaningPipeline:
 # ---------------------------------------------------------------------------
 # Presets for Pipeline Configuration
 # ---------------------------------------------------------------------------
+
 
 preset_light: list[dict[str, Optional[dict]]] = [
     {"enforce_schema": None},
@@ -90,49 +133,3 @@ preset_strict: list[dict[str, Optional[dict]]] = [
     {"fix_columns_types": None},
     {"add_audit_columns": None},
 ]
-
-
-def build_pipeline(
-    data_frame: pd.DataFrame,
-    configuration: Optional[list[dict[str, Optional[dict]]]] = None,
-) -> DataCleaningPipeline:
-    """
-    Build and return a DataCleaningPipeline.
-
-    Pass a custom `configuration` list to override the defaults.
-    Each item is a dict with one key (step name) and an optional kwargs dict.
-
-    Example::
-
-        pipeline = build_pipeline(df, configuration=[
-            {"fix_columns_titles": None},
-            {"validate_domain_rules": {"rules": {"age": [0, 120]}}},
-            {"fix_numeric_columns": {"fixcase": "mean"}},
-        ])
-    """
-    if configuration is None:
-        configuration = default_configuration
-
-    step_list: list[BaseStep] = []
-    for step_entry in configuration:
-        for step_name, kwargs in step_entry.items():
-            if kwargs:
-                step_list.append(DataCleaningStepFactory.create(step_name, data_frame, **kwargs))
-            else:
-                step_list.append(DataCleaningStepFactory.create(step_name, data_frame))
-
-    return DataCleaningPipeline(step_list)
-
-
-def build_pipeline_from_preset(
-    data_frame: pd.DataFrame,
-    preset: str = "default",
-) -> DataCleaningPipeline:
-    """Build a pipeline using one of the predefined configurations ('light', 'default', 'strict')."""
-    presets = {
-        "light": preset_light,
-        "default": default_configuration,
-        "strict": preset_strict,
-    }
-    config = presets.get(preset, default_configuration)
-    return build_pipeline(data_frame, configuration=config)
