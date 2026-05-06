@@ -1,8 +1,3 @@
-# NOTE: vibecoded this script have multiple errors it doesn't validate
-# the data before proccesing & the exeptions are stupid this thing use exept: Exception
-# instead of specific exceptions but the math and logic is right
-# TODO: read all the script and fix the errors 
-
 """Distribution classification and fitting module."""
 
 from __future__ import annotations
@@ -157,7 +152,9 @@ class DistributionFitter:
             distribution.shapes.split(", ") if distribution.shapes else []
         )
         all_param_names = shape_params + ["loc", "scale"]
-        parameters = {k: float(v) for k, v in zip(all_param_names, params)}
+        parameters = {
+            k: float(v) for k, v in zip(all_param_names, params)
+        }
 
         return DistributionFitResult(
             name=name,
@@ -212,7 +209,9 @@ class DistributionClassifier:
         all_fits = self._fitter.fit_all(data)
 
         if not all_fits:
-            raise RuntimeError("No distributions could be fitted to the provided data.")
+            raise RuntimeError(
+                "No distributions could be fitted to the provided data."
+            )
 
         best_fit = all_fits[0]
         is_bimodal = self._bimodality_detector.detect(data)

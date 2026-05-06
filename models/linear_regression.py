@@ -7,7 +7,7 @@ import pandas as pd
 
 from algorithms.optimizers.gradient_descent import GradientDescent
 from evaluation.score import Score
-from pre_proccesing.encoders.encoder_factory import Encoder
+from preproccesing.encoders.encoder_factory import Encoder
 
 
 class BaseLinearRegressionModel(ABC):
