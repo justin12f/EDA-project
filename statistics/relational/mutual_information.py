@@ -144,9 +144,7 @@ class MutualInformationCalculator:
         x_encoded = pd.get_dummies(x, drop_first=False)
 
         detected_type = (
-            self._target_detector.detect(y)
-            if target_type == "auto"
-            else target_type
+            self._target_detector.detect(y) if target_type == "auto" else target_type
         )
 
         if detected_type == "categorical":

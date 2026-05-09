@@ -28,3 +28,12 @@ class StandardScaler(BaseScaler):
         """
         standar_data = ( data - np.mean(data) ) / np.std(data)
         return standar_data
+
+    def fit_transform( self, data: pd.Series) -> pd.Series:
+        """
+        fit_transform method for fit and transform the data in the class StandarScaler
+        Args:
+            data (pd.Series): ->
+        """
+        self.fit(data)
+        return self.transform(data)

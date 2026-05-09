@@ -39,6 +39,23 @@ from .analyzers.implementations import (
     AnalyseGrangerCausality,
     AnalyseContingency,
     AnalyseInteractionEffects,
+    AnalyseFeatureVariance,
+    AnalyseFeatureSelection,
+    AnalyseFeatureImportance,
+    AnalyseDimensionalityReduction,
+    AnalyseClassImbalance,
+    AnalyseModelResiduals,
+    AnalyseLearningCurve,
+    AnalyseCrossValidation,
+    AnalyseVolatility,
+    AnalyseMomentum,
+    AnalyseMovingAverages,
+    AnalyseStationarity,
+    AnalyseLagFeatures,
+    AnalyseChangePoints,
+    AnalyseForecastAccuracy,
+    AnalyseCyclicalPatterns,
+    AnalyseRollingStatistics,
 )
 
 
@@ -109,3 +126,24 @@ AnalyzerFactory.register("cross_correlation",        AnalyseCrossCorrelation)
 AnalyzerFactory.register("granger_causality",        AnalyseGrangerCausality)
 AnalyzerFactory.register("contingency_analysis",     AnalyseContingency)
 AnalyzerFactory.register("interaction_effects",      AnalyseInteractionEffects)
+
+# Domain 5 — ML Support
+AnalyzerFactory.register("feature_variance",          AnalyseFeatureVariance)
+AnalyzerFactory.register("feature_selection",         AnalyseFeatureSelection)
+AnalyzerFactory.register("feature_importance",        AnalyseFeatureImportance)
+AnalyzerFactory.register("dimensionality_reduction",  AnalyseDimensionalityReduction)
+AnalyzerFactory.register("class_imbalance",           AnalyseClassImbalance)
+AnalyzerFactory.register("model_residuals",           AnalyseModelResiduals)
+AnalyzerFactory.register("learning_curve",            AnalyseLearningCurve)
+AnalyzerFactory.register("cross_validation",          AnalyseCrossValidation)
+
+# Domain 4 — Time Series
+AnalyzerFactory.register("volatility",          AnalyseVolatility)
+AnalyzerFactory.register("momentum",            AnalyseMomentum)
+AnalyzerFactory.register("moving_averages",     AnalyseMovingAverages)
+AnalyzerFactory.register("stationarity",        AnalyseStationarity)
+AnalyzerFactory.register("lag_features",        AnalyseLagFeatures)
+AnalyzerFactory.register("change_points",       AnalyseChangePoints)
+AnalyzerFactory.register("forecast_accuracy",   AnalyseForecastAccuracy)
+AnalyzerFactory.register("cyclical_patterns",   AnalyseCyclicalPatterns)
+AnalyzerFactory.register("rolling_statistics",  AnalyseRollingStatistics)

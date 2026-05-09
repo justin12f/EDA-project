@@ -1,6 +1,6 @@
 """Module for data analysis"""
 
-from statistics.time_series_analysis.seasonal import SeasonalDecomposition
+from statistics.time_series.seasonal import SeasonalDecomposition
 
 import pandas as pd
 
@@ -20,14 +20,6 @@ from statistics.descriptive.value_counts import ValueCountsCalculator
 # ── DOMAIN 2 IMPORTS ──────────────────────────────────────────────────────────
 """Module for data analysis"""
 
-from statistics.time_series_analysis.seasonal import SeasonalDecomposition
-
-import pandas as pd
-
-from analyze_data.analyzers.base import BaseDataAnalysis
-from models.linear_regression import LinearRegression
-
-import numpy as np
 from statistics.descriptive.distribution import DistributionClassifier
 from statistics.descriptive.normality import NormalityTestSuite
 from statistics.descriptive.central_tendency import CentralTendencyCalculator
@@ -57,77 +49,7 @@ from statistics.relational.granger_causality import GrangerCausalityCalculator
 from statistics.relational.contingency_analysis import ContingencyAnalysisCalculator
 from statistics.relational.interaction_effects import InteractionEffectsCalculator
 
-class AnalyseDataTypes(BaseDataAnalysis):
-    """Analyse the data types of the dataframe"""
 
-    def analyze(self, **kwargs) -> dict[str, str]:
-        """Analyse the data type in the columns"""
-        data_types: dict[str, str] = self._data_frame.dtypes.to_dict()
-        return data_types
-
-
-class AnalyseDataShape(BaseDataAnalysis):
-    """Analyse the shape of the dataframe"""
-
-    def analyze(self, **kwargs) -> tuple[int, int]:
-        """Analyse the shape in the columns"""
-        return self._data_frame.shape
-
-
-class AnalyseDataInfo(BaseDataAnalysis):
-    """Analyse the info of te data frame"""
-
-    def analyze(self, **kwargs) -> pd.DataFrame:
-        """return the summary of the dataframe info"""
-        return self._data_frame.info()
-
-
-class AnalyseDataDescribe(BaseDataAnalysis):
-    """Analyse the describe of the dataframe"""
-
-    def analyze(self, **kwargs) -> pd.DataFrame:
-        """return the describe  of the data frame"""
-        return self._data_frame.describe()
-
-
-class AnalyseDataColumns(BaseDataAnalysis):
-    """Analyse the columns of the dataframe"""
-
-    def analyze(self, **kwargs) -> pd.Index:
-        """return the columns of the data frame"""
-        return self._data_frame.columns
-
-
-class AnalyseDataIndex(BaseDataAnalysis):
-    """Analyse the index of the dataframe"""
-
-    def analyze(self, **kwargs) -> pd.Index:
-        """return the index of the data frame"""
-        return self._data_frame.index
-
-
-class AnalyseDataHead(BaseDataAnalysis):
-    """Analyse the head of the dataframe"""
-
-    def analyze(self, **kwargs) -> pd.DataFrame:
-        """return the head of the data frame"""
-        return self._data_frame.head()
-
-
-class AnalyseDataTail(BaseDataAnalysis):
-    """Analyse the tail of the dataframe"""
-
-    def analyze(self, **kwargs) -> pd.DataFrame:
-        """return the tail of the data frame"""
-        return self._data_frame.tail()
-
-
-class AnalyseDataSample(BaseDataAnalysis):
-    """Analyse the sample of the dataframe"""
-
-    def analyze(self, **kwargs) -> pd.DataFrame:
-        """return the sample of the data frame"""
-        return self._data_frame.sample()
 
 
 # ==================== ANALYZERS DE FEATURES ENGINEERING ====================
@@ -1161,4 +1083,451 @@ class AnalyseInteractionEffects(BaseDataAnalysis):
             feature_columns=kwargs.get("feature_columns"),
             min_gain_threshold=kwargs.get("min_gain_threshold", 0.01),
             top_n=kwargs.get("top_n"),
+        )
+
+
+# ── DOMAIN 5 IMPORTS ──────────────────────────────────────────────────────────
+from statistics.ml_support.feature_variance import FeatureVarianceCalculator
+from statistics.ml_support.feature_selection import FeatureSelectionCalculator
+from statistics.ml_support.feature_importance import FeatureImportanceCalculator
+from statistics.ml_support.dimensionality_reduction import DimensionalityReductionCalculator
+from statistics.ml_support.class_imbalance import ClassImbalanceCalculator
+from statistics.ml_support.model_residuals import ModelResidualsCalculator
+from statistics.ml_support.learning_curve import LearningCurveCalculator
+from statistics.ml_support.cross_validation import CrossValidationCalculator
+
+
+class AnalyseFeatureVariance(BaseDataAnalysis):
+    """Near-zero variance detection across all numeric columns.
+
+    Workflow:
+        analyzer = AnalyzerFactory.create("pd.DataFrame", df)
+        result = analyzer.analyze(
+            variance_threshold=1e-4,
+            unique_ratio_threshold=0.01,
+            frequency_ratio_threshold=0.95,
+        )
+    """
+
+    def analyze(self, **kwargs) -> dict:
+        return FeatureVarianceCalculator().calculate(
+            data_frame=self._data_frame,
+            variance_threshold=kwargs.get("variance_threshold", 1e-4),
+            unique_ratio_threshold=kwargs.get("unique_ratio_threshold", 0.01),
+            frequency_ratio_threshold=kwargs.get("frequency_ratio_threshold", 0.95),
+        )
+
+
+class AnalyseFeatureSelection(BaseDataAnalysis):
+    """Univariate feature scoring: chi2, ANOVA F, mutual information.
+
+    Workflow:
+        analyzer = AnalyzerFactory.create("pd.DataFrame", df)
+        result = analyzer.analyze(
+            target_column="churn",
+            feature_columns=["age", "income"],
+            methods=["chi2", "anova_f", "mutual_information"],
+            target_type="classification",
+            top_n=10,
+        )
+    """
+
+    def analyze(self, **kwargs) -> dict:
+        target_column: str = kwargs.get("target_column")
+        if target_column is None:
+            raise ValueError("'target_column' is required.")
+        if target_column not in self._data_frame.columns:
+            raise KeyError(f"Column '{target_column}' not found.")
+
+        return FeatureSelectionCalculator().calculate(
+            data_frame=self._data_frame,
+            target_column=target_column,
+            feature_columns=kwargs.get("feature_columns"),
+            methods=kwargs.get("methods"),
+            target_type=kwargs.get("target_type", "classification"),
+            top_n=kwargs.get("top_n"),
+            random_seed=kwargs.get("random_seed", 42),
+        )
+
+
+class AnalyseFeatureImportance(BaseDataAnalysis):
+    """Random Forest Gini and permutation importance.
+
+    Workflow:
+        analyzer = AnalyzerFactory.create("pd.DataFrame", df)
+        result = analyzer.analyze(
+            target_column="churn",
+            feature_columns=["age", "income"],
+            methods=["gini", "permutation"],
+            target_type="classification",
+            n_estimators=100,
+            top_n=15,
+        )
+    """
+
+    def analyze(self, **kwargs) -> dict:
+        target_column: str = kwargs.get("target_column")
+        if target_column is None:
+            raise ValueError("'target_column' is required.")
+        if target_column not in self._data_frame.columns:
+            raise KeyError(f"Column '{target_column}' not found.")
+
+        return FeatureImportanceCalculator().calculate(
+            data_frame=self._data_frame,
+            target_column=target_column,
+            feature_columns=kwargs.get("feature_columns"),
+            methods=kwargs.get("methods"),
+            target_type=kwargs.get("target_type", "classification"),
+            n_estimators=kwargs.get("n_estimators", 100),
+            n_repeats=kwargs.get("n_repeats", 10),
+            top_n=kwargs.get("top_n"),
+            random_seed=kwargs.get("random_seed", 42),
+        )
+
+
+class AnalyseDimensionalityReduction(BaseDataAnalysis):
+    """PCA with variance explained, loadings, and optimal component selection.
+
+    Workflow:
+        analyzer = AnalyzerFactory.create("pd.DataFrame", df)
+        result = analyzer.analyze(
+            columns=["age", "income", "score"],  # optional
+            n_components=None,
+            target_variance_explained=0.95,
+        )
+    """
+
+    def analyze(self, **kwargs) -> dict:
+        columns: list[str] | None = kwargs.get("columns")
+        numeric_df = self._data_frame.select_dtypes(include=[np.number])
+
+        if columns is not None:
+            missing = [c for c in columns if c not in self._data_frame.columns]
+            if missing:
+                raise KeyError(f"Columns not found: {missing}")
+            numeric_df = numeric_df[columns]
+
+        if numeric_df.empty:
+            raise ValueError("No numeric columns found for PCA.")
+
+        return DimensionalityReductionCalculator().calculate(
+            data_frame=numeric_df,
+            n_components=kwargs.get("n_components"),
+            target_variance_explained=kwargs.get("target_variance_explained", 0.95),
+        )
+
+
+class AnalyseClassImbalance(BaseDataAnalysis):
+    """Class distribution analysis with resampling strategy recommendation.
+
+    Workflow:
+        analyzer = AnalyzerFactory.create("pd.DataFrame", df)
+        result = analyzer.analyze(
+            target_column="churn",
+            minority_threshold=0.3,
+        )
+    """
+
+    def analyze(self, **kwargs) -> dict:
+        target_column: str = kwargs.get("target_column")
+        if target_column is None:
+            raise ValueError("'target_column' is required.")
+        if target_column not in self._data_frame.columns:
+            raise KeyError(f"Column '{target_column}' not found.")
+
+        return ClassImbalanceCalculator().calculate(
+            series=self._data_frame[target_column],
+            minority_threshold=kwargs.get("minority_threshold", 0.3),
+        )
+
+
+class AnalyseModelResiduals(BaseDataAnalysis):
+    """Residual diagnostics: normality, homoscedasticity, autocorrelation.
+
+    Workflow:
+        analyzer = AnalyzerFactory.create("pd.DataFrame", df)
+        result = analyzer.analyze(
+            actual_column="actual_sales",
+            predicted_column="predicted_sales",
+            significance_level=0.05,
+        )
+    """
+
+    def analyze(self, **kwargs) -> dict:
+        actual_column: str = kwargs.get("actual_column")
+        predicted_column: str = kwargs.get("predicted_column")
+
+        if actual_column is None or predicted_column is None:
+            raise ValueError("'actual_column' and 'predicted_column' are required.")
+        for col in (actual_column, predicted_column):
+            if col not in self._data_frame.columns:
+                raise KeyError(f"Column '{col}' not found.")
+
+        paired = self._data_frame[[actual_column, predicted_column]].dropna()
+        return ModelResidualsCalculator().calculate(
+            y_true=paired[actual_column].to_numpy(dtype=float),
+            y_pred=paired[predicted_column].to_numpy(dtype=float),
+            significance_level=kwargs.get("significance_level", 0.05),
+        )
+
+
+class AnalyseLearningCurve(BaseDataAnalysis):
+    """Learning curve for bias-variance diagnosis across training sizes.
+
+    Workflow:
+        from sklearn.linear_model import LogisticRegression
+
+        analyzer = AnalyzerFactory.create("pd.DataFrame", df)
+        result = analyzer.analyze(
+            target_column="churn",
+            estimator=LogisticRegression(),
+            feature_columns=["age", "income"],
+            strategy="stratified_kfold",
+            n_checkpoints=10,
+            cv=5,
+            scoring="accuracy",
+            gap_threshold=0.1,
+            min_acceptable_score=0.6,
+        )
+    """
+
+    def analyze(self, **kwargs) -> dict:
+        target_column: str = kwargs.get("target_column")
+        estimator = kwargs.get("estimator")
+
+        if target_column is None:
+            raise ValueError("'target_column' is required.")
+        if estimator is None:
+            raise ValueError("'estimator' is required (sklearn-compatible model).")
+        if target_column not in self._data_frame.columns:
+            raise KeyError(f"Column '{target_column}' not found.")
+
+        return LearningCurveCalculator().calculate(
+            data_frame=self._data_frame,
+            target_column=target_column,
+            estimator=estimator,
+            feature_columns=kwargs.get("feature_columns"),
+            n_checkpoints=kwargs.get("n_checkpoints", 10),
+            cv=kwargs.get("cv", 5),
+            scoring=kwargs.get("scoring", "accuracy"),
+            gap_threshold=kwargs.get("gap_threshold", 0.1),
+            min_acceptable_score=kwargs.get("min_acceptable_score", 0.6),
+            random_seed=kwargs.get("random_seed", 42),
+        )
+
+
+class AnalyseCrossValidation(BaseDataAnalysis):
+    """K-Fold / Stratified / Repeated cross-validation with CI.
+
+    Workflow:
+        from sklearn.ensemble import RandomForestClassifier
+
+        analyzer = AnalyzerFactory.create("pd.DataFrame", df)
+        result = analyzer.analyze(
+            target_column="churn",
+            estimator=RandomForestClassifier(n_estimators=100),
+            feature_columns=["age", "income"],
+            strategy="stratified_kfold",
+            n_folds=5,
+            n_repeats=3,
+            scoring="f1_weighted",
+            confidence_level=0.95,
+        )
+    """
+
+    def analyze(self, **kwargs) -> dict:
+        target_column: str = kwargs.get("target_column")
+        estimator = kwargs.get("estimator")
+
+        if target_column is None:
+            raise ValueError("'target_column' is required.")
+        if estimator is None:
+            raise ValueError("'estimator' is required (sklearn-compatible model).")
+        if target_column not in self._data_frame.columns:
+            raise KeyError(f"Column '{target_column}' not found.")
+
+        return CrossValidationCalculator().calculate(
+            data_frame=self._data_frame,
+            target_column=target_column,
+            estimator=estimator,
+            feature_columns=kwargs.get("feature_columns"),
+            strategy=kwargs.get("strategy", "stratified_kfold"),
+            n_folds=kwargs.get("n_folds", 5),
+            n_repeats=kwargs.get("n_repeats", 3),
+            scoring=kwargs.get("scoring", "accuracy"),
+            confidence_level=kwargs.get("confidence_level", 0.95),
+            random_seed=kwargs.get("random_seed", 42),
+            n_jobs=kwargs.get("n_jobs", -1),
+        )
+
+
+# ── DOMAIN 4 IMPORTS ──────────────────────────────────────────────────────────
+from statistics.time_series.volatility import VolatilityCalculator
+from statistics.time_series.momentum import MomentumCalculator
+from statistics.time_series.moving_averages import MovingAveragesCalculator
+from statistics.time_series.stationarity import StationarityCalculator
+from statistics.time_series.lag_features import LagFeaturesCalculator
+from statistics.time_series.change_points import ChangePointDetector
+from statistics.time_series.forecast_accuracy import ForecastAccuracyCalculator
+from statistics.time_series.cyclical_patterns import CyclicalPatternsCalculator
+from statistics.time_series.rolling_statistics import RollingStatisticsCalculator
+
+
+class AnalyseVolatility(BaseDataAnalysis):
+    """Rolling std, EWMA volatility, CV and regime detection."""
+
+    def analyze(self, **kwargs) -> dict:
+        column: str = kwargs.get("column")
+        if column is None:
+            raise ValueError("'column' is required.")
+        if column not in self._data_frame.columns:
+            raise KeyError(f"Column '{column}' not found in DataFrame.")
+        series = self._data_frame[column].dropna().to_numpy(dtype=float)
+        return VolatilityCalculator().calculate(
+            series=series,
+            window=kwargs.get("window", 20),
+            decay_factor=kwargs.get("decay_factor", 0.94),
+        )
+
+
+class AnalyseMomentum(BaseDataAnalysis):
+    """Rate of change, acceleration, and momentum signal classification."""
+
+    def analyze(self, **kwargs) -> dict:
+        column: str = kwargs.get("column")
+        if column is None:
+            raise ValueError("'column' is required.")
+        if column not in self._data_frame.columns:
+            raise KeyError(f"Column '{column}' not found in DataFrame.")
+        series = self._data_frame[column].dropna().to_numpy(dtype=float)
+        return MomentumCalculator().calculate(
+            series=series,
+            period=kwargs.get("period", 14),
+        )
+
+
+class AnalyseMovingAverages(BaseDataAnalysis):
+    """SMA, EMA, WMA computation with optional crossover detection."""
+
+    def analyze(self, **kwargs) -> dict:
+        column: str = kwargs.get("column")
+        if column is None:
+            raise ValueError("'column' is required.")
+        if column not in self._data_frame.columns:
+            raise KeyError(f"Column '{column}' not found in DataFrame.")
+        series = self._data_frame[column].dropna().to_numpy(dtype=float)
+        return MovingAveragesCalculator().calculate(
+            series=series,
+            periods=kwargs.get("periods", [20, 50, 200]),
+            ma_types=kwargs.get("ma_types"),
+            detect_crossovers=kwargs.get("detect_crossovers", False),
+            fast_period=kwargs.get("fast_period"),
+            slow_period=kwargs.get("slow_period"),
+            crossover_ma_type=kwargs.get("crossover_ma_type", "ema"),
+        )
+
+
+class AnalyseStationarity(BaseDataAnalysis):
+    """ADF + KPSS combined stationarity test with recommendation."""
+
+    def analyze(self, **kwargs) -> dict:
+        column: str = kwargs.get("column")
+        if column is None:
+            raise ValueError("'column' is required.")
+        if column not in self._data_frame.columns:
+            raise KeyError(f"Column '{column}' not found in DataFrame.")
+        series = self._data_frame[column].dropna().to_numpy(dtype=float)
+        return StationarityCalculator().calculate(
+            series=series,
+            max_lags=kwargs.get("max_lags", 4),
+            significance_level=kwargs.get("significance_level", 0.05),
+        )
+
+
+class AnalyseLagFeatures(BaseDataAnalysis):
+    """ACF, PACF analysis and lag feature generation."""
+
+    def analyze(self, **kwargs) -> dict:
+        column: str = kwargs.get("column")
+        if column is None:
+            raise ValueError("'column' is required.")
+        if column not in self._data_frame.columns:
+            raise KeyError(f"Column '{column}' not found in DataFrame.")
+        return LagFeaturesCalculator().calculate(
+            series=self._data_frame[column],
+            max_lag=kwargs.get("max_lag", 20),
+            lags_to_generate=kwargs.get("lags_to_generate"),
+            significance_level=kwargs.get("significance_level", 0.05),
+        )
+
+
+class AnalyseChangePoints(BaseDataAnalysis):
+    """CUSUM mean-shift and variance change point detection."""
+
+    def analyze(self, **kwargs) -> dict:
+        column: str = kwargs.get("column")
+        if column is None:
+            raise ValueError("'column' is required.")
+        if column not in self._data_frame.columns:
+            raise KeyError(f"Column '{column}' not found in DataFrame.")
+        series = self._data_frame[column].dropna().to_numpy(dtype=float)
+        return ChangePointDetector().calculate(
+            series=series,
+            k_multiplier=kwargs.get("k_multiplier", 0.5),
+            h_multiplier=kwargs.get("h_multiplier", 4.0),
+            variance_ratio_threshold=kwargs.get("variance_ratio_threshold", 2.0),
+        )
+
+
+class AnalyseForecastAccuracy(BaseDataAnalysis):
+    """MAE, RMSE, MAPE, MASE forecast accuracy metrics."""
+
+    def analyze(self, **kwargs) -> dict:
+        actual_column: str = kwargs.get("actual_column")
+        predicted_column: str = kwargs.get("predicted_column")
+        if actual_column is None or predicted_column is None:
+            raise ValueError("'actual_column' and 'predicted_column' are required.")
+        for col in (actual_column, predicted_column):
+            if col not in self._data_frame.columns:
+                raise KeyError(f"Column '{col}' not found in DataFrame.")
+        paired = self._data_frame[[actual_column, predicted_column]].dropna()
+        return ForecastAccuracyCalculator().calculate(
+            y_true=paired[actual_column].to_numpy(dtype=float),
+            y_pred=paired[predicted_column].to_numpy(dtype=float),
+            metrics=kwargs.get("metrics"),
+        )
+
+
+class AnalyseCyclicalPatterns(BaseDataAnalysis):
+    """FFT-based dominant cycle detection."""
+
+    def analyze(self, **kwargs) -> dict:
+        column: str = kwargs.get("column")
+        if column is None:
+            raise ValueError("'column' is required.")
+        if column not in self._data_frame.columns:
+            raise KeyError(f"Column '{column}' not found in DataFrame.")
+        series = self._data_frame[column].dropna().to_numpy(dtype=float)
+        return CyclicalPatternsCalculator().calculate(
+            series=series,
+            top_n=kwargs.get("top_n", 5),
+            remove_trend=kwargs.get("remove_trend", True),
+            apply_window=kwargs.get("apply_window", True),
+        )
+
+
+class AnalyseRollingStatistics(BaseDataAnalysis):
+    """Configurable rolling statistics: mean, std, min, max, median, skewness."""
+
+    def analyze(self, **kwargs) -> dict:
+        column: str = kwargs.get("column")
+        if column is None:
+            raise ValueError("'column' is required.")
+        if column not in self._data_frame.columns:
+            raise KeyError(f"Column '{column}' not found in DataFrame.")
+        series = self._data_frame[column].dropna().to_numpy(dtype=float)
+        return RollingStatisticsCalculator().calculate(
+            series=series,
+            window=kwargs.get("window", 20),
+            statistics=kwargs.get("statistics"),
         )

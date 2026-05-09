@@ -9,7 +9,7 @@ import numpy as np
 import pandas as pd
 from models.linear_regression import LinearRegression
 from evaluation.score import SquaredR
-from preproccesing.scalers.implementations.standar_scaler import StandardScaler
+from preproccesing.scalers.implementations.standard_scaler import StandardScaler
 
 
 @dataclass(frozen=True)
@@ -45,7 +45,7 @@ class AdditiveModelEvaluator:
             R² of the additive model.
         """
         x = np.column_stack([x_a, x_b])
-        model = LinearRegression()
+        model = LinearRegression(type_of_prediction="ordinary_least_squares", complexity="multiple")
         model.fit(x, y)
         return float(SquaredR().squared_r(y, model.predict(x)))
 
@@ -71,10 +71,10 @@ class InteractionModelEvaluator:
         """
         interaction_term = x_a * x_b
         x = np.column_stack([x_a, x_b, interaction_term])
-        model = LinearRegression()
+        model = LinearRegression(type_of_prediction="ordinary_least_squares", complexity="multiple")
         model.fit(x, y)
         r2 = float(SquaredR().squared_r(y, model.predict(x)))
-        interaction_coef = float(model.coefficients_[2])
+        interaction_coef = float(model.model.coefficients_[3])
         return r2, interaction_coef
 
 

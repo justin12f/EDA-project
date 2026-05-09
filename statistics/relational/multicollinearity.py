@@ -80,7 +80,7 @@ class SingleFeatureVIFCalculator:
             type_of_prediction="analytical",
             complexity="multiple",
         )
-        model.fit(x_others, y_target)
+        model.fit(x=x_others, y=y_target)
         y_pred = model.predict(x_others)
 
         ss_res = float(np.sum((y_target - y_pred) ** 2))
