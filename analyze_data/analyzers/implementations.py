@@ -49,6 +49,15 @@ from statistics.relational.granger_causality import GrangerCausalityCalculator
 from statistics.relational.contingency_analysis import ContingencyAnalysisCalculator
 from statistics.relational.interaction_effects import InteractionEffectsCalculator
 
+# ── DOMAIN 6 IMPORTS ──────────────────────────────────────────────────────────
+from statistics.nlp.text_basic_stats import TextBasicStatsCalculator
+from statistics.nlp.word_frequency import WordFrequencyCalculator
+from statistics.nlp.sentiment_analysis import SentimentAnalysisCalculator
+from statistics.nlp.topic_detection import TopicDetectionCalculator
+from statistics.nlp.language_detection import LanguageDetectionCalculator
+from statistics.nlp.text_similarity import TextSimilarityCalculator
+from statistics.nlp.named_entity_density import NamedEntityDensityCalculator
+
 
 
 
@@ -1531,3 +1540,199 @@ class AnalyseRollingStatistics(BaseDataAnalysis):
             window=kwargs.get("window", 20),
             statistics=kwargs.get("statistics"),
         )
+
+
+class AnalyseTextBasicStats(BaseDataAnalysis):
+    """Per-document and corpus-level text statistics.
+
+    Workflow:
+        analyzer = AnalyzerFactory.create("pd.DataFrame", df)
+        result = analyzer.analyze(
+            column="review_text",
+            sample_n=None,   # optional
+        )
+    """
+
+    def analyze(self, **kwargs) -> dict:
+        column: str = kwargs.get("column")
+        if column is None:
+            raise ValueError("'column' is required.")
+        if column not in self._data_frame.columns:
+            raise KeyError(f"Column '{column}' not found in DataFrame.")
+
+        return TextBasicStatsCalculator().calculate(
+            series=self._data_frame[column],
+            sample_n=kwargs.get("sample_n"),
+        )
+
+
+class AnalyseWordFrequency(BaseDataAnalysis):
+    """TF and TF-IDF term frequency ranking across a text corpus.
+
+    Workflow:
+        analyzer = AnalyzerFactory.create("pd.DataFrame", df)
+        result = analyzer.analyze(
+            column="article_body",
+            top_n=30,
+            remove_stopwords=True,
+            custom_stopwords=None,
+        )
+    """
+
+    def analyze(self, **kwargs) -> dict:
+        column: str = kwargs.get("column")
+        if column is None:
+            raise ValueError("'column' is required.")
+        if column not in self._data_frame.columns:
+            raise KeyError(f"Column '{column}' not found in DataFrame.")
+
+        return WordFrequencyCalculator().calculate(
+            series=self._data_frame[column],
+            top_n=kwargs.get("top_n", 30),
+            remove_stopwords=kwargs.get("remove_stopwords", True),
+            custom_stopwords=kwargs.get("custom_stopwords"),
+        )
+
+
+class AnalyseSentiment(BaseDataAnalysis):
+    """Lexicon-based polarity and subjectivity analysis.
+
+    Workflow:
+        analyzer = AnalyzerFactory.create("pd.DataFrame", df)
+        result = analyzer.analyze(
+            column="user_review",
+            sample_n=None,
+        )
+    """
+
+    def analyze(self, **kwargs) -> dict:
+        column: str = kwargs.get("column")
+        if column is None:
+            raise ValueError("'column' is required.")
+        if column not in self._data_frame.columns:
+            raise KeyError(f"Column '{column}' not found in DataFrame.")
+
+        return SentimentAnalysisCalculator().calculate(
+            series=self._data_frame[column],
+            sample_n=kwargs.get("sample_n"),
+        )
+
+
+class AnalyseTopicDetection(BaseDataAnalysis):
+    """NMF-based latent topic discovery in a text corpus.
+
+    Workflow:
+        analyzer = AnalyzerFactory.create("pd.DataFrame", df)
+        result = analyzer.analyze(
+            column="article_body",
+            n_topics=5,
+            top_terms_per_topic=10,
+            min_df=2,
+            max_df_ratio=0.9,
+            random_seed=42,
+        )
+    """
+
+    def analyze(self, **kwargs) -> dict:
+        column: str = kwargs.get("column")
+        if column is None:
+            raise ValueError("'column' is required.")
+        if column not in self._data_frame.columns:
+            raise KeyError(f"Column '{column}' not found in DataFrame.")
+
+        return TopicDetectionCalculator().calculate(
+            series=self._data_frame[column],
+            n_topics=kwargs.get("n_topics", 5),
+            top_terms_per_topic=kwargs.get("top_terms_per_topic", 10),
+            min_df=kwargs.get("min_df", 2),
+            max_df_ratio=kwargs.get("max_df_ratio", 0.9),
+            random_seed=kwargs.get("random_seed", 42),
+        )
+
+
+class AnalyseLanguageDetection(BaseDataAnalysis):
+    """Character trigram-based language detection per document.
+
+    Workflow:
+        analyzer = AnalyzerFactory.create("pd.DataFrame", df)
+        result = analyzer.analyze(
+            column="user_comment",
+            top_n_candidates=3,
+        )
+    """
+
+    def analyze(self, **kwargs) -> dict:
+        column: str = kwargs.get("column")
+        if column is None:
+            raise ValueError("'column' is required.")
+        if column not in self._data_frame.columns:
+            raise KeyError(f"Column '{column}' not found in DataFrame.")
+
+        return LanguageDetectionCalculator().calculate(
+            series=self._data_frame[column],
+            top_n_candidates=kwargs.get("top_n_candidates", 3),
+        )
+
+
+class AnalyseTextSimilarity(BaseDataAnalysis):
+    """Pairwise TF-IDF cosine similarity between two text columns.
+
+    Workflow:
+        analyzer = AnalyzerFactory.create("pd.DataFrame", df)
+        result = analyzer.analyze(
+            column_a="original_text",
+            column_b="translated_text",
+        )
+    """
+
+    def analyze(self, **kwargs) -> dict:
+        column_a: str = kwargs.get("column_a")
+        column_b: str = kwargs.get("column_b")
+
+        if column_a is None or column_b is None:
+            raise ValueError("'column_a' and 'column_b' are required.")
+        for col in (column_a, column_b):
+            if col not in self._data_frame.columns:
+                raise KeyError(f"Column '{col}' not found in DataFrame.")
+
+        return TextSimilarityCalculator().calculate(
+            data_frame=self._data_frame,
+            column_a=column_a,
+            column_b=column_b,
+        )
+
+
+class AnalyseNamedEntityDensity(BaseDataAnalysis):
+    """Rule-based named entity detection and density analysis.
+
+    Workflow:
+        analyzer = AnalyzerFactory.create("pd.DataFrame", df)
+        result = analyzer.analyze(
+            column="article_body",
+            entity_types=["PERSON", "ORGANIZATION", "MONEY"],  # optional
+            sample_n=None,
+        )
+    """
+
+    def analyze(self, **kwargs) -> dict:
+        column: str = kwargs.get("column")
+        if column is None:
+            raise ValueError("'column' is required.")
+        if column not in self._data_frame.columns:
+            raise KeyError(f"Column '{column}' not found in DataFrame.")
+
+        return NamedEntityDensityCalculator().calculate(
+            series=self._data_frame[column],
+            entity_types=kwargs.get("entity_types"),
+            sample_n=kwargs.get("sample_n"),
+        )
+
+
+# ── FACTORY REGISTRATIONS ─────────────────────────────────────────────────────
+AnalyzerFactory.register("text_basic_stats",      AnalyseTextBasicStats)
+AnalyzerFactory.register("word_frequency",         AnalyseWordFrequency)
+AnalyzerFactory.register("sentiment_analysis",     AnalyseSentiment)
+AnalyzerFactory.register("topic_detection",        AnalyseTopicDetection)
+AnalyzerFactory.register("language_detection",     AnalyseLanguageDetection)
+AnalyzerFactory.register("text_similarity",        AnalyseTextSimilarity)
+AnalyzerFactory.register("named_entity_density",   AnalyseNamedEntityDensity)
