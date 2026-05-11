@@ -56,6 +56,19 @@ from .analyzers.implementations import (
     AnalyseForecastAccuracy,
     AnalyseCyclicalPatterns,
     AnalyseRollingStatistics,
+    AnalyseKMeansClusters,
+    AnalyseRFMSegmentation,
+    AnalyseCohortAnalysis,
+    AnalysePopulationSplits,
+    AnalyseDBSCANClusters,
+    AnalyseHierarchicalClusters,
+    AnalyseTextBasicStats,
+    AnalyseWordFrequency,
+    AnalyseSentiment,
+    AnalyseTopicDetection,
+    AnalyseLanguageDetection,
+    AnalyseTextSimilarity,
+    AnalyseNamedEntityDensity,
 )
 
 
@@ -147,3 +160,20 @@ AnalyzerFactory.register("change_points",       AnalyseChangePoints)
 AnalyzerFactory.register("forecast_accuracy",   AnalyseForecastAccuracy)
 AnalyzerFactory.register("cyclical_patterns",   AnalyseCyclicalPatterns)
 AnalyzerFactory.register("rolling_statistics",  AnalyseRollingStatistics)
+
+# Domain 7 — Segmentation
+AnalyzerFactory.register("kmeans_clusters",        AnalyseKMeansClusters)
+AnalyzerFactory.register("rfm_segmentation",       AnalyseRFMSegmentation)
+AnalyzerFactory.register("cohort_analysis",        AnalyseCohortAnalysis)
+AnalyzerFactory.register("population_splits",      AnalysePopulationSplits)
+AnalyzerFactory.register("dbscan_clusters",        AnalyseDBSCANClusters)
+AnalyzerFactory.register("hierarchical_clusters",  AnalyseHierarchicalClusters)
+
+# Domain 6 — NLP
+AnalyzerFactory.register("text_basic_stats",      AnalyseTextBasicStats)
+AnalyzerFactory.register("word_frequency",         AnalyseWordFrequency)
+AnalyzerFactory.register("sentiment_analysis",     AnalyseSentiment)
+AnalyzerFactory.register("topic_detection",        AnalyseTopicDetection)
+AnalyzerFactory.register("language_detection",     AnalyseLanguageDetection)
+AnalyzerFactory.register("text_similarity",        AnalyseTextSimilarity)
+AnalyzerFactory.register("named_entity_density",   AnalyseNamedEntityDensity)

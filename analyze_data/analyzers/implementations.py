@@ -58,7 +58,104 @@ from statistics.nlp.language_detection import LanguageDetectionCalculator
 from statistics.nlp.text_similarity import TextSimilarityCalculator
 from statistics.nlp.named_entity_density import NamedEntityDensityCalculator
 
+# ── DOMAIN 7 IMPORTS ──────────────────────────────────────────────────────────
+from statistics.segmentation.kmeans_clusters import KMeansClusterCalculator
+from statistics.segmentation.rfm_segmentation import RFMSegmentationCalculator
+from statistics.segmentation.cohort_analysis import CohortAnalysisCalculator
+from statistics.segmentation.population_splits import PopulationSplitsCalculator
+from statistics.segmentation.dbscan_clusters import DBSCANClusterCalculator
+from statistics.segmentation.hierarchical_clusters import HierarchicalClusterCalculator
 
+
+
+
+# ── BASIC DATAFRAME INSPECTORS ────────────────────────────────────────────────
+
+
+class AnalyseDataTypes(BaseDataAnalysis):
+    """Return a dict of column → dtype string for the DataFrame."""
+
+    def analyze(self, **kwargs) -> dict:
+        return {"dtypes": self._data_frame.dtypes.astype(str).to_dict()}
+
+
+class AnalyseDataShape(BaseDataAnalysis):
+    """Return the (rows, columns) shape of the DataFrame."""
+
+    def analyze(self, **kwargs) -> dict:
+        return {"rows": self._data_frame.shape[0], "columns": self._data_frame.shape[1]}
+
+
+class AnalyseDataInfo(BaseDataAnalysis):
+    """Return column names, dtypes, and non-null counts."""
+
+    def analyze(self, **kwargs) -> dict:
+        info = {
+            col: {
+                "dtype": str(self._data_frame[col].dtype),
+                "non_null": int(self._data_frame[col].notna().sum()),
+                "null": int(self._data_frame[col].isna().sum()),
+            }
+            for col in self._data_frame.columns
+        }
+        return {"info": info, "n_rows": len(self._data_frame)}
+
+
+class AnalyseDataDescribe(BaseDataAnalysis):
+    """Return pandas describe() as a nested dict."""
+
+    def analyze(self, **kwargs) -> dict:
+        include = kwargs.get("include", "all")
+        return self._data_frame.describe(include=include).to_dict()
+
+
+class AnalyseDataColumns(BaseDataAnalysis):
+    """Return the list of column names."""
+
+    def analyze(self, **kwargs) -> dict:
+        return {"columns": self._data_frame.columns.tolist()}
+
+
+class AnalyseDataIndex(BaseDataAnalysis):
+    """Return index information."""
+
+    def analyze(self, **kwargs) -> dict:
+        idx = self._data_frame.index
+        return {
+            "index_name": idx.name,
+            "index_dtype": str(idx.dtype),
+            "start": str(idx[0]) if len(idx) > 0 else None,
+            "end": str(idx[-1]) if len(idx) > 0 else None,
+            "n": len(idx),
+        }
+
+
+class AnalyseDataHead(BaseDataAnalysis):
+    """Return the first N rows as a dict."""
+
+    def analyze(self, **kwargs) -> dict:
+        n: int = kwargs.get("n", 5)
+        return self._data_frame.head(n).to_dict(orient="records")
+
+
+class AnalyseDataTail(BaseDataAnalysis):
+    """Return the last N rows as a dict."""
+
+    def analyze(self, **kwargs) -> dict:
+        n: int = kwargs.get("n", 5)
+        return self._data_frame.tail(n).to_dict(orient="records")
+
+
+class AnalyseDataSample(BaseDataAnalysis):
+    """Return a random sample of N rows as a dict."""
+
+    def analyze(self, **kwargs) -> dict:
+        n: int = kwargs.get("n", 5)
+        random_state: int = kwargs.get("random_state", 42)
+        sample_n = min(n, len(self._data_frame))
+        return self._data_frame.sample(sample_n, random_state=random_state).to_dict(
+            orient="records"
+        )
 
 
 # ==================== ANALYZERS DE FEATURES ENGINEERING ====================
@@ -1728,11 +1825,189 @@ class AnalyseNamedEntityDensity(BaseDataAnalysis):
         )
 
 
-# ── FACTORY REGISTRATIONS ─────────────────────────────────────────────────────
-AnalyzerFactory.register("text_basic_stats",      AnalyseTextBasicStats)
-AnalyzerFactory.register("word_frequency",         AnalyseWordFrequency)
-AnalyzerFactory.register("sentiment_analysis",     AnalyseSentiment)
-AnalyzerFactory.register("topic_detection",        AnalyseTopicDetection)
-AnalyzerFactory.register("language_detection",     AnalyseLanguageDetection)
-AnalyzerFactory.register("text_similarity",        AnalyseTextSimilarity)
-AnalyzerFactory.register("named_entity_density",   AnalyseNamedEntityDensity)
+
+
+# ── DOMAIN 7 — SEGMENTATION ───────────────────────────────────────────────────
+
+
+class AnalyseKMeansClusters(BaseDataAnalysis):
+    """K-Means clustering with auto K selection via silhouette score.
+
+    Workflow:
+        analyzer = AnalyzerFactory.create("kmeans_clusters", df)
+        result = analyzer.analyze(
+            feature_columns=["recency", "frequency", "monetary"],
+            n_clusters=None,     # auto-selects optimal K
+            k_range=(2, 8),
+            random_seed=42,
+        )
+    """
+
+    def analyze(self, **kwargs) -> dict:
+        feature_columns: list[str] | None = kwargs.get("feature_columns")
+        if feature_columns is not None:
+            missing = [c for c in feature_columns if c not in self._data_frame.columns]
+            if missing:
+                raise KeyError(f"Feature columns not found: {missing}")
+        return KMeansClusterCalculator().calculate(
+            data_frame=self._data_frame,
+            feature_columns=feature_columns,
+            n_clusters=kwargs.get("n_clusters"),
+            k_range=kwargs.get("k_range", (2, 8)),
+            random_seed=kwargs.get("random_seed", 42),
+        )
+
+
+class AnalyseRFMSegmentation(BaseDataAnalysis):
+    """RFM segmentation from transactional data.
+
+    Workflow:
+        analyzer = AnalyzerFactory.create("rfm_segmentation", df)
+        result = analyzer.analyze(
+            customer_column="customer_id",
+            date_column="purchase_date",
+            amount_column="order_value",
+            reference_date=None,   # optional pd.Timestamp
+        )
+    """
+
+    def analyze(self, **kwargs) -> dict:
+        required = ["customer_column", "date_column", "amount_column"]
+        missing_params = [p for p in required if kwargs.get(p) is None]
+        if missing_params:
+            raise ValueError(f"Required parameters: {missing_params}")
+        for col in (
+            kwargs["customer_column"],
+            kwargs["date_column"],
+            kwargs["amount_column"],
+        ):
+            if col not in self._data_frame.columns:
+                raise KeyError(f"Column '{col}' not found in DataFrame.")
+        return RFMSegmentationCalculator().calculate(
+            data_frame=self._data_frame,
+            customer_column=kwargs["customer_column"],
+            date_column=kwargs["date_column"],
+            amount_column=kwargs["amount_column"],
+            reference_date=kwargs.get("reference_date"),
+        )
+
+
+class AnalyseCohortAnalysis(BaseDataAnalysis):
+    """Cohort retention matrix by acquisition period.
+
+    Workflow:
+        analyzer = AnalyzerFactory.create("cohort_analysis", df)
+        result = analyzer.analyze(
+            user_column="user_id",
+            date_column="activity_date",
+            period="M",    # "M" | "W" | "Q"
+        )
+    """
+
+    def analyze(self, **kwargs) -> dict:
+        user_column: str = kwargs.get("user_column")
+        date_column: str = kwargs.get("date_column")
+        if user_column is None or date_column is None:
+            raise ValueError("'user_column' and 'date_column' are required.")
+        for col in (user_column, date_column):
+            if col not in self._data_frame.columns:
+                raise KeyError(f"Column '{col}' not found in DataFrame.")
+        return CohortAnalysisCalculator().calculate(
+            data_frame=self._data_frame,
+            user_column=user_column,
+            date_column=date_column,
+            period=kwargs.get("period", "M"),
+        )
+
+
+class AnalysePopulationSplits(BaseDataAnalysis):
+    """Statistical feature comparison between two population groups.
+
+    Workflow:
+        analyzer = AnalyzerFactory.create("population_splits", df)
+        result = analyzer.analyze(
+            split_column="is_churned",
+            group_a_value=0,
+            group_b_value=1,
+            feature_columns=None,       # optional
+            significance_level=0.05,
+        )
+    """
+
+    def analyze(self, **kwargs) -> dict:
+        split_column: str = kwargs.get("split_column")
+        group_a_value = kwargs.get("group_a_value")
+        group_b_value = kwargs.get("group_b_value")
+        if split_column is None:
+            raise ValueError("'split_column' is required.")
+        if group_a_value is None or group_b_value is None:
+            raise ValueError("'group_a_value' and 'group_b_value' are required.")
+        if split_column not in self._data_frame.columns:
+            raise KeyError(f"Column '{split_column}' not found in DataFrame.")
+        return PopulationSplitsCalculator().calculate(
+            data_frame=self._data_frame,
+            split_column=split_column,
+            group_a_value=group_a_value,
+            group_b_value=group_b_value,
+            feature_columns=kwargs.get("feature_columns"),
+            significance_level=kwargs.get("significance_level", 0.05),
+        )
+
+
+class AnalyseDBSCANClusters(BaseDataAnalysis):
+    """DBSCAN density-based clustering with auto epsilon estimation.
+
+    Workflow:
+        analyzer = AnalyzerFactory.create("dbscan_clusters", df)
+        result = analyzer.analyze(
+            feature_columns=["lat", "lon"],
+            epsilon=None,       # auto-estimated via k-distance elbow
+            min_samples=5,
+        )
+    """
+
+    def analyze(self, **kwargs) -> dict:
+        feature_columns: list[str] | None = kwargs.get("feature_columns")
+        if feature_columns is not None:
+            missing = [c for c in feature_columns if c not in self._data_frame.columns]
+            if missing:
+                raise KeyError(f"Feature columns not found: {missing}")
+        return DBSCANClusterCalculator().calculate(
+            data_frame=self._data_frame,
+            feature_columns=feature_columns,
+            epsilon=kwargs.get("epsilon"),
+            min_samples=kwargs.get("min_samples", 5),
+            random_seed=kwargs.get("random_seed", 42),
+        )
+
+
+class AnalyseHierarchicalClusters(BaseDataAnalysis):
+    """Hierarchical agglomerative clustering with cophenetic correlation.
+
+    Workflow:
+        analyzer = AnalyzerFactory.create("hierarchical_clusters", df)
+        result = analyzer.analyze(
+            feature_columns=["age", "income", "score"],
+            n_clusters=None,
+            k_range=(2, 8),
+            linkage_method="ward",    # "ward"|"complete"|"average"|"single"
+            extract_dendrogram=False,
+        )
+    """
+
+    def analyze(self, **kwargs) -> dict:
+        feature_columns: list[str] | None = kwargs.get("feature_columns")
+        if feature_columns is not None:
+            missing = [c for c in feature_columns if c not in self._data_frame.columns]
+            if missing:
+                raise KeyError(f"Feature columns not found: {missing}")
+        return HierarchicalClusterCalculator().calculate(
+            data_frame=self._data_frame,
+            feature_columns=feature_columns,
+            n_clusters=kwargs.get("n_clusters"),
+            k_range=kwargs.get("k_range", (2, 8)),
+            linkage_method=kwargs.get("linkage_method", "ward"),
+            extract_dendrogram=kwargs.get("extract_dendrogram", False),
+        )
+
+
