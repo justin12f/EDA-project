@@ -13,8 +13,8 @@ class MeanSquareError:
         y_pred: np.ndarray | pd.Series | list[pd.Series],
     ) -> float:
         """calculate the MSE value"""
-        y_true = np.array(y_true)
-        y_pred = np.array(y_pred)
+        y_true = np.ravel(y_true)
+        y_pred = np.ravel(y_pred)
         return np.mean((y_true - y_pred) ** 2)
 
 
@@ -40,8 +40,8 @@ class SquaredR:
         y_pred: np.ndarray | pd.Series | list[pd.Series],
     ) -> float:
         """calculate the R**2 value"""
-        y_true = np.array(y_true)
-        y_pred = np.array(y_pred)
+        y_true = np.ravel(y_true)
+        y_pred = np.ravel(y_pred)
         y_true_mean = y_true.mean()
         numerator = np.sum((y_pred - y_true) ** 2)
         denominator = np.sum((y_true - y_true_mean) ** 2)

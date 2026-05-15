@@ -66,7 +66,15 @@ from statistics.segmentation.population_splits import PopulationSplitsCalculator
 from statistics.segmentation.dbscan_clusters import DBSCANClusterCalculator
 from statistics.segmentation.hierarchical_clusters import HierarchicalClusterCalculator
 
-
+# ── DOMAIN 8 IMPORTS ──────────────────────────────────────────────────────────
+from statistics.business.growth_rates import GrowthRatesCalculator
+from statistics.business.risk_metrics import RiskMetricsCalculator
+from statistics.business.financial_ratios import FinancialRatiosCalculator
+from statistics.business.conversion_funnel import ConversionFunnelCalculator
+from statistics.business.churn_rate import ChurnRateCalculator
+from statistics.business.customer_lifetime_value import CustomerLifetimeValueCalculator
+from statistics.business.pareto_analysis import ParetoAnalysisCalculator
+from statistics.business.run_rate import RunRateCalculator
 
 
 # ── BASIC DATAFRAME INSPECTORS ────────────────────────────────────────────────
@@ -2011,3 +2019,274 @@ class AnalyseHierarchicalClusters(BaseDataAnalysis):
         )
 
 
+class AnalyseGrowthRates(BaseDataAnalysis):
+    """MoM/YoY period-over-period growth, CAGR, and rolling growth.
+
+    Workflow:
+        analyzer = AnalyzerFactory.create("pd.DataFrame", df)
+        result = analyzer.analyze(
+            value_column="revenue",
+            date_column="month",        # optional
+            period_window=1,
+            periods_per_year=12,
+        )
+    """
+
+    def analyze(self, **kwargs) -> dict:
+        value_column: str = kwargs.get("value_column")
+        if value_column is None:
+            raise ValueError("'value_column' is required.")
+        if value_column not in self._data_frame.columns:
+            raise KeyError(f"Column '{value_column}' not found in DataFrame.")
+
+        return GrowthRatesCalculator().calculate(
+            data_frame=self._data_frame,
+            value_column=value_column,
+            date_column=kwargs.get("date_column"),
+            period_window=kwargs.get("period_window", 1),
+            n_years=kwargs.get("n_years"),
+            periods_per_year=kwargs.get("periods_per_year", 12),
+        )
+
+
+class AnalyseRiskMetrics(BaseDataAnalysis):
+    """VaR, CVaR, Sharpe, Sortino, Max Drawdown, and Calmar ratio.
+
+    Workflow:
+        analyzer = AnalyzerFactory.create("pd.DataFrame", df)
+        result = analyzer.analyze(
+            value_column="portfolio_value",
+            returns_column=None,          # optional pre-computed returns
+            confidence_level=0.95,
+            risk_free_rate=0.02,
+            periods_per_year=252,
+        )
+    """
+
+    def analyze(self, **kwargs) -> dict:
+        value_column: str = kwargs.get("value_column")
+        if value_column is None:
+            raise ValueError("'value_column' is required.")
+        if value_column not in self._data_frame.columns:
+            raise KeyError(f"Column '{value_column}' not found in DataFrame.")
+
+        return RiskMetricsCalculator().calculate(
+            data_frame=self._data_frame,
+            value_column=value_column,
+            returns_column=kwargs.get("returns_column"),
+            returns_method=kwargs.get("returns_method", "simple"),
+            confidence_level=kwargs.get("confidence_level", 0.95),
+            risk_free_rate=kwargs.get("risk_free_rate", 0.02),
+            periods_per_year=kwargs.get("periods_per_year", 252),
+        )
+
+
+class AnalyseFinancialRatios(BaseDataAnalysis):
+    """Profitability, liquidity, leverage, and efficiency ratios.
+
+    Required columns (subset used per ratio):
+        revenue, cogs, net_income, shareholders_equity,
+        total_assets, current_assets, current_liabilities,
+        inventory, total_debt
+
+    Workflow:
+        analyzer = AnalyzerFactory.create("pd.DataFrame", df)
+        result = analyzer.analyze(
+            ratios=["gross_margin", "roe", "current_ratio"],  # optional
+        )
+    """
+
+    def analyze(self, **kwargs) -> dict:
+        return FinancialRatiosCalculator().calculate(
+            data_frame=self._data_frame,
+            ratios=kwargs.get("ratios"),
+        )
+
+
+class AnalyseConversionFunnel(BaseDataAnalysis):
+    """Funnel analysis with stage conversion rates and bottleneck detection.
+
+    Workflow — pre-aggregated:
+        analyzer = AnalyzerFactory.create("pd.DataFrame", df)
+        result = analyzer.analyze(
+            stage_counts={"Visit": 10000, "Signup": 3000, "Purchase": 500},
+            bottleneck_threshold=0.5,
+        )
+
+    Workflow — event log:
+        result = analyzer.analyze(
+            user_column="user_id",
+            event_column="event_name",
+            stage_order=["Visit", "Signup", "Purchase"],
+            bottleneck_threshold=0.5,
+        )
+    """
+
+    def analyze(self, **kwargs) -> dict:
+        stage_counts: dict | None = kwargs.get("stage_counts")
+        user_column: str | None = kwargs.get("user_column")
+        event_column: str | None = kwargs.get("event_column")
+        stage_order: list[str] | None = kwargs.get("stage_order")
+
+        if stage_counts is None and (
+            user_column is None or event_column is None or stage_order is None
+        ):
+            raise ValueError(
+                "Provide 'stage_counts' OR all of: 'user_column', "
+                "'event_column', 'stage_order'."
+            )
+
+        return ConversionFunnelCalculator().calculate(
+            stage_counts=stage_counts,
+            data_frame=self._data_frame if stage_counts is None else None,
+            user_column=user_column,
+            event_column=event_column,
+            stage_order=stage_order,
+            bottleneck_threshold=kwargs.get("bottleneck_threshold", 0.5),
+        )
+
+
+class AnalyseChurnRate(BaseDataAnalysis):
+    """Period-level churn rate from aggregated data or event logs.
+
+    Workflow — aggregated:
+        analyzer = AnalyzerFactory.create("pd.DataFrame", df)
+        result = analyzer.analyze(
+            period_column="month",
+            customers_start_column="customers_start",
+            churned_column="churned",
+            new_customers_column="new_customers",
+            mode="aggregated",
+        )
+
+    Workflow — event log:
+        result = analyzer.analyze(
+            user_column="user_id",
+            period_column="month",
+            mode="events",
+        )
+    """
+
+    def analyze(self, **kwargs) -> dict:
+        period_column: str = kwargs.get("period_column")
+        if period_column is None:
+            raise ValueError("'period_column' is required.")
+        if period_column not in self._data_frame.columns:
+            raise KeyError(f"Column '{period_column}' not found in DataFrame.")
+
+        return ChurnRateCalculator().calculate(
+            data_frame=self._data_frame,
+            period_column=period_column,
+            mode=kwargs.get("mode", "aggregated"),
+            customers_start_column=kwargs.get("customers_start_column"),
+            churned_column=kwargs.get("churned_column"),
+            new_customers_column=kwargs.get("new_customers_column"),
+            user_column=kwargs.get("user_column"),
+        )
+
+
+class AnalyseCustomerLifetimeValue(BaseDataAnalysis):
+    """Discounted and simple CLV per customer from transactional data.
+
+    Workflow:
+        analyzer = AnalyzerFactory.create("pd.DataFrame", df)
+        result = analyzer.analyze(
+            customer_column="customer_id",
+            order_value_column="order_value",
+            date_column="purchase_date",
+            discount_rate=0.1,
+            margin_rate=0.3,
+            periods_per_year=12,
+        )
+    """
+
+    def analyze(self, **kwargs) -> dict:
+        required = ["customer_column", "order_value_column", "date_column"]
+        missing_params = [p for p in required if kwargs.get(p) is None]
+        if missing_params:
+            raise ValueError(f"Required parameters: {missing_params}")
+
+        for col_key in required:
+            col = kwargs[col_key]
+            if col not in self._data_frame.columns:
+                raise KeyError(f"Column '{col}' not found in DataFrame.")
+
+        return CustomerLifetimeValueCalculator().calculate(
+            data_frame=self._data_frame,
+            customer_column=kwargs["customer_column"],
+            order_value_column=kwargs["order_value_column"],
+            date_column=kwargs["date_column"],
+            discount_rate=kwargs.get("discount_rate", 0.1),
+            margin_rate=kwargs.get("margin_rate", 0.3),
+            periods_per_year=kwargs.get("periods_per_year", 12),
+        )
+
+
+class AnalyseParetoAnalysis(BaseDataAnalysis):
+    """Pareto (80/20) analysis with Gini concentration coefficient.
+
+    Workflow:
+        analyzer = AnalyzerFactory.create("pd.DataFrame", df)
+        result = analyzer.analyze(
+            entity_column="product_sku",
+            value_column="revenue",
+            target_share=0.8,
+        )
+    """
+
+    def analyze(self, **kwargs) -> dict:
+        entity_column: str = kwargs.get("entity_column")
+        value_column: str = kwargs.get("value_column")
+
+        if entity_column is None or value_column is None:
+            raise ValueError("'entity_column' and 'value_column' are required.")
+        for col in (entity_column, value_column):
+            if col not in self._data_frame.columns:
+                raise KeyError(f"Column '{col}' not found in DataFrame.")
+
+        return ParetoAnalysisCalculator().calculate(
+            data_frame=self._data_frame,
+            entity_column=entity_column,
+            value_column=value_column,
+            target_share=kwargs.get("target_share", 0.8),
+        )
+
+
+class AnalyseRunRate(BaseDataAnalysis):
+    """Run rate projection: simple, trailing average, and weighted recent.
+
+    Workflow — partial period (YTD):
+        analyzer = AnalyzerFactory.create("pd.DataFrame", df)
+        result = analyzer.analyze(
+            observed_value=750_000,
+            elapsed_fraction=0.625,
+            methods=["simple"],
+        )
+
+    Workflow — historical periods:
+        result = analyzer.analyze(
+            value_column="monthly_revenue",
+            full_periods=12,
+            n_periods_trailing=3,
+            decay=0.9,
+            methods=["trailing_average", "weighted_recent"],
+        )
+    """
+
+    def analyze(self, **kwargs) -> dict:
+        value_column: str | None = kwargs.get("value_column")
+        observed_value: float | None = kwargs.get("observed_value")
+
+        if value_column is not None and value_column not in self._data_frame.columns:
+            raise KeyError(f"Column '{value_column}' not found in DataFrame.")
+
+        return RunRateCalculator().calculate(
+            observed_value=observed_value,
+            elapsed_fraction=kwargs.get("elapsed_fraction"),
+            data_frame=self._data_frame if value_column is not None else None,
+            value_column=value_column,
+            full_periods=kwargs.get("full_periods", 12),
+            n_periods_trailing=kwargs.get("n_periods_trailing", 3),
+            decay=kwargs.get("decay", 0.9),
+            methods=kwargs.get("methods"),
+        )

@@ -2,8 +2,8 @@
 
 import pandas as pd
 
-from .analyzers.base import BaseDataAnalysis
-from .analyzers.implementations import (
+from analyze_data.analyzers.base import BaseDataAnalysis
+from analyze_data.analyzers.implementations import (
     AnalyseDataColumns,
     AnalyseDataDescribe,
     AnalyseDataHead,
@@ -69,6 +69,14 @@ from .analyzers.implementations import (
     AnalyseLanguageDetection,
     AnalyseTextSimilarity,
     AnalyseNamedEntityDensity,
+    AnalyseGrowthRates,
+    AnalyseRiskMetrics,
+    AnalyseFinancialRatios,
+    AnalyseConversionFunnel,
+    AnalyseChurnRate,
+    AnalyseCustomerLifetimeValue,
+    AnalyseParetoAnalysis,
+    AnalyseRunRate,
 )
 
 
@@ -177,3 +185,13 @@ AnalyzerFactory.register("topic_detection",        AnalyseTopicDetection)
 AnalyzerFactory.register("language_detection",     AnalyseLanguageDetection)
 AnalyzerFactory.register("text_similarity",        AnalyseTextSimilarity)
 AnalyzerFactory.register("named_entity_density",   AnalyseNamedEntityDensity)
+
+# Domain 8 — Business
+AnalyzerFactory.register("growth_rates",              AnalyseGrowthRates)
+AnalyzerFactory.register("risk_metrics",              AnalyseRiskMetrics)
+AnalyzerFactory.register("financial_ratios",          AnalyseFinancialRatios)
+AnalyzerFactory.register("conversion_funnel",         AnalyseConversionFunnel)
+AnalyzerFactory.register("churn_rate",                AnalyseChurnRate)
+AnalyzerFactory.register("customer_lifetime_value",   AnalyseCustomerLifetimeValue)
+AnalyzerFactory.register("pareto_analysis",           AnalyseParetoAnalysis)
+AnalyzerFactory.register("run_rate",                  AnalyseRunRate)

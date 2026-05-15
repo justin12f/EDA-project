@@ -2,12 +2,13 @@
 
 from abc import ABC, abstractmethod
 
-import numpy as np
 import pandas as pd
+import numpy as np
 
 from algorithms.optimizers.gradient_descent import GradientDescent
 from evaluation.score import Score
 from preproccesing.encoders.encoder_factory import Encoder
+from preproccesing.scalers.implementations.standard_scaler import StandardScaler
 
 
 class BaseLinearRegressionModel(ABC):
@@ -339,6 +340,13 @@ class AddToFitFromKwargs:
         return fit_arguments
 
 
+class StandardSCalerLinearRegression:
+    """Scaler for linear regression"""
+
+    def scale(self , data : pd.Series) -> pd.Series:
+        """Scale the data"""
+        return StandardScaler().fit_transform(data)
+
 class LinearRegression(BaseLinearRegressionModel):
     """Dependency Injection for linear regression"""
 
@@ -347,6 +355,7 @@ class LinearRegression(BaseLinearRegressionModel):
     ) -> None:
         self.model = LinearRegressionFactory().create(type_of_prediction, complexity)
         self.encoder = None
+        self.standard_scaler = False 
 
     def fit(self, x: list[pd.Series], y: pd.DataFrame, **kwargs) -> None:
         """fit de  linear regresion"""
@@ -360,11 +369,18 @@ class LinearRegression(BaseLinearRegressionModel):
             "max_iterations",
             "tolerance",
             "type_of_encoder",
+            "standard_scaler"
         ]
 
         fit_arguments = AddToFitFromKwargs().add_to_fit_from_kwargs(
             fit_arguments, list_of_arguments, kwargs
         )
+
+
+        if fit_arguments.get("standard_scaler"):
+            self.standard_scaler = StandardScaler()
+            x = self.standard_scaler.fit_transform(x)
+
 
         if "type_of_encoder" in fit_arguments:
             self.encoder = EncodeNeededValidation(x).validate(
@@ -389,6 +405,9 @@ class LinearRegression(BaseLinearRegressionModel):
 
     def predict(self, x: np.ndarray | pd.DataFrame | list[pd.Series]) -> np.ndarray:
         """predict the y value"""
+        if getattr(self, "standard_scaler", False) and hasattr(self.standard_scaler, "mean_"):
+            x = self.standard_scaler.transform(x)
+
         if self.encoder is not None:
             encoded_df = self.encoder.transform()
             x = encoded_df.iloc[:, 0] if len(encoded_df.columns) == 1 else encoded_df

@@ -2,8 +2,8 @@
 
 import pandas as pd
 
-from .implementations.base import BaseEncoder
-from .implementations.implementations import OneHotEncoder, OrdinalEncoder
+from preproccesing.encoders.implementations.base import BaseEncoder
+from preproccesing.encoders.implementations.implementations import OneHotEncoder, OrdinalEncoder
 
 
 class EncoderFactory:
