@@ -416,6 +416,13 @@ class ColumnsTitlesStep(BaseStep):
             .str.lower()
             .str.replace(r"\s+", "_", regex=True)
         )
+        df.columns = [
+            "".join(
+                c for c in unicodedata.normalize('NFD', col)
+                if unicodedata.category(c) != 'Mn'
+            )
+            for col in df.columns
+        ]
         return df
 
 

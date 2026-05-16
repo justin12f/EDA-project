@@ -77,6 +77,19 @@ from analyze_data.analyzers.implementations import (
     AnalyseCustomerLifetimeValue,
     AnalyseParetoAnalysis,
     AnalyseRunRate,
+    AnalyseGeoDistribution,
+    AnalyseGeoClustering,
+    AnalyseGeoBoundingBox,
+    AnalyseGeoHeatmap,
+    AnalyseProximity,
+    AnalyseNetworkDensity,
+    AnalyseCentrality,
+    AnalyseCommunityDetection,
+    AnalysePathAnalysis,
+    AnalyseKaplanMeier,
+    AnalyseHazardRate,
+    AnalyseEventDensity,
+    AnalyseTimeToEvent,
 )
 
 
@@ -195,3 +208,21 @@ AnalyzerFactory.register("churn_rate",                AnalyseChurnRate)
 AnalyzerFactory.register("customer_lifetime_value",   AnalyseCustomerLifetimeValue)
 AnalyzerFactory.register("pareto_analysis",           AnalyseParetoAnalysis)
 AnalyzerFactory.register("run_rate",                  AnalyseRunRate)
+
+# Domain 9 — Geospatial
+AnalyzerFactory.register("geo_distribution",          AnalyseGeoDistribution)
+AnalyzerFactory.register("geo_clustering",            AnalyseGeoClustering)
+AnalyzerFactory.register("geo_bounding_box",          AnalyseGeoBoundingBox)
+AnalyzerFactory.register("geo_heatmap",               AnalyseGeoHeatmap)
+AnalyzerFactory.register("proximity_analysis",        AnalyseProximity)
+
+AnalyzerFactory.register("network_density",      AnalyseNetworkDensity)
+AnalyzerFactory.register("centrality",           AnalyseCentrality)
+AnalyzerFactory.register("community_detection",  AnalyseCommunityDetection)
+AnalyzerFactory.register("path_analysis",        AnalysePathAnalysis)
+
+# Domain 11 — Survival & Events
+AnalyzerFactory.register("kaplan_meier",         AnalyseKaplanMeier)
+AnalyzerFactory.register("hazard_rate",          AnalyseHazardRate)
+AnalyzerFactory.register("event_density",        AnalyseEventDensity)
+AnalyzerFactory.register("time_to_event",        AnalyseTimeToEvent)

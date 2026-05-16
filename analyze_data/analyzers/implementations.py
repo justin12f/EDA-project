@@ -58,6 +58,12 @@ from statistics.nlp.language_detection import LanguageDetectionCalculator
 from statistics.nlp.text_similarity import TextSimilarityCalculator
 from statistics.nlp.named_entity_density import NamedEntityDensityCalculator
 
+# ── DOMAIN 9 IMPORTS ──────────────────────────────────────────────────────────
+from statistics.geospatial.geo_distribution import GeoDistributionCalculator
+from statistics.geospatial.geo_clustering import GeoClusteringCalculator
+from statistics.geospatial.geo_bounding_box import GeoBoundingBoxCalculator
+from statistics.geospatial.geo_heatmap import GeoHeatmapCalculator
+from statistics.geospatial.proximity_analysis import ProximityAnalysisCalculator
 # ── DOMAIN 7 IMPORTS ──────────────────────────────────────────────────────────
 from statistics.segmentation.kmeans_clusters import KMeansClusterCalculator
 from statistics.segmentation.rfm_segmentation import RFMSegmentationCalculator
@@ -76,6 +82,18 @@ from statistics.business.customer_lifetime_value import CustomerLifetimeValueCal
 from statistics.business.pareto_analysis import ParetoAnalysisCalculator
 from statistics.business.run_rate import RunRateCalculator
 
+
+# ── DOMAIN 10 IMPORTS ─────────────────────────────────────────────────────────
+from statistics.graphs.network_density import NetworkDensityCalculator
+from statistics.graphs.centrality_analysis import CentralityAnalysisCalculator
+from statistics.graphs.community_detection import CommunityDetectionCalculator
+from statistics.graphs.path_analysis import PathAnalysisCalculator
+
+# ── DOMAIN 11 IMPORTS ─────────────────────────────────────────────────────────
+from statistics.survival.kaplan_meier import KaplanMeierCalculator
+from statistics.survival.hazard_rate import HazardRateCalculator
+from statistics.survival.event_density import EventDensityCalculator
+from statistics.survival.time_to_event import TimeToEventCalculator
 
 # ── BASIC DATAFRAME INSPECTORS ────────────────────────────────────────────────
 
@@ -2289,4 +2307,429 @@ class AnalyseRunRate(BaseDataAnalysis):
             n_periods_trailing=kwargs.get("n_periods_trailing", 3),
             decay=kwargs.get("decay", 0.9),
             methods=kwargs.get("methods"),
+        )
+
+
+class AnalyseGeoDistribution(BaseDataAnalysis):
+    """Geographic frequency distribution with HHI concentration metric.
+
+    Workflow:
+        analyzer = AnalyzerFactory.create("pd.DataFrame", df)
+        result = analyzer.analyze(
+            geo_column="country",
+            top_n=20,
+            secondary_column="city",   # optional
+        )
+    """
+
+    def analyze(self, **kwargs) -> dict:
+        geo_column: str = kwargs.get("geo_column")
+        if geo_column is None:
+            raise ValueError("'geo_column' is required.")
+        if geo_column not in self._data_frame.columns:
+            raise KeyError(f"Column '{geo_column}' not found in DataFrame.")
+
+        return GeoDistributionCalculator().calculate(
+            data_frame=self._data_frame,
+            geo_column=geo_column,
+            top_n=kwargs.get("top_n", 20),
+            secondary_column=kwargs.get("secondary_column"),
+        )
+
+
+class AnalyseGeoClustering(BaseDataAnalysis):
+    """Haversine-DBSCAN geographic point clustering.
+
+    Workflow:
+        analyzer = AnalyzerFactory.create("pd.DataFrame", df)
+        result = analyzer.analyze(
+            lat_column="latitude",
+            lon_column="longitude",
+            epsilon_km=5.0,
+            min_samples=5,
+        )
+    """
+
+    def analyze(self, **kwargs) -> dict:
+        lat_column: str = kwargs.get("lat_column")
+        lon_column: str = kwargs.get("lon_column")
+
+        if lat_column is None or lon_column is None:
+            raise ValueError("'lat_column' and 'lon_column' are required.")
+        for col in (lat_column, lon_column):
+            if col not in self._data_frame.columns:
+                raise KeyError(f"Column '{col}' not found in DataFrame.")
+
+        return GeoClusteringCalculator().calculate(
+            data_frame=self._data_frame,
+            lat_column=lat_column,
+            lon_column=lon_column,
+            epsilon_km=kwargs.get("epsilon_km", 5.0),
+            min_samples=kwargs.get("min_samples", 5),
+        )
+
+
+class AnalyseGeoBoundingBox(BaseDataAnalysis):
+    """Bounding box, centroid, diagonal, and dispersion label.
+
+    Workflow:
+        analyzer = AnalyzerFactory.create("pd.DataFrame", df)
+        result = analyzer.analyze(
+            lat_column="latitude",
+            lon_column="longitude",
+        )
+    """
+
+    def analyze(self, **kwargs) -> dict:
+        lat_column: str = kwargs.get("lat_column")
+        lon_column: str = kwargs.get("lon_column")
+
+        if lat_column is None or lon_column is None:
+            raise ValueError("'lat_column' and 'lon_column' are required.")
+        for col in (lat_column, lon_column):
+            if col not in self._data_frame.columns:
+                raise KeyError(f"Column '{col}' not found in DataFrame.")
+
+        return GeoBoundingBoxCalculator().calculate(
+            data_frame=self._data_frame,
+            lat_column=lat_column,
+            lon_column=lon_column,
+        )
+
+
+class AnalyseGeoHeatmap(BaseDataAnalysis):
+    """Grid-based geographic density heatmap (points per km²).
+
+    Workflow:
+        analyzer = AnalyzerFactory.create("pd.DataFrame", df)
+        result = analyzer.analyze(
+            lat_column="latitude",
+            lon_column="longitude",
+            n_lat_bins=20,
+            n_lon_bins=20,
+            include_empty_cells=False,
+        )
+    """
+
+    def analyze(self, **kwargs) -> dict:
+        lat_column: str = kwargs.get("lat_column")
+        lon_column: str = kwargs.get("lon_column")
+
+        if lat_column is None or lon_column is None:
+            raise ValueError("'lat_column' and 'lon_column' are required.")
+        for col in (lat_column, lon_column):
+            if col not in self._data_frame.columns:
+                raise KeyError(f"Column '{col}' not found in DataFrame.")
+
+        return GeoHeatmapCalculator().calculate(
+            data_frame=self._data_frame,
+            lat_column=lat_column,
+            lon_column=lon_column,
+            n_lat_bins=kwargs.get("n_lat_bins", 20),
+            n_lon_bins=kwargs.get("n_lon_bins", 20),
+            include_empty_cells=kwargs.get("include_empty_cells", False),
+        )
+
+
+class AnalyseProximity(BaseDataAnalysis):
+    """Nearest neighbor distances and ANN spatial pattern analysis.
+
+    Workflow:
+        analyzer = AnalyzerFactory.create("pd.DataFrame", df)
+        result = analyzer.analyze(
+            lat_column="latitude",
+            lon_column="longitude",
+            include_all_nn=False,
+            max_points=2000,
+        )
+    """
+
+    def analyze(self, **kwargs) -> dict:
+        lat_column: str = kwargs.get("lat_column")
+        lon_column: str = kwargs.get("lon_column")
+
+        if lat_column is None or lon_column is None:
+            raise ValueError("'lat_column' and 'lon_column' are required.")
+        for col in (lat_column, lon_column):
+            if col not in self._data_frame.columns:
+                raise KeyError(f"Column '{col}' not found in DataFrame.")
+
+        return ProximityAnalysisCalculator().calculate(
+            data_frame=self._data_frame,
+            lat_column=lat_column,
+            lon_column=lon_column,
+            include_all_nn=kwargs.get("include_all_nn", False),
+            max_points=kwargs.get("max_points", 2_000),
+        )
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# DOMAIN 10 — GRAPH ANALYZERS
+# ─────────────────────────────────────────────────────────────────────────────
+
+class AnalyseNetworkDensity(BaseDataAnalysis):
+    """Graph density, connectivity, and degree distribution.
+
+    Workflow:
+        analyzer = AnalyzerFactory.create("pd.DataFrame", df)
+        result = analyzer.analyze(
+            source_column="from_node",
+            target_column="to_node",
+            graph_type="undirected",   # "directed" | "undirected"
+            weight_column=None,        # optional
+        )
+    """
+
+    def analyze(self, **kwargs) -> dict:
+        source_column: str = kwargs.get("source_column")
+        target_column: str = kwargs.get("target_column")
+
+        if source_column is None or target_column is None:
+            raise ValueError("'source_column' and 'target_column' are required.")
+        for col in (source_column, target_column):
+            if col not in self._data_frame.columns:
+                raise KeyError(f"Column '{col}' not found in DataFrame.")
+
+        return NetworkDensityCalculator().calculate(
+            edges=self._data_frame,
+            source_column=source_column,
+            target_column=target_column,
+            graph_type=kwargs.get("graph_type", "undirected"),
+            weight_column=kwargs.get("weight_column"),
+        )
+
+
+class AnalyseCentrality(BaseDataAnalysis):
+    """Degree, betweenness, closeness, and PageRank centrality.
+
+    Workflow:
+        analyzer = AnalyzerFactory.create("pd.DataFrame", df)
+        result = analyzer.analyze(
+            source_column="from_node",
+            target_column="to_node",
+            graph_type="undirected",
+            top_n=20,
+            damping=0.85,
+            weight_column=None,
+        )
+    """
+
+    def analyze(self, **kwargs) -> dict:
+        source_column: str = kwargs.get("source_column")
+        target_column: str = kwargs.get("target_column")
+
+        if source_column is None or target_column is None:
+            raise ValueError("'source_column' and 'target_column' are required.")
+        for col in (source_column, target_column):
+            if col not in self._data_frame.columns:
+                raise KeyError(f"Column '{col}' not found in DataFrame.")
+
+        return CentralityAnalysisCalculator().calculate(
+            edges=self._data_frame,
+            source_column=source_column,
+            target_column=target_column,
+            graph_type=kwargs.get("graph_type", "undirected"),
+            top_n=kwargs.get("top_n", 20),
+            damping=kwargs.get("damping", 0.85),
+            weight_column=kwargs.get("weight_column"),
+        )
+
+
+class AnalyseCommunityDetection(BaseDataAnalysis):
+    """Louvain-style community detection with modularity Q scoring.
+
+    Workflow:
+        analyzer = AnalyzerFactory.create("pd.DataFrame", df)
+        result = analyzer.analyze(
+            source_column="from_node",
+            target_column="to_node",
+            random_seed=42,
+            weight_column=None,
+        )
+    """
+
+    def analyze(self, **kwargs) -> dict:
+        source_column: str = kwargs.get("source_column")
+        target_column: str = kwargs.get("target_column")
+
+        if source_column is None or target_column is None:
+            raise ValueError("'source_column' and 'target_column' are required.")
+        for col in (source_column, target_column):
+            if col not in self._data_frame.columns:
+                raise KeyError(f"Column '{col}' not found in DataFrame.")
+
+        return CommunityDetectionCalculator().calculate(
+            edges=self._data_frame,
+            source_column=source_column,
+            target_column=target_column,
+            random_seed=kwargs.get("random_seed", 42),
+            weight_column=kwargs.get("weight_column"),
+        )
+
+
+class AnalysePathAnalysis(BaseDataAnalysis):
+    """Average path length, diameter, clustering coefficient, small-world σ.
+
+    Workflow:
+        analyzer = AnalyzerFactory.create("pd.DataFrame", df)
+        result = analyzer.analyze(
+            source_column="from_node",
+            target_column="to_node",
+            graph_type="undirected",
+            weight_column=None,
+        )
+    """
+
+    def analyze(self, **kwargs) -> dict:
+        source_column: str = kwargs.get("source_column")
+        target_column: str = kwargs.get("target_column")
+
+        if source_column is None or target_column is None:
+            raise ValueError("'source_column' and 'target_column' are required.")
+        for col in (source_column, target_column):
+            if col not in self._data_frame.columns:
+                raise KeyError(f"Column '{col}' not found in DataFrame.")
+
+        return PathAnalysisCalculator().calculate(
+            edges=self._data_frame,
+            source_column=source_column,
+            target_column=target_column,
+            graph_type=kwargs.get("graph_type", "undirected"),
+            weight_column=kwargs.get("weight_column"),
+        )
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# DOMAIN 11 — SURVIVAL ANALYZERS
+# ─────────────────────────────────────────────────────────────────────────────
+
+class AnalyseKaplanMeier(BaseDataAnalysis):
+    """Kaplan-Meier survival curve with Greenwood confidence intervals.
+
+    Workflow:
+        analyzer = AnalyzerFactory.create("pd.DataFrame", df)
+        result = analyzer.analyze(
+            time_column="survival_days",
+            event_column="event_occurred",   # 1=event, 0=censored
+            confidence_level=0.95,
+            group_column=None,               # optional stratification
+        )
+    """
+
+    def analyze(self, **kwargs) -> dict:
+        time_column: str = kwargs.get("time_column")
+        event_column: str = kwargs.get("event_column")
+
+        if time_column is None or event_column is None:
+            raise ValueError("'time_column' and 'event_column' are required.")
+        for col in (time_column, event_column):
+            if col not in self._data_frame.columns:
+                raise KeyError(f"Column '{col}' not found in DataFrame.")
+
+        group_column: str | None = kwargs.get("group_column")
+        if group_column is not None and group_column not in self._data_frame.columns:
+            raise KeyError(f"Column '{group_column}' not found in DataFrame.")
+
+        return KaplanMeierCalculator().calculate(
+            data_frame=self._data_frame,
+            time_column=time_column,
+            event_column=event_column,
+            confidence_level=kwargs.get("confidence_level", 0.95),
+            group_column=group_column,
+        )
+
+
+class AnalyseHazardRate(BaseDataAnalysis):
+    """Nelson-Aalen cumulative hazard with Gaussian-smoothed instantaneous hazard.
+
+    Workflow:
+        analyzer = AnalyzerFactory.create("pd.DataFrame", df)
+        result = analyzer.analyze(
+            time_column="survival_days",
+            event_column="event_occurred",   # 1=event, 0=censored
+            n_smooth_points=100,
+        )
+    """
+
+    def analyze(self, **kwargs) -> dict:
+        time_column: str = kwargs.get("time_column")
+        event_column: str = kwargs.get("event_column")
+
+        if time_column is None or event_column is None:
+            raise ValueError("'time_column' and 'event_column' are required.")
+        for col in (time_column, event_column):
+            if col not in self._data_frame.columns:
+                raise KeyError(f"Column '{col}' not found in DataFrame.")
+
+        return HazardRateCalculator().calculate(
+            data_frame=self._data_frame,
+            time_column=time_column,
+            event_column=event_column,
+            n_smooth_points=kwargs.get("n_smooth_points", 100),
+        )
+
+
+class AnalyseEventDensity(BaseDataAnalysis):
+    """Event frequency, inter-event intervals, burstiness B, and rolling rate.
+
+    Workflow:
+        analyzer = AnalyzerFactory.create("pd.DataFrame", df)
+        result = analyzer.analyze(
+            event_time_column="failure_time",
+            event_indicator_column="is_failure",   # optional: 1=event filter
+            window_size=30.0,                      # optional, auto if None
+            n_rate_windows=20,
+        )
+    """
+
+    def analyze(self, **kwargs) -> dict:
+        event_time_column: str = kwargs.get("event_time_column")
+
+        if event_time_column is None:
+            raise ValueError("'event_time_column' is required.")
+        if event_time_column not in self._data_frame.columns:
+            raise KeyError(f"Column '{event_time_column}' not found in DataFrame.")
+
+        event_indicator: str | None = kwargs.get("event_indicator_column")
+        if event_indicator is not None and event_indicator not in self._data_frame.columns:
+            raise KeyError(f"Column '{event_indicator}' not found in DataFrame.")
+
+        return EventDensityCalculator().calculate(
+            data_frame=self._data_frame,
+            event_time_column=event_time_column,
+            event_indicator_column=event_indicator,
+            window_size=kwargs.get("window_size"),
+            n_rate_windows=kwargs.get("n_rate_windows", 20),
+        )
+
+
+class AnalyseTimeToEvent(BaseDataAnalysis):
+    """Time-to-event descriptive statistics, threshold analysis, exponential fit.
+
+    Workflow:
+        analyzer = AnalyzerFactory.create("pd.DataFrame", df)
+        result = analyzer.analyze(
+            time_column="days_to_churn",
+            event_column="churned",          # 1=event, 0=censored
+            thresholds=[30, 60, 90, 180, 365],
+            fit_exponential=True,
+        )
+    """
+
+    def analyze(self, **kwargs) -> dict:
+        time_column: str = kwargs.get("time_column")
+        event_column: str = kwargs.get("event_column")
+
+        if time_column is None or event_column is None:
+            raise ValueError("'time_column' and 'event_column' are required.")
+        for col in (time_column, event_column):
+            if col not in self._data_frame.columns:
+                raise KeyError(f"Column '{col}' not found in DataFrame.")
+
+        return TimeToEventCalculator().calculate(
+            data_frame=self._data_frame,
+            time_column=time_column,
+            event_column=event_column,
+            thresholds=kwargs.get("thresholds"),
+            fit_exponential=kwargs.get("fit_exponential", True),
         )

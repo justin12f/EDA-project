@@ -1,0 +1,1 @@
+"""Geospatial statistics domain."""
