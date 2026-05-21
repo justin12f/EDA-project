@@ -1,67 +1,102 @@
-"""Module to calculate the score of the linear regression model"""
+"""Module to calculate regression model scores.
+
+Backend-agnostic — uses only numpy. Accepts numpy arrays directly.
+Callers convert from their backend before calling.
+"""
+
+from __future__ import annotations
 
 import numpy as np
-import pandas as pd
 
 
 class MeanSquareError:
-    """calculate the MSE"""
+    """Calculate the Mean Squared Error."""
 
     def mean_square_error(
         self,
-        y_true: np.ndarray | pd.Series | list[pd.Series],
-        y_pred: np.ndarray | pd.Series | list[pd.Series],
+        y_true: np.ndarray,
+        y_pred: np.ndarray,
     ) -> float:
-        """calculate the MSE value"""
+        """Calculate the MSE value.
+
+        Args:
+            y_true: Ground truth values (1-D array).
+            y_pred: Predicted values (1-D array).
+
+        Returns:
+            Mean squared error as a float.
+        """
         y_true = np.ravel(y_true)
         y_pred = np.ravel(y_pred)
-        return np.mean((y_true - y_pred) ** 2)
+        return float(np.mean((y_true - y_pred) ** 2))
 
 
 class RootMeanSquareError:
-    """ "Calculate the rooted MSE"""
+    """Calculate the Root Mean Squared Error."""
 
     def root_mean_square_error(
         self,
-        y_true: np.ndarray | pd.Series | list[pd.Series],
-        y_pred: np.ndarray | pd.Series | list[pd.Series],
+        y_true: np.ndarray,
+        y_pred: np.ndarray,
     ) -> float:
-        """calculate the root mininum square error value"""
+        """Calculate the RMSE value.
+
+        Args:
+            y_true: Ground truth values (1-D array).
+            y_pred: Predicted values (1-D array).
+
+        Returns:
+            Root mean squared error as a float.
+        """
         mse = MeanSquareError().mean_square_error(y_true, y_pred)
-        return np.sqrt(mse)
+        return float(np.sqrt(mse))
 
 
 class SquaredR:
-    """Calculate the R**2 value"""
+    """Calculate the R² (coefficient of determination)."""
 
     def squared_r(
         self,
-        y_true: np.ndarray | pd.Series | list[pd.Series],
-        y_pred: np.ndarray | pd.Series | list[pd.Series],
+        y_true: np.ndarray,
+        y_pred: np.ndarray,
     ) -> float:
-        """calculate the R**2 value"""
+        """Calculate the R² value.
+
+        Args:
+            y_true: Ground truth values (1-D array).
+            y_pred: Predicted values (1-D array).
+
+        Returns:
+            R² value as a float.
+        """
         y_true = np.ravel(y_true)
         y_pred = np.ravel(y_pred)
         y_true_mean = y_true.mean()
         numerator = np.sum((y_pred - y_true) ** 2)
         denominator = np.sum((y_true - y_true_mean) ** 2)
-        return 1 - (numerator / denominator)
+        return float(1 - (numerator / denominator))
 
 
 class Score:
-    """Calculate the score of the linear regression model"""
+    """Calculate all regression model scores."""
 
     def get_score(
         self,
-        y_true: np.ndarray | pd.Series | list[pd.Series],
-        y_pred: np.ndarray | pd.Series | list[pd.Series],
+        y_true: np.ndarray,
+        y_pred: np.ndarray,
     ) -> dict[str, float]:
-        """calculates all the metrics"""
-        mean_square_error = MeanSquareError().mean_square_error(y_true, y_pred)
-        root_mean_square_error = RootMeanSquareError().root_mean_square_error(y_true, y_pred)
-        squared_r = SquaredR().squared_r(y_true, y_pred)
+        """Calculate MSE, RMSE, and R² metrics.
+
+        Args:
+            y_true: Ground truth values (1-D array).
+            y_pred: Predicted values (1-D array).
+
+        Returns:
+            Dict with keys ``mean_square_error``, ``root_mean_square_error``,
+            and ``squared_r``.
+        """
         return {
-            "mean_square_error": mean_square_error,
-            "root_mean_square_error": root_mean_square_error,
-            "squared_r": squared_r,
+            "mean_square_error": MeanSquareError().mean_square_error(y_true, y_pred),
+            "root_mean_square_error": RootMeanSquareError().root_mean_square_error(y_true, y_pred),
+            "squared_r": SquaredR().squared_r(y_true, y_pred),
         }

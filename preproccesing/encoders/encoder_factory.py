@@ -1,43 +1,117 @@
-"""Module for abstract classes"""
+"""Encoder factory with multi-backend support.
 
-import pandas as pd
+Usage:
+    # Polars backend (default)
+    encoder = Encoder("one_hot")
+    encoder.fit(polars_df)
+    result = encoder.transform()
 
-from preproccesing.encoders.implementations.base import BaseEncoder
-from preproccesing.encoders.implementations.implementations import OneHotEncoder, OrdinalEncoder
+    # PySpark backend
+    encoder = Encoder("one_hot", backend="spark")
+    encoder.fit(spark_df)
+    result = encoder.transform()
+"""
+
+from __future__ import annotations
+
+from typing import Any, Literal
+
+from preproccesing.encoders.implementations.base import AbstractEncoder
+
+# ── Polars encoders ───────────────────────────────────────────────────────────
+from preproccesing.encoders.polars_impl import (
+    PolarsOneHotEncoder,
+    PolarsOrdinalEncoder,
+)
+
+# ── Spark encoders ────────────────────────────────────────────────────────────
+from preproccesing.encoders.spark_impl import (
+    SparkOneHotEncoder,
+    SparkOrdinalEncoder,
+)
+
+Backend = Literal["polars", "spark"]
 
 
 class EncoderFactory:
-    """Factory for creating encoders"""
+    """Factory for creating encoders with multi-backend support.
 
-    _registry: dict[str, type[BaseEncoder]] = {}
+    Registry maps ``(encoder_type, backend)`` → ``EncoderClass``.
+    """
 
-    @classmethod
-    def register(cls, encoder_type: str, encoder: type[BaseEncoder]) -> None:
-        """Register an encoder"""
-        cls._registry[encoder_type] = encoder
+    _registry: dict[tuple[str, str], type[AbstractEncoder]] = {}
 
     @classmethod
-    def create(cls, encoder_class: str) -> BaseEncoder:
-        """Create an encoder"""
-        if encoder_class not in cls._registry:
-            raise ValueError(f"Encoder type {encoder_class} not found")
-        return cls._registry[encoder_class]()
+    def register(
+        cls,
+        encoder_type: str,
+        backend: str,
+        encoder: type[AbstractEncoder],
+    ) -> None:
+        """Register an encoder under a (type, backend) key."""
+        cls._registry[(encoder_type, backend)] = encoder
+
+    @classmethod
+    def create(
+        cls,
+        encoder_class: str,
+        backend: Backend = "polars",
+    ) -> AbstractEncoder:
+        """Create an encoder for the given type and backend.
+
+        Args:
+            encoder_class: Encoder type name (e.g., ``"one_hot"``).
+            backend: ``"polars"`` or ``"spark"``.
+
+        Returns:
+            An ``AbstractEncoder`` instance.
+
+        Raises:
+            ValueError: If the (type, backend) pair is not registered.
+        """
+        key = (encoder_class, backend)
+        encoder_cls = cls._registry.get(key)
+        if encoder_cls is None:
+            available = [
+                f"{t} ({b})" for (t, b) in sorted(cls._registry.keys())
+            ]
+            raise ValueError(
+                f"Encoder '{encoder_class}' for backend '{backend}' not found. "
+                f"Available: {available}"
+            )
+        return encoder_cls()
 
 
-EncoderFactory.register("one_hot", OneHotEncoder)
-EncoderFactory.register("ordinal", OrdinalEncoder)
+# ═══════════════════════════════════════════════════════════════════════════════
+# Register all built-in encoders
+# ═══════════════════════════════════════════════════════════════════════════════
+
+# ── Polars ────────────────────────────────────────────────────────────────────
+EncoderFactory.register("one_hot", "polars", PolarsOneHotEncoder)
+EncoderFactory.register("ordinal", "polars", PolarsOrdinalEncoder)
+
+# ── PySpark ───────────────────────────────────────────────────────────────────
+EncoderFactory.register("one_hot", "spark", SparkOneHotEncoder)
+EncoderFactory.register("ordinal", "spark", SparkOrdinalEncoder)
 
 
 class Encoder:
-    """Dependency inyection for all encoders"""
+    """Dependency injection wrapper for encoders.
 
-    def __init__(self, encoder: str) -> None:
-        self.encoder = EncoderFactory.create(encoder)
+    Provides a unified API regardless of backend.
 
-    def fit(self, data: pd.DataFrame, **kwargs) -> None:
-        """Fit the encoder to the data"""
+    Args:
+        encoder: Encoder type name.
+        backend: Backend engine — ``"polars"`` or ``"spark"``.
+    """
+
+    def __init__(self, encoder: str, backend: Backend = "polars") -> None:
+        self.encoder = EncoderFactory.create(encoder, backend)
+
+    def fit(self, data: Any, **kwargs: Any) -> None:
+        """Fit the encoder to the data."""
         self.encoder.fit(data, **kwargs)
 
-    def transform(self) -> pd.Series | pd.DataFrame:
-        """Transform the data"""
+    def transform(self) -> Any:
+        """Transform the data."""
         return self.encoder.transform()

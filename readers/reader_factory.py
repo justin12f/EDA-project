@@ -1,118 +1,132 @@
-"""Module for creation of abstract classes and file reading."""
+"""Reader factory with multi-backend support.
+
+Usage:
+    # Polars backend (default)
+    reader = ReaderFactory.create("data.csv")
+    lf = reader.read()  # → pl.LazyFrame
+
+    # PySpark backend
+    reader = ReaderFactory.create("data.csv", backend="spark")
+    sdf = reader.read()  # → pyspark.sql.DataFrame
+
+    # Explicit backend
+    reader = ReaderFactory.create("data.parquet", backend="polars")
+"""
+
+from __future__ import annotations
 
 import os
-from abc import ABC, abstractmethod
+from typing import Literal
 
-import pandas as pd
+from readers.base import AbstractReader
+from readers.exceptions import BackendNotSupportedError, ReaderError
 
+# ── Polars readers ────────────────────────────────────────────────────────────
+from readers.polars_impl import (
+    PolarsCSVReader,
+    PolarsExcelReader,
+    PolarsJSONReader,
+    PolarsParquetReader,
+)
 
-class BaseReader(ABC):
-    """BaseClass for all readers"""
-
-    def __init__(self, file: str) -> None:
-        self._file = file
-
-    @abstractmethod
-    def read(self) -> pd.DataFrame | list[pd.DataFrame]:
-        """Read the file"""
-
-
-class CSVReader(BaseReader):
-    """
-    Read CSV files with automatic separator detection.
-
-    Uses Python's built-in csv Sniffer (via `sep=None, engine='python'`)
-    so it works with comma, semicolon, tab, pipe, and spaced-comma separators
-    like those found in dirty_data.csv (`col1 , col2`).
-    """
-
-    def read(self) -> pd.DataFrame:
-        try:
-            # First attempt: auto-detect separator (handles most cases)
-            df = pd.read_csv(
-                self._file,
-                sep=None,
-                engine="python",
-                skipinitialspace=True,
-                na_values=["", "NA", "N/A", "n/a", "null", "NULL", "None", "NaN"],
-                keep_default_na=True,
-            )
-            return df
-        except (
-            pd.errors.ParserError,
-            ValueError,
-        ):  # Fallback: standard comma separator
-            return pd.read_csv(self._file, skipinitialspace=True)
+# ── PySpark readers ───────────────────────────────────────────────────────────
+from readers.spark_impl import (
+    SparkCSVReader,
+    SparkJSONReader,
+    SparkParquetReader,
+)
 
 
-class ParquetReader(BaseReader):
-    """Read Parquet file"""
-
-    def read(self) -> pd.DataFrame:
-        return pd.read_parquet(self._file)
-
-
-class JSONReader(BaseReader):
-    """Read JSON file — supports both records and split orientation."""
-
-    def read(self) -> pd.DataFrame:
-        try:
-            return pd.read_json(self._file)
-        except ValueError:
-            return pd.read_json(self._file, orient="records")
-
-
-class ExcelReader(BaseReader):
-    """Read Excel file (.xlsx / .xls)"""
-
-    def read(self) -> pd.DataFrame:
-        return pd.read_excel(self._file)
-
-
-class HTMLReader(BaseReader):
-    """Read the first table found in an HTML file."""
-
-    def read(self) -> pd.DataFrame:
-        tables = pd.read_html(self._file)
-        if not tables:
-            raise ValueError(f"No tables found in {self._file}")
-        return tables[0]
+# Type alias for supported backends
+Backend = Literal["polars", "spark"]
 
 
 class ReaderFactory:
-    """Factory for creating readers.
+    """Factory for creating readers with multi-backend support.
+
+    The registry maps ``(extension, backend)`` → ``ReaderClass``.
 
     Usage:
-        1. Register a reader: ReaderFactory.register(".ext", ReaderClass)
-        2. Create a reader:   ReaderFactory.create("file.ext")
-        3. Read the file:     ReaderFactory.create("file.ext").read()
+        1. Register:  ``ReaderFactory.register(".csv", "polars", PolarsCSVReader)``
+        2. Create:    ``ReaderFactory.create("file.csv", backend="polars")``
+        3. Read:      ``ReaderFactory.create("file.csv").read()``
     """
 
-    _registry: dict[str, type[BaseReader]] = {}
+    _registry: dict[tuple[str, str], type[AbstractReader]] = {}
 
     @classmethod
-    def register(cls, extension: str, reader: type[BaseReader]) -> None:
-        """Register an extension → reader mapping."""
-        cls._registry[extension] = reader
+    def register(
+        cls,
+        extension: str,
+        backend: str,
+        reader: type[AbstractReader],
+    ) -> None:
+        """Register an (extension, backend) → reader mapping."""
+        cls._registry[(extension, backend)] = reader
 
     @classmethod
-    def create(cls, file: str) -> BaseReader:
-        """Return the appropriate reader for the given file extension."""
+    def create(
+        cls,
+        file: str,
+        backend: Backend = "polars",
+    ) -> AbstractReader:
+        """Return the appropriate reader for the file extension and backend.
+
+        Args:
+            file: Path to the file to read.
+            backend: Backend engine — ``"polars"`` or ``"spark"``.
+
+        Returns:
+            An ``AbstractReader`` bound to the given backend.
+
+        Raises:
+            BackendNotSupportedError: If the backend is not registered.
+            ReaderError: If no reader exists for the file extension.
+        """
         extension = os.path.splitext(file)[1].lower()
-        reader_class = cls._registry.get(extension)
-        if not reader_class:
-            raise ValueError(
-                f"No reader found for extension '{extension}'. "
-                f"Registered: {list(cls._registry.keys())}"
+        key = (extension, backend)
+        reader_class = cls._registry.get(key)
+
+        if reader_class is None:
+            # Check if the backend exists at all
+            available_backends = sorted({b for (_, b) in cls._registry})
+            if backend not in available_backends:
+                raise BackendNotSupportedError(backend, available_backends)
+
+            # Backend exists but extension is not supported
+            supported = sorted(
+                ext for (ext, b) in cls._registry if b == backend
             )
+            raise ReaderError(
+                f"No reader for extension '{extension}' on backend '{backend}'. "
+                f"Supported extensions: {supported}"
+            )
+
         return reader_class(file)
 
+    @classmethod
+    def available_backends(cls) -> list[str]:
+        """Return list of registered backend names."""
+        return sorted({b for (_, b) in cls._registry})
 
+    @classmethod
+    def available_extensions(cls, backend: str) -> list[str]:
+        """Return list of registered extensions for a given backend."""
+        return sorted(ext for (ext, b) in cls._registry if b == backend)
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
 # Register all built-in readers
-ReaderFactory.register(".csv", CSVReader)
-ReaderFactory.register(".parquet", ParquetReader)
-ReaderFactory.register(".json", JSONReader)
-ReaderFactory.register(".xlsx", ExcelReader)
-ReaderFactory.register(".xls", ExcelReader)
-ReaderFactory.register(".html", HTMLReader)
-ReaderFactory.register(".htm", HTMLReader)
+# ═══════════════════════════════════════════════════════════════════════════════
+
+# ── Polars ────────────────────────────────────────────────────────────────────
+ReaderFactory.register(".csv", "polars", PolarsCSVReader)
+ReaderFactory.register(".parquet", "polars", PolarsParquetReader)
+ReaderFactory.register(".json", "polars", PolarsJSONReader)
+ReaderFactory.register(".xlsx", "polars", PolarsExcelReader)
+ReaderFactory.register(".xls", "polars", PolarsExcelReader)
+
+# ── PySpark ───────────────────────────────────────────────────────────────────
+ReaderFactory.register(".csv", "spark", SparkCSVReader)
+ReaderFactory.register(".parquet", "spark", SparkParquetReader)
+ReaderFactory.register(".json", "spark", SparkJSONReader)
