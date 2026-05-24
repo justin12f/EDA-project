@@ -1,10 +1,13 @@
 """Momentum and rate-of-change analysis for time series."""
 
+# #[AI_CONTEXT_START]
+# - CONFIGURACIÓN DE FACTORY: Registrar este calculator en `TimeSeriesStatisticsFactory` (backends pandas | polars | spark) y exponerlo mediante `StatisticsInyeccionDependency`, inyectada por la Factory Maestra de Agentes junto a las demás fábricas de dominio.
+# - ABSTRACCIÓN DEL DATO: Mutar constructores y `analyze`/`compute` para recibir el contenedor abstracto del backend (`pd.DataFrame`, `pl.DataFrame`/`pl.LazyFrame`, `pyspark.sql.DataFrame`) inyectado por la factory; eliminar `np.ndarray`/`pd.Series` sueltos en firmas públicas.
+# - REFACTOR NATIVO: Resolver métricas con expresiones 100 % nativas del backend activo (Polars: `.select`/`.group_by`/`.agg` sin `.collect()` salvo materialización acordada; PySpark: `pyspark.sql.functions` y ventanas distribuidas; Pandas: operaciones vectorizadas). No convertir a NumPy/Pandas desde backends no-pandas.
+# #[AI_CONTEXT_END]
 from __future__ import annotations
 
 import numpy as np
-
-
 
 class RateOfChangeCalculator:
     """Rate of Change (ROC): percentage change over n periods.
@@ -37,7 +40,6 @@ class RateOfChangeCalculator:
                 result[i] = (series[i] - base) / abs(base) * 100.0
         return result
 
-
 class AccelerationCalculator:
     """Acceleration: first difference of ROC (momentum of momentum).
 
@@ -61,7 +63,6 @@ class AccelerationCalculator:
             if not np.isnan(roc[i]) and not np.isnan(roc[i - 1]):
                 result[i] = roc[i] - roc[i - 1]
         return result
-
 
 class MomentumSignalClassifier:
     """Classifies momentum and acceleration into actionable signal states.
@@ -101,7 +102,6 @@ class MomentumSignalClassifier:
             else:
                 signals.append("neutral")
         return signals
-
 
 class MomentumCalculator:
     """Computes ROC, acceleration, and momentum signals for a time series.

@@ -1,5 +1,10 @@
 """Geographic DBSCAN clustering on latitude/longitude coordinates."""
 
+# #[AI_CONTEXT_START]
+# - CONFIGURACIÓN DE FACTORY: Registrar este calculator en `GeospatialStatisticsFactory` (backends pandas | polars | spark) y exponerlo mediante `StatisticsInyeccionDependency`, inyectada por la Factory Maestra de Agentes junto a las demás fábricas de dominio.
+# - ABSTRACCIÓN DEL DATO: Mutar constructores y `analyze`/`compute` para recibir el contenedor abstracto del backend (`pd.DataFrame`, `pl.DataFrame`/`pl.LazyFrame`, `pyspark.sql.DataFrame`) inyectado por la factory; eliminar `np.ndarray`/`pd.Series` sueltos en firmas públicas.
+# - REFACTOR NATIVO: Resolver métricas con expresiones 100 % nativas del backend activo (Polars: `.select`/`.group_by`/`.agg` sin `.collect()` salvo materialización acordada; PySpark: `pyspark.sql.functions` y ventanas distribuidas; Pandas: operaciones vectorizadas). No convertir a NumPy/Pandas desde backends no-pandas.
+# #[AI_CONTEXT_END]
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -7,7 +12,6 @@ from dataclasses import dataclass
 import numpy as np
 import pandas as pd
 from sklearn.cluster import DBSCAN
-
 
 @dataclass(frozen=True)
 class GeoCluster:
@@ -23,7 +27,6 @@ class GeoCluster:
     bbox_lon_min: float
     bbox_lon_max: float
     is_noise: bool
-
 
 class HaversineDistanceMatrix:
     """Computes pairwise Haversine distances between coordinate pairs.
@@ -65,7 +68,6 @@ class HaversineDistanceMatrix:
             dist_matrix[i] = 2 * self._EARTH_RADIUS_KM * np.arcsin(np.sqrt(np.clip(a, 0, 1)))
 
         return dist_matrix
-
 
 class GeoClusterProfileBuilder:
     """Builds geographic cluster profiles from labels and coordinate data."""
@@ -109,7 +111,6 @@ class GeoClusterProfileBuilder:
             )
 
         return profiles
-
 
 class GeoClusteringCalculator:
     """Haversine-DBSCAN geographic point clustering.

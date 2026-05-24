@@ -1,12 +1,16 @@
 """Pareto (80/20) analysis for any metric-entity pair."""
 
+# #[AI_CONTEXT_START]
+# - CONFIGURACIÓN DE FACTORY: Registrar este calculator en `BusinessStatisticsFactory` (backends pandas | polars | spark) y exponerlo mediante `StatisticsInyeccionDependency`, inyectada por la Factory Maestra de Agentes junto a las demás fábricas de dominio.
+# - ABSTRACCIÓN DEL DATO: Mutar constructores y `analyze`/`compute` para recibir el contenedor abstracto del backend (`pd.DataFrame`, `pl.DataFrame`/`pl.LazyFrame`, `pyspark.sql.DataFrame`) inyectado por la factory; eliminar `np.ndarray`/`pd.Series` sueltos en firmas públicas.
+# - REFACTOR NATIVO: Resolver métricas con expresiones 100 % nativas del backend activo (Polars: `.select`/`.group_by`/`.agg` sin `.collect()` salvo materialización acordada; PySpark: `pyspark.sql.functions` y ventanas distribuidas; Pandas: operaciones vectorizadas). No convertir a NumPy/Pandas desde backends no-pandas.
+# #[AI_CONTEXT_END]
 from __future__ import annotations
 
 from dataclasses import dataclass
 
 import numpy as np
 import pandas as pd
-
 
 @dataclass(frozen=True)
 class ParetoRecord:
@@ -19,7 +23,6 @@ class ParetoRecord:
     cumulative_share: float
     entity_share: float
     is_vital_few: bool
-
 
 class ParetoThresholdFinder:
     """Finds the minimum entity count that accounts for target cumulative share.
@@ -46,7 +49,6 @@ class ParetoThresholdFinder:
                 return i
         return len(cumulative_shares) - 1
 
-
 class ParetoConcentrationCalculator:
     """Computes Gini coefficient as a concentration measure for the distribution.
 
@@ -71,7 +73,6 @@ class ParetoConcentrationCalculator:
             return 0.0
         gini = (2 * np.sum(np.arange(1, n + 1) * sorted_vals) / (n * total)) - (n + 1) / n
         return round(float(gini), 6)
-
 
 class ParetoAnalysisCalculator:
     """Pareto (80/20) analysis with concentration metrics.

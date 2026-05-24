@@ -1,0 +1,5 @@
+# #[AI_CONTEXT_START]
+# - CONFIGURACIÓN DE FACTORY: `LinearRegressionFactory` por (tipo, complejidad, backend) vía `LinearRegressionInyeccionDependency` desde Factory Maestra.
+# - ABSTRACCIÓN DEL DATO: `fit`/`predict` aceptan contenedor del backend activo, no `np.ndarray`/`pd.DataFrame` genéricos mezclados.
+# - REFACTOR NATIVO: Implementaciones `*Pandas`, `*Polars`, `*Spark` delegando optimización y scoring al mismo backend.
+# #[AI_CONTEXT_END]

@@ -1,0 +1,75 @@
+"""Factory — domain `graphs`."""
+from __future__ import annotations
+from typing import Any
+from core.abstract_factory import RegistryFactory
+
+class GraphsStatisticsFactory(RegistryFactory[str, Any]):
+    pass
+
+def _register() -> None:
+    from statistics.graphs.backends import pandas_impl as p
+    from statistics.graphs.backends import polars_impl as pl
+    from statistics.graphs.backends import spark_impl as sp
+
+    GraphsStatisticsFactory.register("degree_centrality_calculator", "pandas", p.DegreeCentralityCalculatorPandas)
+    GraphsStatisticsFactory.register("degree_centrality_calculator", "polars", pl.DegreeCentralityCalculatorPolars)
+    GraphsStatisticsFactory.register("degree_centrality_calculator", "spark", sp.DegreeCentralityCalculatorSpark)
+    GraphsStatisticsFactory.register("bfs_shortest_paths", "pandas", p.BFSShortestPathsPandas)
+    GraphsStatisticsFactory.register("bfs_shortest_paths", "polars", pl.BFSShortestPathsPolars)
+    GraphsStatisticsFactory.register("bfs_shortest_paths", "spark", sp.BFSShortestPathsSpark)
+    GraphsStatisticsFactory.register("betweenness_calculator", "pandas", p.BetweennessCalculatorPandas)
+    GraphsStatisticsFactory.register("betweenness_calculator", "polars", pl.BetweennessCalculatorPolars)
+    GraphsStatisticsFactory.register("betweenness_calculator", "spark", sp.BetweennessCalculatorSpark)
+    GraphsStatisticsFactory.register("closeness_centrality_calculator", "pandas", p.ClosenessCentralityCalculatorPandas)
+    GraphsStatisticsFactory.register("closeness_centrality_calculator", "polars", pl.ClosenessCentralityCalculatorPolars)
+    GraphsStatisticsFactory.register("closeness_centrality_calculator", "spark", sp.ClosenessCentralityCalculatorSpark)
+    GraphsStatisticsFactory.register("page_rank_calculator", "pandas", p.PageRankCalculatorPandas)
+    GraphsStatisticsFactory.register("page_rank_calculator", "polars", pl.PageRankCalculatorPolars)
+    GraphsStatisticsFactory.register("page_rank_calculator", "spark", sp.PageRankCalculatorSpark)
+    GraphsStatisticsFactory.register("centrality_ranker", "pandas", p.CentralityRankerPandas)
+    GraphsStatisticsFactory.register("centrality_ranker", "polars", pl.CentralityRankerPolars)
+    GraphsStatisticsFactory.register("centrality_ranker", "spark", sp.CentralityRankerSpark)
+    GraphsStatisticsFactory.register("centrality_analysis_calculator", "pandas", p.CentralityAnalysisCalculatorPandas)
+    GraphsStatisticsFactory.register("centrality_analysis_calculator", "polars", pl.CentralityAnalysisCalculatorPolars)
+    GraphsStatisticsFactory.register("centrality_analysis_calculator", "spark", sp.CentralityAnalysisCalculatorSpark)
+    GraphsStatisticsFactory.register("modularity_calculator", "pandas", p.ModularityCalculatorPandas)
+    GraphsStatisticsFactory.register("modularity_calculator", "polars", pl.ModularityCalculatorPolars)
+    GraphsStatisticsFactory.register("modularity_calculator", "spark", sp.ModularityCalculatorSpark)
+    GraphsStatisticsFactory.register("greedy_modularity_optimizer", "pandas", p.GreedyModularityOptimizerPandas)
+    GraphsStatisticsFactory.register("greedy_modularity_optimizer", "polars", pl.GreedyModularityOptimizerPolars)
+    GraphsStatisticsFactory.register("greedy_modularity_optimizer", "spark", sp.GreedyModularityOptimizerSpark)
+    GraphsStatisticsFactory.register("community_profile_builder", "pandas", p.CommunityProfileBuilderPandas)
+    GraphsStatisticsFactory.register("community_profile_builder", "polars", pl.CommunityProfileBuilderPolars)
+    GraphsStatisticsFactory.register("community_profile_builder", "spark", sp.CommunityProfileBuilderSpark)
+    GraphsStatisticsFactory.register("community_detection_calculator", "pandas", p.CommunityDetectionCalculatorPandas)
+    GraphsStatisticsFactory.register("community_detection_calculator", "polars", pl.CommunityDetectionCalculatorPolars)
+    GraphsStatisticsFactory.register("community_detection_calculator", "spark", sp.CommunityDetectionCalculatorSpark)
+    GraphsStatisticsFactory.register("adjacency_matrix_builder", "pandas", p.AdjacencyMatrixBuilderPandas)
+    GraphsStatisticsFactory.register("adjacency_matrix_builder", "polars", pl.AdjacencyMatrixBuilderPolars)
+    GraphsStatisticsFactory.register("adjacency_matrix_builder", "spark", sp.AdjacencyMatrixBuilderSpark)
+    GraphsStatisticsFactory.register("connected_components_finder", "pandas", p.ConnectedComponentsFinderPandas)
+    GraphsStatisticsFactory.register("connected_components_finder", "polars", pl.ConnectedComponentsFinderPolars)
+    GraphsStatisticsFactory.register("connected_components_finder", "spark", sp.ConnectedComponentsFinderSpark)
+    GraphsStatisticsFactory.register("degree_distribution_calculator", "pandas", p.DegreeDistributionCalculatorPandas)
+    GraphsStatisticsFactory.register("degree_distribution_calculator", "polars", pl.DegreeDistributionCalculatorPolars)
+    GraphsStatisticsFactory.register("degree_distribution_calculator", "spark", sp.DegreeDistributionCalculatorSpark)
+    GraphsStatisticsFactory.register("network_density_calculator", "pandas", p.NetworkDensityCalculatorPandas)
+    GraphsStatisticsFactory.register("network_density_calculator", "polars", pl.NetworkDensityCalculatorPolars)
+    GraphsStatisticsFactory.register("network_density_calculator", "spark", sp.NetworkDensityCalculatorSpark)
+    GraphsStatisticsFactory.register("all_pairs_shortest_path_calculator", "pandas", p.AllPairsShortestPathCalculatorPandas)
+    GraphsStatisticsFactory.register("all_pairs_shortest_path_calculator", "polars", pl.AllPairsShortestPathCalculatorPolars)
+    GraphsStatisticsFactory.register("all_pairs_shortest_path_calculator", "spark", sp.AllPairsShortestPathCalculatorSpark)
+    GraphsStatisticsFactory.register("path_statistics_extractor", "pandas", p.PathStatisticsExtractorPandas)
+    GraphsStatisticsFactory.register("path_statistics_extractor", "polars", pl.PathStatisticsExtractorPolars)
+    GraphsStatisticsFactory.register("path_statistics_extractor", "spark", sp.PathStatisticsExtractorSpark)
+    GraphsStatisticsFactory.register("small_world_coefficient", "pandas", p.SmallWorldCoefficientPandas)
+    GraphsStatisticsFactory.register("small_world_coefficient", "polars", pl.SmallWorldCoefficientPolars)
+    GraphsStatisticsFactory.register("small_world_coefficient", "spark", sp.SmallWorldCoefficientSpark)
+    GraphsStatisticsFactory.register("clustering_coefficient_calculator", "pandas", p.ClusteringCoefficientCalculatorPandas)
+    GraphsStatisticsFactory.register("clustering_coefficient_calculator", "polars", pl.ClusteringCoefficientCalculatorPolars)
+    GraphsStatisticsFactory.register("clustering_coefficient_calculator", "spark", sp.ClusteringCoefficientCalculatorSpark)
+    GraphsStatisticsFactory.register("path_analysis_calculator", "pandas", p.PathAnalysisCalculatorPandas)
+    GraphsStatisticsFactory.register("path_analysis_calculator", "polars", pl.PathAnalysisCalculatorPolars)
+    GraphsStatisticsFactory.register("path_analysis_calculator", "spark", sp.PathAnalysisCalculatorSpark)
+
+_register()

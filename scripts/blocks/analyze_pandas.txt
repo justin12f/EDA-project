@@ -1,0 +1,5 @@
+# #[AI_CONTEXT_START]
+# - CONFIGURACIÓN DE FACTORY: `DataAnalyzerFactory` / `AnalyzeContextFactory` backend pandas; inyectar vía `AnalyzeDataInyeccionDependency` desde la Factory Maestra de Agentes.
+# - ABSTRACCIÓN DEL DATO: Analyzers reciben `pd.DataFrame` inyectado; renombrar clases con sufijo `Pandas` para claridad en registro de factory.
+# - REFACTOR NATIVO: Mantener interoperabilidad sklearn/scipy solo en ruta pandas; tests dedicados; deprecar si existe duplicado legacy fuera de `backends/`.
+# #[AI_CONTEXT_END]

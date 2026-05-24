@@ -1,5 +1,10 @@
 """ANOVA testing module with post-hoc analysis."""
 
+# #[AI_CONTEXT_START]
+# - CONFIGURACIÓN DE FACTORY: Registrar este calculator en `InferentialStatisticsFactory` (backends pandas | polars | spark) y exponerlo mediante `StatisticsInyeccionDependency`, inyectada por la Factory Maestra de Agentes junto a las demás fábricas de dominio.
+# - ABSTRACCIÓN DEL DATO: Mutar constructores y `analyze`/`compute` para recibir el contenedor abstracto del backend (`pd.DataFrame`, `pl.DataFrame`/`pl.LazyFrame`, `pyspark.sql.DataFrame`) inyectado por la factory; eliminar `np.ndarray`/`pd.Series` sueltos en firmas públicas.
+# - REFACTOR NATIVO: Resolver métricas con expresiones 100 % nativas del backend activo (Polars: `.select`/`.group_by`/`.agg` sin `.collect()` salvo materialización acordada; PySpark: `pyspark.sql.functions` y ventanas distribuidas; Pandas: operaciones vectorizadas). No convertir a NumPy/Pandas desde backends no-pandas.
+# #[AI_CONTEXT_END]
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -7,7 +12,6 @@ from dataclasses import dataclass
 import numpy as np
 from scipy import stats
 from itertools import combinations
-
 
 @dataclass(frozen=True)
 class TukeyPairResult:
@@ -18,7 +22,6 @@ class TukeyPairResult:
     mean_difference: float
     p_value: float
     significant: bool
-
 
 class TukeyHSDPostHoc:
     """Tukey HSD pairwise comparison using the studentized range distribution.
@@ -106,7 +109,6 @@ class TukeyHSDPostHoc:
             Harmonic mean of n_i and n_j.
         """
         return (2 * n_i * n_j) / (n_i + n_j)
-
 
 class OneWayAnovaCalculator:
     """One-way ANOVA with optional Tukey HSD post-hoc test.

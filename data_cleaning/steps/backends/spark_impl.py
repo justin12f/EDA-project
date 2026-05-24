@@ -14,6 +14,11 @@ Reglas estrictas:
       para evitar full sort distribuido.
 """
 
+# #[AI_CONTEXT_START]
+# - CONFIGURACIÓN DE FACTORY: `DataCleaningStepFactory` del backend correspondiente en `data_cleaning/steps/backends/`; inyección vía `DataCleaningInyeccionDependency` → Factory Maestra.
+# - ABSTRACCIÓN DEL DATO: Canonicalizar en `backends/`; deprecar duplicados en `steps/implementations.py` y `steps/polars_impl.py` raíz tras verificar referencias.
+# - REFACTOR NATIVO: Steps en inglés y 100 % API nativa del backend; sin NumPy salvo materialización local explícita.
+# #[AI_CONTEXT_END]
 from __future__ import annotations
 
 import re
@@ -63,7 +68,6 @@ from data_cleaning.steps.backends.pandas_impl import (
     DomainBounds,
     ImputationStrategy,
 )
-
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Steps: Schema & Structure
@@ -120,7 +124,6 @@ class ColumnScopedStep(AbstractColumnScopedStep[SparkDataFrame]):
         # Restore original column order
         return result.select(data.columns)
 
-
 class ColumnsTitlesStep(AbstractColumnsTitlesStep[SparkDataFrame]):
     """Spark: Normalize column names (lowercase, underscored, no diacritics)."""
 
@@ -139,7 +142,6 @@ class ColumnsTitlesStep(AbstractColumnsTitlesStep[SparkDataFrame]):
             if clean != old_col:
                 df = df.withColumnRenamed(old_col, clean)
         return df
-
 
 class EnforceSchemaStep(AbstractEnforceSchemaStep[SparkDataFrame]):
     """Spark: Validate minimum structural requirements (warns, does not raise)."""
@@ -168,7 +170,6 @@ class EnforceSchemaStep(AbstractEnforceSchemaStep[SparkDataFrame]):
             warnings.warn(f"Missing required columns: {missing}", stacklevel=2)
         return data
 
-
 class DropHighMissingColumnsStep(AbstractDropHighMissingColumnsStep[SparkDataFrame]):
     """Spark: Drop columns where null fraction > threshold."""
 
@@ -191,7 +192,6 @@ class DropHighMissingColumnsStep(AbstractDropHighMissingColumnsStep[SparkDataFra
         cols_to_drop = [c for c, frac in null_fracs.items() if frac > self.threshold]
         return data.drop(*cols_to_drop) if cols_to_drop else data
 
-
 class DropConstantColumnsStep(AbstractDropConstantColumnsStep[SparkDataFrame]):
     """Spark: Drop columns with ≤1 unique non-null value."""
 
@@ -205,7 +205,6 @@ class DropConstantColumnsStep(AbstractDropConstantColumnsStep[SparkDataFrame]):
         ).collect()[0].asDict()
         cols_to_drop = [c for c, n in n_unique.items() if n <= 1]
         return data.drop(*cols_to_drop) if cols_to_drop else data
-
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Steps: Missing Values & Sentinel Handling
@@ -241,7 +240,6 @@ class HandleSentinelValuesStep(AbstractHandleSentinelValuesStep[SparkDataFrame])
                 ).otherwise(F.col(col))
             )
         return df
-
 
 class ImputeCategoricalStep(AbstractImputeCategoricalStep[SparkDataFrame]):
     """Spark: Impute missing categorical values (mode via groupBy or fixed)."""
@@ -292,7 +290,6 @@ class ImputeCategoricalStep(AbstractImputeCategoricalStep[SparkDataFrame]):
                     F.when(F.col(col).isNull(), F.lit(self.fill_value)).otherwise(F.col(col))
                 )
         return df
-
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Steps: Type Conversion & Parsing
@@ -360,7 +357,6 @@ class SafeConversionStep(AbstractSafeConversionStep[SparkDataFrame]):
         ).collect()[0].asDict()
         return [c for c, frac in digit_fracs.items() if frac > self.digit_threshold]
 
-
 class FixDatesColumnsStep(AbstractFixDatesColumnsStep[SparkDataFrame]):
     """Spark: Parse string columns to timestamp, invalidate out-of-range dates."""
 
@@ -396,7 +392,6 @@ class FixDatesColumnsStep(AbstractFixDatesColumnsStep[SparkDataFrame]):
                 ).otherwise(F.lit(None).cast(T.TimestampType()))
             )
         return df
-
 
 class FixBoolsColumnsStep(AbstractFixBoolsColumnsStep[SparkDataFrame]):
     """Spark: Convert text boolean representations to BooleanType."""
@@ -448,7 +443,6 @@ class FixBoolsColumnsStep(AbstractFixBoolsColumnsStep[SparkDataFrame]):
                 result.append(col)
         return result
 
-
 class FixColumnsTypesStep(AbstractFixColumnsTypesStep[SparkDataFrame]):
     """Spark: Cast columns to their final target dtypes."""
 
@@ -490,7 +484,6 @@ class FixColumnsTypesStep(AbstractFixColumnsTypesStep[SparkDataFrame]):
         for col in date_cols:
             df = df.withColumn(col, F.to_timestamp(F.col(col)))
         return df
-
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Steps: Numeric Cleaning & Imputation
@@ -567,7 +560,6 @@ class FixNumericColumnsStep(AbstractFixNumericColumnsStep[SparkDataFrame]):
             )
             return float(row[0][col]) if row else None
 
-
 # ─────────────────────────────────────────────────────────────────────────────
 # Steps: Outlier Handling
 # ─────────────────────────────────────────────────────────────────────────────
@@ -611,7 +603,6 @@ class IQROutlierStep(AbstractIQROutlierStep[SparkDataFrame]):
             if isinstance(data.schema[c].dataType, (T.DoubleType, T.FloatType, T.IntegerType, T.LongType))
             and not c.endswith("_id") and c != "id"
         ]
-
 
 class ZScoreOutlierStep(AbstractZScoreOutlierStep[SparkDataFrame]):
     """Spark: Nullify values beyond z_threshold standard deviations from mean."""
@@ -664,7 +655,6 @@ class ZScoreOutlierStep(AbstractZScoreOutlierStep[SparkDataFrame]):
             )
         return df
 
-
 class CapOutliersStep(AbstractCapOutliersStep[SparkDataFrame]):
     """Spark: Winsorize outliers at configurable percentile bounds (approxQuantile)."""
 
@@ -710,7 +700,6 @@ class CapOutliersStep(AbstractCapOutliersStep[SparkDataFrame]):
             )
         return df
 
-
 # ─────────────────────────────────────────────────────────────────────────────
 # Steps: Text Normalization
 # ─────────────────────────────────────────────────────────────────────────────
@@ -743,7 +732,6 @@ class FixNotNumericColumnsStep(AbstractFixNotNumericColumnsStep[SparkDataFrame])
             )
         return df
 
-
 class NormalizeCategoriesStep(AbstractNormalizeCategoriesStep[SparkDataFrame]):
     """Spark: Unify category variants via F.when chains from synonym maps."""
 
@@ -766,7 +754,6 @@ class NormalizeCategoriesStep(AbstractNormalizeCategoriesStep[SparkDataFrame]):
                 expr = F.when(normalized == F.lit(alias), F.lit(canonical)).otherwise(expr)
             df = df.withColumn(col, expr)
         return df
-
 
 class TextStandardizationStep(AbstractTextStandardizationStep[SparkDataFrame]):
     """Spark: Text normalization — regex-based (NFKD via UDF, only justified exception).
@@ -817,7 +804,6 @@ class TextStandardizationStep(AbstractTextStandardizationStep[SparkDataFrame]):
             df = df.withColumn(col, _nfkd_normalize(cleaned))
         return df
 
-
 # ─────────────────────────────────────────────────────────────────────────────
 # Steps: Validation
 # ─────────────────────────────────────────────────────────────────────────────
@@ -850,7 +836,6 @@ class ValidateDomainRulesStep(AbstractValidateDomainRulesStep[SparkDataFrame]):
             )
         return df
 
-
 class CrossColumnValidationStep(AbstractCrossColumnValidationStep[SparkDataFrame]):
     """Spark: Validate cross-column rules using F.when native expressions."""
 
@@ -875,7 +860,6 @@ class CrossColumnValidationStep(AbstractCrossColumnValidationStep[SparkDataFrame
                 )
         return df
 
-
 # ─────────────────────────────────────────────────────────────────────────────
 # Steps: Duplicate Handling
 # ─────────────────────────────────────────────────────────────────────────────
@@ -888,7 +872,6 @@ class RemoveDuplicatesRowsStep(AbstractRemoveDuplicatesRowsStep[SparkDataFrame])
 
     def process(self, data: SparkDataFrame) -> SparkDataFrame:
         return data.dropDuplicates()
-
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Steps: Quality & Audit
@@ -918,7 +901,6 @@ class FlagDataQualityStep(AbstractFlagDataQualityStep[SparkDataFrame]):
             (non_null_count / F.lit(n_cols)).cast(T.DoubleType())
         )
 
-
 class AddAuditColumnsStep(AbstractAddAuditColumnsStep[SparkDataFrame]):
     """Spark: Append lineage-tracking columns (_original_index, _cleaned_at)."""
 
@@ -937,7 +919,6 @@ class AddAuditColumnsStep(AbstractAddAuditColumnsStep[SparkDataFrame]):
             )
         df = df.withColumn(self._CLEANED_AT_COL, F.current_timestamp())
         return df
-
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Steps: Feature Scaling

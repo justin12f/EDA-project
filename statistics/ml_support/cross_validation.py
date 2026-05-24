@@ -1,5 +1,10 @@
 """K-Fold cross-validation with stratification and repeated CV support."""
 
+# #[AI_CONTEXT_START]
+# - CONFIGURACIÓN DE FACTORY: Registrar este calculator en `MlSupportStatisticsFactory` (backends pandas | polars | spark) y exponerlo mediante `StatisticsInyeccionDependency`, inyectada por la Factory Maestra de Agentes junto a las demás fábricas de dominio.
+# - ABSTRACCIÓN DEL DATO: Mutar constructores y `analyze`/`compute` para recibir el contenedor abstracto del backend (`pd.DataFrame`, `pl.DataFrame`/`pl.LazyFrame`, `pyspark.sql.DataFrame`) inyectado por la factory; eliminar `np.ndarray`/`pd.Series` sueltos en firmas públicas.
+# - REFACTOR NATIVO: Resolver métricas con expresiones 100 % nativas del backend activo (Polars: `.select`/`.group_by`/`.agg` sin `.collect()` salvo materialización acordada; PySpark: `pyspark.sql.functions` y ventanas distribuidas; Pandas: operaciones vectorizadas). No convertir a NumPy/Pandas desde backends no-pandas.
+# #[AI_CONTEXT_END]
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -14,7 +19,6 @@ from sklearn.model_selection import (
     StratifiedKFold,
     cross_val_score,
 )
-
 
 @dataclass(frozen=True)
 class CVResult:
@@ -31,7 +35,6 @@ class CVResult:
     confidence_interval_upper: float
     n_folds: int
     n_repeats: int
-
 
 class CVStrategySelector:
     """Selects the appropriate CV strategy based on task and configuration.
@@ -88,7 +91,6 @@ class CVStrategySelector:
             n_splits=n_folds, n_repeats=n_repeats, random_state=random_seed
         )
 
-
 class CVConfidenceIntervalCalculator:
     """Computes a t-distribution confidence interval for CV score mean."""
 
@@ -114,7 +116,6 @@ class CVConfidenceIntervalCalculator:
         t_crit = float(scipy_stats.t.ppf(1 - alpha / 2, df=n - 1))
         margin = t_crit * se
         return mean - margin, mean + margin
-
 
 class CrossValidationCalculator:
     """Flexible K-Fold cross-validation with CI and repeated CV support.

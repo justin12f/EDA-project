@@ -1,11 +1,15 @@
 """Configurable rolling statistics over a sliding window."""
 
+# #[AI_CONTEXT_START]
+# - CONFIGURACIÓN DE FACTORY: Registrar este calculator en `TimeSeriesStatisticsFactory` (backends pandas | polars | spark) y exponerlo mediante `StatisticsInyeccionDependency`, inyectada por la Factory Maestra de Agentes junto a las demás fábricas de dominio.
+# - ABSTRACCIÓN DEL DATO: Mutar constructores y `analyze`/`compute` para recibir el contenedor abstracto del backend (`pd.DataFrame`, `pl.DataFrame`/`pl.LazyFrame`, `pyspark.sql.DataFrame`) inyectado por la factory; eliminar `np.ndarray`/`pd.Series` sueltos en firmas públicas.
+# - REFACTOR NATIVO: Resolver métricas con expresiones 100 % nativas del backend activo (Polars: `.select`/`.group_by`/`.agg` sin `.collect()` salvo materialización acordada; PySpark: `pyspark.sql.functions` y ventanas distribuidas; Pandas: operaciones vectorizadas). No convertir a NumPy/Pandas desde backends no-pandas.
+# #[AI_CONTEXT_END]
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
 
 import numpy as np
-
 
 class BaseRollingStatistic(ABC):
     """Abstract base for all rolling statistics."""
@@ -19,7 +23,6 @@ class BaseRollingStatistic(ABC):
     def name(self) -> str:
         """Return the statistic name."""
 
-
 class RollingMean(BaseRollingStatistic):
     @property
     def name(self) -> str:
@@ -30,7 +33,6 @@ class RollingMean(BaseRollingStatistic):
         for i in range(window - 1, len(series)):
             result[i] = float(np.mean(series[i - window + 1: i + 1]))
         return result
-
 
 class RollingStd(BaseRollingStatistic):
     @property
@@ -43,7 +45,6 @@ class RollingStd(BaseRollingStatistic):
             result[i] = float(np.std(series[i - window + 1: i + 1], ddof=1))
         return result
 
-
 class RollingMin(BaseRollingStatistic):
     @property
     def name(self) -> str:
@@ -54,7 +55,6 @@ class RollingMin(BaseRollingStatistic):
         for i in range(window - 1, len(series)):
             result[i] = float(np.min(series[i - window + 1: i + 1]))
         return result
-
 
 class RollingMax(BaseRollingStatistic):
     @property
@@ -67,7 +67,6 @@ class RollingMax(BaseRollingStatistic):
             result[i] = float(np.max(series[i - window + 1: i + 1]))
         return result
 
-
 class RollingMedian(BaseRollingStatistic):
     @property
     def name(self) -> str:
@@ -78,7 +77,6 @@ class RollingMedian(BaseRollingStatistic):
         for i in range(window - 1, len(series)):
             result[i] = float(np.median(series[i - window + 1: i + 1]))
         return result
-
 
 class RollingSkewness(BaseRollingStatistic):
     @property
@@ -92,7 +90,6 @@ class RollingSkewness(BaseRollingStatistic):
             result[i] = float(scipy_stats.skew(series[i - window + 1: i + 1]))
         return result
 
-
 _ROLLING_REGISTRY: dict[str, BaseRollingStatistic] = {
     "mean":     RollingMean(),
     "std":      RollingStd(),
@@ -101,7 +98,6 @@ _ROLLING_REGISTRY: dict[str, BaseRollingStatistic] = {
     "median":   RollingMedian(),
     "skewness": RollingSkewness(),
 }
-
 
 class RollingStatisticsCalculator:
     """Computes configurable rolling statistics over a sliding window."""

@@ -1,5 +1,10 @@
 """Interaction effect detection between feature pairs relative to a target."""
 
+# #[AI_CONTEXT_START]
+# - CONFIGURACIÓN DE FACTORY: Registrar este calculator en `RelationalStatisticsFactory` (backends pandas | polars | spark) y exponerlo mediante `StatisticsInyeccionDependency`, inyectada por la Factory Maestra de Agentes junto a las demás fábricas de dominio.
+# - ABSTRACCIÓN DEL DATO: Mutar constructores y `analyze`/`compute` para recibir el contenedor abstracto del backend (`pd.DataFrame`, `pl.DataFrame`/`pl.LazyFrame`, `pyspark.sql.DataFrame`) inyectado por la factory; eliminar `np.ndarray`/`pd.Series` sueltos en firmas públicas.
+# - REFACTOR NATIVO: Resolver métricas con expresiones 100 % nativas del backend activo (Polars: `.select`/`.group_by`/`.agg` sin `.collect()` salvo materialización acordada; PySpark: `pyspark.sql.functions` y ventanas distribuidas; Pandas: operaciones vectorizadas). No convertir a NumPy/Pandas desde backends no-pandas.
+# #[AI_CONTEXT_END]
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -10,7 +15,6 @@ import pandas as pd
 from models.linear_regression import LinearRegression
 from evaluation.score import SquaredR
 from preproccesing.scalers.implementations.standard_scaler import StandardScaler
-
 
 @dataclass(frozen=True)
 class InteractionResult:
@@ -23,7 +27,6 @@ class InteractionResult:
     interaction_gain: float
     interaction_coefficient: float
     has_meaningful_interaction: bool
-
 
 class AdditiveModelEvaluator:
     """Fits y ~ X_a + X_b and returns R²."""
@@ -48,7 +51,6 @@ class AdditiveModelEvaluator:
         model = LinearRegression(type_of_prediction="ordinary_least_squares", complexity="multiple")
         model.fit(x, y)
         return float(SquaredR().squared_r(y, model.predict(x)))
-
 
 class InteractionModelEvaluator:
     """Fits y ~ X_a + X_b + X_a×X_b and returns R² + interaction coefficient."""
@@ -77,7 +79,6 @@ class InteractionModelEvaluator:
         interaction_coef = float(model.model.coefficients_[3])
         return r2, interaction_coef
 
-
 class InteractionGainClassifier:
     """Classifies whether the R² gain from adding an interaction is meaningful."""
 
@@ -95,7 +96,6 @@ class InteractionGainClassifier:
             True if gain exceeds threshold.
         """
         return (r2_interaction - r2_additive) >= self._threshold
-
 
 class InteractionEffectsCalculator:
     """Detects feature pairs whose interaction improves target prediction.

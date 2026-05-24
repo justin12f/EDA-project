@@ -1,5 +1,10 @@
 """Distribution classification and fitting module."""
 
+# #[AI_CONTEXT_START]
+# - CONFIGURACIÓN DE FACTORY: Registrar este calculator en `DescriptiveStatisticsFactory` (backends pandas | polars | spark) y exponerlo mediante `StatisticsInyeccionDependency`, inyectada por la Factory Maestra de Agentes junto a las demás fábricas de dominio.
+# - ABSTRACCIÓN DEL DATO: Mutar constructores y `analyze`/`compute` para recibir el contenedor abstracto del backend (`pd.DataFrame`, `pl.DataFrame`/`pl.LazyFrame`, `pyspark.sql.DataFrame`) inyectado por la factory; eliminar `np.ndarray`/`pd.Series` sueltos en firmas públicas.
+# - REFACTOR NATIVO: Resolver métricas con expresiones 100 % nativas del backend activo (Polars: `.select`/`.group_by`/`.agg` sin `.collect()` salvo materialización acordada; PySpark: `pyspark.sql.functions` y ventanas distribuidas; Pandas: operaciones vectorizadas). No convertir a NumPy/Pandas desde backends no-pandas.
+# #[AI_CONTEXT_END]
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -7,7 +12,6 @@ from typing import Optional
 
 import numpy as np
 from scipy import stats
-
 
 @dataclass(frozen=True)
 class DistributionFitResult:
@@ -17,7 +21,6 @@ class DistributionFitResult:
     ks_statistic: float
     p_value: float
     parameters: dict[str, float]
-
 
 class BimodalityDetector:
     """Detects bimodality using the bimodality coefficient (BC).
@@ -54,7 +57,6 @@ class BimodalityDetector:
         bimodality_coefficient = numerator / denominator if denominator != 0 else 0.0
         return bimodality_coefficient > self._BIMODALITY_THRESHOLD
 
-
 class TransformationAdvisor:
     """Recommends a data transformation based on distribution shape and skewness."""
 
@@ -82,7 +84,6 @@ class TransformationAdvisor:
             return "box_cox or yeo_johnson"
 
         return None
-
 
 class DistributionFitter:
     """Fits data against candidate theoretical distributions using the KS test.
@@ -162,7 +163,6 @@ class DistributionFitter:
             p_value=float(p_value),
             parameters=parameters,
         )
-
 
 class DistributionClassifier:
     """Orchestrates the full distribution classification pipeline.

@@ -1,5 +1,10 @@
 """Module to create the gradient descent algorithm"""
 
+# #[AI_CONTEXT_START]
+# - CONFIGURACIÓN DE FACTORY: `OptimizerFactory` (pandas | polars | spark) bajo `ModelsInyeccionDependency`, encadenada desde la Factory Maestra de Agentes.
+# - ABSTRACCIÓN DEL DATO: Sustituir `np.ndarray`/`pd.Series` en `loss_function` y `GradientDescent` por tensores o columnas del backend inyectadas (p. ej. `pl.Expr`, columnas Spark, columnas `pd.DataFrame`).
+# - REFACTOR NATIVO: Implementar `GradientDescentPandas`, `GradientDescentPolars`, `GradientDescentSpark` con actualización de coeficientes vía operaciones nativas; la clase actual queda como contrato abstracto sin lógica NumPy en el camino de producción.
+# #[AI_CONTEXT_END]
 from __future__ import annotations
 
 from typing import Callable

@@ -1,0 +1,5 @@
+# #[AI_CONTEXT_START]
+# - CONFIGURACIÓN DE FACTORY: Wrapper registrado en `DataCleaningStepFactory` del backend activo; inyección vía `DataCleaningInyeccionDependency`.
+# - ABSTRACCIÓN DEL DATO: `wrapped(data)` acepta el frame del backend inyectado, no `pandas.DataFrame` exclusivo.
+# - REFACTOR NATIVO: Logging y `compare_metrics` sin copias pandas obligatorias; clonar/materializar según contrato del backend.
+# #[AI_CONTEXT_END]

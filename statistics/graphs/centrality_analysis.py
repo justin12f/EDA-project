@@ -1,12 +1,16 @@
 """Node centrality: degree, betweenness, closeness, and PageRank."""
 
+# #[AI_CONTEXT_START]
+# - CONFIGURACIÓN DE FACTORY: Registrar este calculator en `GraphStatisticsFactory` (backends pandas | polars | spark) y exponerlo mediante `StatisticsInyeccionDependency`, inyectada por la Factory Maestra de Agentes junto a las demás fábricas de dominio.
+# - ABSTRACCIÓN DEL DATO: Mutar constructores y `analyze`/`compute` para recibir el contenedor abstracto del backend (`pd.DataFrame`, `pl.DataFrame`/`pl.LazyFrame`, `pyspark.sql.DataFrame`) inyectado por la factory; eliminar `np.ndarray`/`pd.Series` sueltos en firmas públicas.
+# - REFACTOR NATIVO: Resolver métricas con expresiones 100 % nativas del backend activo (Polars: `.select`/`.group_by`/`.agg` sin `.collect()` salvo materialización acordada; PySpark: `pyspark.sql.functions` y ventanas distribuidas; Pandas: operaciones vectorizadas). No convertir a NumPy/Pandas desde backends no-pandas.
+# #[AI_CONTEXT_END]
 from __future__ import annotations
 
 from dataclasses import dataclass
 
 import numpy as np
 import pandas as pd
-
 
 @dataclass(frozen=True)
 class NodeCentralityRecord:
@@ -18,7 +22,6 @@ class NodeCentralityRecord:
     closeness_centrality: float
     pagerank: float
     overall_rank: int
-
 
 class DegreeCentralityCalculator:
     """Degree centrality: fraction of possible connections a node has.
@@ -44,7 +47,6 @@ class DegreeCentralityCalculator:
         sym = (adjacency + adjacency.T) > 0
         degrees = sym.sum(axis=1).astype(float)
         return degrees / (n - 1) if n > 1 else degrees
-
 
 class BFSShortestPaths:
     """Computes shortest path lengths from a single source via BFS.
@@ -80,7 +82,6 @@ class BFSShortestPaths:
                     queue.append(int(nb))
 
         return dist
-
 
 class BetweennessCalculator:
     """Betweenness centrality via Brandes-like BFS accumulation.
@@ -132,7 +133,6 @@ class BetweennessCalculator:
         norm = (n - 1) * (n - 2) / 2 if n > 2 else 1.0
         return betweenness / norm if norm > 0 else betweenness
 
-
 class ClosenessCentralityCalculator:
     """Closeness centrality: inverse of mean shortest path to all reachable nodes.
 
@@ -173,7 +173,6 @@ class ClosenessCentralityCalculator:
                 closeness[v] = raw * ((n_reachable - 1) / (n - 1))
 
         return closeness
-
 
 class PageRankCalculator:
     """PageRank via power iteration.
@@ -229,7 +228,6 @@ class PageRankCalculator:
 
         return pr
 
-
 class CentralityRanker:
     """Ranks nodes by composite centrality score."""
 
@@ -270,7 +268,6 @@ class CentralityRanker:
         ]
 
         return records[:top_n] if top_n is not None else records
-
 
 class CentralityAnalysisCalculator:
     """Degree, betweenness, closeness, and PageRank centrality.

@@ -1,10 +1,14 @@
 """Skewness and kurtosis analysis module."""
 
+# #[AI_CONTEXT_START]
+# - CONFIGURACIÓN DE FACTORY: Registrar este calculator en `DescriptiveStatisticsFactory` (backends pandas | polars | spark) y exponerlo mediante `StatisticsInyeccionDependency`, inyectada por la Factory Maestra de Agentes junto a las demás fábricas de dominio.
+# - ABSTRACCIÓN DEL DATO: Mutar constructores y `analyze`/`compute` para recibir el contenedor abstracto del backend (`pd.DataFrame`, `pl.DataFrame`/`pl.LazyFrame`, `pyspark.sql.DataFrame`) inyectado por la factory; eliminar `np.ndarray`/`pd.Series` sueltos en firmas públicas.
+# - REFACTOR NATIVO: Resolver métricas con expresiones 100 % nativas del backend activo (Polars: `.select`/`.group_by`/`.agg` sin `.collect()` salvo materialización acordada; PySpark: `pyspark.sql.functions` y ventanas distribuidas; Pandas: operaciones vectorizadas). No convertir a NumPy/Pandas desde backends no-pandas.
+# #[AI_CONTEXT_END]
 from __future__ import annotations
 
 import numpy as np
 from scipy import stats
-
 
 class SkewnessInterpreter:
     """Classifies skewness severity and recommends transformations."""
@@ -42,7 +46,6 @@ class SkewnessInterpreter:
             "recommended_action": action,
         }
 
-
 class KurtosisInterpreter:
     """Classifies excess kurtosis and advises on model selection."""
 
@@ -66,7 +69,6 @@ class KurtosisInterpreter:
             action = "standard models generally safe"
 
         return {"distribution_type": dist_type, "recommended_action": action}
-
 
 class SkewnessKurtosisCalculator:
     """Calculates skewness and kurtosis with actionable interpretations.

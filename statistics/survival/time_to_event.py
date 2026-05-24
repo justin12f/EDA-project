@@ -1,5 +1,10 @@
 """Time-to-event descriptive statistics and threshold analysis."""
 
+# #[AI_CONTEXT_START]
+# - CONFIGURACIÓN DE FACTORY: Registrar este calculator en `SurvivalStatisticsFactory` (backends pandas | polars | spark) y exponerlo mediante `StatisticsInyeccionDependency`, inyectada por la Factory Maestra de Agentes junto a las demás fábricas de dominio.
+# - ABSTRACCIÓN DEL DATO: Mutar constructores y `analyze`/`compute` para recibir el contenedor abstracto del backend (`pd.DataFrame`, `pl.DataFrame`/`pl.LazyFrame`, `pyspark.sql.DataFrame`) inyectado por la factory; eliminar `np.ndarray`/`pd.Series` sueltos en firmas públicas.
+# - REFACTOR NATIVO: Resolver métricas con expresiones 100 % nativas del backend activo (Polars: `.select`/`.group_by`/`.agg` sin `.collect()` salvo materialización acordada; PySpark: `pyspark.sql.functions` y ventanas distribuidas; Pandas: operaciones vectorizadas). No convertir a NumPy/Pandas desde backends no-pandas.
+# #[AI_CONTEXT_END]
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -7,7 +12,6 @@ from dataclasses import dataclass
 import numpy as np
 import pandas as pd
 from scipy import stats
-
 
 @dataclass(frozen=True)
 class TimeToEventSummary:
@@ -25,7 +29,6 @@ class TimeToEventSummary:
     min_time: float
     max_time: float
     iqr_time: float
-
 
 class TimeToEventSummaryCalculator:
     """Computes descriptive statistics for time-to-event data."""
@@ -63,7 +66,6 @@ class TimeToEventSummaryCalculator:
             iqr_time=round(float(np.percentile(times, 75) - np.percentile(times, 25)), 4),
         )
 
-
 class ThresholdSurvivalAnalyser:
     """Estimates fraction of subjects surviving past specific time thresholds.
 
@@ -95,7 +97,6 @@ class ThresholdSurvivalAnalyser:
             }
             for threshold in sorted(thresholds)
         ]
-
 
 class ExponentialFitter:
     """Fits an exponential survival model: S(t) = exp(-λt).
@@ -151,7 +152,6 @@ class ExponentialFitter:
             "mean_survival_time": round(1.0 / lambda_mle, 4),
             "goodness_of_fit": gof,
         }
-
 
 class TimeToEventCalculator:
     """Comprehensive time-to-event analysis with threshold and model fitting.

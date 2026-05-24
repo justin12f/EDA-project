@@ -1,0 +1,5 @@
+# #[AI_CONTEXT_START]
+# - CONFIGURACIÓN DE FACTORY: `DataAnalyzerFactory` / `AnalyzeContextFactory` backend spark; inyectar vía `AnalyzeDataInyeccionDependency` desde la Factory Maestra de Agentes.
+# - ABSTRACCIÓN DEL DATO: Analyzers reciben `pyspark.sql.DataFrame` inyectado; sin conversiones locales a pandas.
+# - REFACTOR NATIVO: Análisis con calculadoras `statistics/*` vía expresiones Spark distribuidas; docstrings en inglés; tests backend spark.
+# #[AI_CONTEXT_END]

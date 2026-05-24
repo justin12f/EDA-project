@@ -1,5 +1,10 @@
 """Network density, connectivity, and structural graph metrics."""
 
+# #[AI_CONTEXT_START]
+# - CONFIGURACIÓN DE FACTORY: Registrar este calculator en `GraphStatisticsFactory` (backends pandas | polars | spark) y exponerlo mediante `StatisticsInyeccionDependency`, inyectada por la Factory Maestra de Agentes junto a las demás fábricas de dominio.
+# - ABSTRACCIÓN DEL DATO: Mutar constructores y `analyze`/`compute` para recibir el contenedor abstracto del backend (`pd.DataFrame`, `pl.DataFrame`/`pl.LazyFrame`, `pyspark.sql.DataFrame`) inyectado por la factory; eliminar `np.ndarray`/`pd.Series` sueltos en firmas públicas.
+# - REFACTOR NATIVO: Resolver métricas con expresiones 100 % nativas del backend activo (Polars: `.select`/`.group_by`/`.agg` sin `.collect()` salvo materialización acordada; PySpark: `pyspark.sql.functions` y ventanas distribuidas; Pandas: operaciones vectorizadas). No convertir a NumPy/Pandas desde backends no-pandas.
+# #[AI_CONTEXT_END]
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -8,13 +13,11 @@ from enum import Enum
 import numpy as np
 import pandas as pd
 
-
 class GraphType(str, Enum):
     """Supported graph types."""
 
     DIRECTED = "directed"
     UNDIRECTED = "undirected"
-
 
 @dataclass(frozen=True)
 class GraphStructureResult:
@@ -31,7 +34,6 @@ class GraphStructureResult:
     max_degree: int
     min_degree: int
     graph_type: str
-
 
 class AdjacencyMatrixBuilder:
     """Builds an adjacency matrix from an edge list DataFrame.
@@ -78,7 +80,6 @@ class AdjacencyMatrixBuilder:
         np.fill_diagonal(matrix, 0)
         return matrix, all_nodes
 
-
 class ConnectedComponentsFinder:
     """Finds connected components via BFS traversal on the adjacency matrix.
 
@@ -119,7 +120,6 @@ class ConnectedComponentsFinder:
 
         return len(components), components
 
-
 class DegreeDistributionCalculator:
     """Computes degree statistics from adjacency matrix."""
 
@@ -151,7 +151,6 @@ class DegreeDistributionCalculator:
             "std_degree": round(float(degrees.std()), 4),
             "degree_values": degrees.tolist(),
         }
-
 
 class NetworkDensityCalculator:
     """Structural graph metrics: density, connectivity, and degree distribution.

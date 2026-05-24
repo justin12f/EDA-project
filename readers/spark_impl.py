@@ -4,6 +4,11 @@ All readers return ``pyspark.sql.DataFrame``.
 Spark DataFrames are already lazy (DAG of transformations).
 """
 
+# #[AI_CONTEXT_START]
+# - CONFIGURACIÓN DE FACTORY: `ReaderFactory` local por extensión y backend; `ReadersInyeccionDependency` como capa superior para Agentes.
+# - ABSTRACCIÓN DEL DATO: Retorno de `read()` como `pl.LazyFrame` (polars), `pyspark.sql.DataFrame` (spark) o `pd.DataFrame` (pandas); registrar readers pandas faltantes en la factory.
+# - REFACTOR NATIVO: Ampliar formatos con APIs nativas (`pl.scan_*`, `spark.read`, `pd.read_*`) sin mezclar backends en una misma clase.
+# #[AI_CONTEXT_END]
 from __future__ import annotations
 
 import os
@@ -14,7 +19,6 @@ from pyspark.sql import SparkSession
 
 from readers.base import AbstractReader
 from readers.exceptions import ReaderError
-
 
 def _get_or_create_spark(app_name: str = "EDA-Project") -> SparkSession:
     """Return the active SparkSession or create a new local one.
@@ -30,7 +34,6 @@ def _get_or_create_spark(app_name: str = "EDA-Project") -> SparkSession:
         .master("local[*]")
         .getOrCreate()
     )
-
 
 class SparkCSVReader(AbstractReader[SparkDataFrame]):
     """Read CSV files into a PySpark DataFrame.
@@ -61,7 +64,6 @@ class SparkCSVReader(AbstractReader[SparkDataFrame]):
                 f"Failed to read CSV '{self._file}': {exc}"
             ) from exc
 
-
 class SparkParquetReader(AbstractReader[SparkDataFrame]):
     """Read Parquet files into a PySpark DataFrame."""
 
@@ -73,7 +75,6 @@ class SparkParquetReader(AbstractReader[SparkDataFrame]):
             raise ReaderError(
                 f"Failed to read Parquet '{self._file}': {exc}"
             ) from exc
-
 
 class SparkJSONReader(AbstractReader[SparkDataFrame]):
     """Read JSON files into a PySpark DataFrame."""

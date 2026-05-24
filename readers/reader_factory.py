@@ -13,11 +13,15 @@ Usage:
     reader = ReaderFactory.create("data.parquet", backend="polars")
 """
 
+# #[AI_CONTEXT_START]
+# - CONFIGURACIÓN DE FACTORY: `ReaderFactory` local por extensión y backend; `ReadersInyeccionDependency` como capa superior para Agentes.
+# - ABSTRACCIÓN DEL DATO: Retorno de `read()` como `pl.LazyFrame` (polars), `pyspark.sql.DataFrame` (spark) o `pd.DataFrame` (pandas); registrar readers pandas faltantes en la factory.
+# - REFACTOR NATIVO: Ampliar formatos con APIs nativas (`pl.scan_*`, `spark.read`, `pd.read_*`) sin mezclar backends en una misma clase.
+# #[AI_CONTEXT_END]
 from __future__ import annotations
 
 import os
-from typing import Literal
-
+from core.backend import Backend, DEFAULT_BACKEND
 from readers.base import AbstractReader
 from readers.exceptions import BackendNotSupportedError, ReaderError
 
@@ -35,11 +39,16 @@ from readers.spark_impl import (
     SparkJSONReader,
     SparkParquetReader,
 )
-
-
-# Type alias for supported backends
-Backend = Literal["polars", "spark"]
-
+from readers.pandas_impl import (
+    PandasCSVReader,
+    PandasExcelReader,
+    PandasJSONReader,
+    PandasParquetReader,
+)
+__all__ = [
+    "Backend",
+    "ReaderFactory",
+]
 
 class ReaderFactory:
     """Factory for creating readers with multi-backend support.
@@ -68,7 +77,7 @@ class ReaderFactory:
     def create(
         cls,
         file: str,
-        backend: Backend = "polars",
+        backend: Backend = DEFAULT_BACKEND,
     ) -> AbstractReader:
         """Return the appropriate reader for the file extension and backend.
 
@@ -114,7 +123,6 @@ class ReaderFactory:
         """Return list of registered extensions for a given backend."""
         return sorted(ext for (ext, b) in cls._registry if b == backend)
 
-
 # ═══════════════════════════════════════════════════════════════════════════════
 # Register all built-in readers
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -130,3 +138,10 @@ ReaderFactory.register(".xls", "polars", PolarsExcelReader)
 ReaderFactory.register(".csv", "spark", SparkCSVReader)
 ReaderFactory.register(".parquet", "spark", SparkParquetReader)
 ReaderFactory.register(".json", "spark", SparkJSONReader)
+
+# ── Pandas ────────────────────────────────────────────────────────────────────
+ReaderFactory.register(".csv", "pandas", PandasCSVReader)
+ReaderFactory.register(".parquet", "pandas", PandasParquetReader)
+ReaderFactory.register(".json", "pandas", PandasJSONReader)
+ReaderFactory.register(".xlsx", "pandas", PandasExcelReader)
+ReaderFactory.register(".xls", "pandas", PandasExcelReader)

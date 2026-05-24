@@ -1,5 +1,10 @@
 """Financial risk metrics: VaR, CVaR, Sharpe, Sortino, and Calmar ratios."""
 
+# #[AI_CONTEXT_START]
+# - CONFIGURACIÓN DE FACTORY: Registrar este calculator en `BusinessStatisticsFactory` (backends pandas | polars | spark) y exponerlo mediante `StatisticsInyeccionDependency`, inyectada por la Factory Maestra de Agentes junto a las demás fábricas de dominio.
+# - ABSTRACCIÓN DEL DATO: Mutar constructores y `analyze`/`compute` para recibir el contenedor abstracto del backend (`pd.DataFrame`, `pl.DataFrame`/`pl.LazyFrame`, `pyspark.sql.DataFrame`) inyectado por la factory; eliminar `np.ndarray`/`pd.Series` sueltos en firmas públicas.
+# - REFACTOR NATIVO: Resolver métricas con expresiones 100 % nativas del backend activo (Polars: `.select`/`.group_by`/`.agg` sin `.collect()` salvo materialización acordada; PySpark: `pyspark.sql.functions` y ventanas distribuidas; Pandas: operaciones vectorizadas). No convertir a NumPy/Pandas desde backends no-pandas.
+# #[AI_CONTEXT_END]
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -8,7 +13,6 @@ import numpy as np
 import pandas as pd
 from scipy import stats
 
-
 @dataclass(frozen=True)
 class RiskMetricResult:
     """Immutable result for a single risk metric."""
@@ -16,7 +20,6 @@ class RiskMetricResult:
     metric_name: str
     value: float
     interpretation: str
-
 
 class ReturnsComputer:
     """Computes simple or log returns from a price/value series.
@@ -62,7 +65,6 @@ class ReturnsComputer:
         )
         return returns
 
-
 class VaRCalculator:
     """Value at Risk (VaR) via historical simulation.
 
@@ -87,7 +89,6 @@ class VaRCalculator:
         """
         alpha = 1.0 - confidence_level
         return float(-np.percentile(returns[~np.isnan(returns)], alpha * 100))
-
 
 class CVaRCalculator:
     """Conditional Value at Risk (CVaR / Expected Shortfall).
@@ -115,7 +116,6 @@ class CVaRCalculator:
         var_threshold = float(np.percentile(clean, alpha * 100))
         tail_returns = clean[clean <= var_threshold]
         return float(-tail_returns.mean()) if len(tail_returns) > 0 else 0.0
-
 
 class SharpeRatioCalculator:
     """Sharpe ratio: risk-adjusted return above a risk-free rate.
@@ -148,7 +148,6 @@ class SharpeRatioCalculator:
         if std == 0.0:
             return 0.0
         return float(excess_returns.mean() / std * np.sqrt(periods_per_year))
-
 
 class SortinoRatioCalculator:
     """Sortino ratio: like Sharpe but penalizes only downside volatility.
@@ -185,7 +184,6 @@ class SortinoRatioCalculator:
         if downside_std == 0.0:
             return float("inf") if excess_returns.mean() > 0 else 0.0
         return float(excess_returns.mean() / downside_std * np.sqrt(periods_per_year))
-
 
 class MaxDrawdownCalculator:
     """Maximum drawdown: largest peak-to-trough decline in portfolio value.
@@ -225,7 +223,6 @@ class MaxDrawdownCalculator:
             "recovery_periods": recovery_periods,
         }
 
-
 class CalmarRatioCalculator:
     """Calmar ratio: annualized return divided by maximum drawdown.
 
@@ -255,7 +252,6 @@ class CalmarRatioCalculator:
         clean = returns[~np.isnan(returns)]
         annualized_return = float(clean.mean() * periods_per_year)
         return round(annualized_return / abs(max_drawdown), 4)
-
 
 class RiskMetricsCalculator:
     """Full financial risk metrics suite.

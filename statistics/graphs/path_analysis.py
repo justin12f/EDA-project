@@ -1,10 +1,14 @@
 """Graph path analysis: average shortest path length and diameter."""
 
+# #[AI_CONTEXT_START]
+# - CONFIGURACIÓN DE FACTORY: Registrar este calculator en `GraphStatisticsFactory` (backends pandas | polars | spark) y exponerlo mediante `StatisticsInyeccionDependency`, inyectada por la Factory Maestra de Agentes junto a las demás fábricas de dominio.
+# - ABSTRACCIÓN DEL DATO: Mutar constructores y `analyze`/`compute` para recibir el contenedor abstracto del backend (`pd.DataFrame`, `pl.DataFrame`/`pl.LazyFrame`, `pyspark.sql.DataFrame`) inyectado por la factory; eliminar `np.ndarray`/`pd.Series` sueltos en firmas públicas.
+# - REFACTOR NATIVO: Resolver métricas con expresiones 100 % nativas del backend activo (Polars: `.select`/`.group_by`/`.agg` sin `.collect()` salvo materialización acordada; PySpark: `pyspark.sql.functions` y ventanas distribuidas; Pandas: operaciones vectorizadas). No convertir a NumPy/Pandas desde backends no-pandas.
+# #[AI_CONTEXT_END]
 from __future__ import annotations
 
 import numpy as np
 import pandas as pd
-
 
 class AllPairsShortestPathCalculator:
     """Floyd-Warshall all-pairs shortest path for small graphs.
@@ -38,7 +42,6 @@ class AllPairsShortestPathCalculator:
                         dist[i, j] = dist[i, k] + dist[k, j]
 
         return dist
-
 
 class PathStatisticsExtractor:
     """Extracts path statistics from an all-pairs distance matrix."""
@@ -76,7 +79,6 @@ class PathStatisticsExtractor:
             "total_pairs": total_pairs,
             "reachability_ratio": round(reachable / total_pairs, 4),
         }
-
 
 class SmallWorldCoefficient:
     """Computes the small-world coefficient σ.
@@ -121,7 +123,6 @@ class SmallWorldCoefficient:
         sigma = (clustering_coeff / c_random) / (avg_path_length / l_random)
         return round(float(sigma), 4)
 
-
 class ClusteringCoefficientCalculator:
     """Local clustering coefficient averaged across all nodes.
 
@@ -155,7 +156,6 @@ class ClusteringCoefficientCalculator:
             coefficients.append(triangles / possible)
 
         return round(float(np.mean(coefficients)), 6) if coefficients else 0.0
-
 
 class PathAnalysisCalculator:
     """Average path length, diameter, clustering, and small-world coefficient.

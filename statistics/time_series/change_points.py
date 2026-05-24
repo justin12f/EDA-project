@@ -1,11 +1,15 @@
 """Change point detection: CUSUM and variance shift detection."""
 
+# #[AI_CONTEXT_START]
+# - CONFIGURACIÓN DE FACTORY: Registrar este calculator en `TimeSeriesStatisticsFactory` (backends pandas | polars | spark) y exponerlo mediante `StatisticsInyeccionDependency`, inyectada por la Factory Maestra de Agentes junto a las demás fábricas de dominio.
+# - ABSTRACCIÓN DEL DATO: Mutar constructores y `analyze`/`compute` para recibir el contenedor abstracto del backend (`pd.DataFrame`, `pl.DataFrame`/`pl.LazyFrame`, `pyspark.sql.DataFrame`) inyectado por la factory; eliminar `np.ndarray`/`pd.Series` sueltos en firmas públicas.
+# - REFACTOR NATIVO: Resolver métricas con expresiones 100 % nativas del backend activo (Polars: `.select`/`.group_by`/`.agg` sin `.collect()` salvo materialización acordada; PySpark: `pyspark.sql.functions` y ventanas distribuidas; Pandas: operaciones vectorizadas). No convertir a NumPy/Pandas desde backends no-pandas.
+# #[AI_CONTEXT_END]
 from __future__ import annotations
 
 from dataclasses import dataclass
 
 import numpy as np
-
 
 @dataclass(frozen=True)
 class ChangePoint:
@@ -15,7 +19,6 @@ class ChangePoint:
     method: str
     statistic: float
     direction: str  # 'upward', 'downward', or 'variance_shift'
-
 
 class CUSUMDetector:
     """CUSUM (Cumulative Sum) change point detector."""
@@ -43,7 +46,6 @@ class CUSUMDetector:
                 change_points.append(ChangePoint(index=t, method="cusum", statistic=round(cusum_neg[t], 4), direction="downward"))
                 cusum_neg[t] = 0.0
         return change_points
-
 
 class VarianceShiftDetector:
     """Detects structural shifts in variance using a rolling F-ratio test."""
@@ -75,7 +77,6 @@ class VarianceShiftDetector:
             if not too_close:
                 retained.append(candidate)
         return sorted(retained, key=lambda p: p.index)
-
 
 class ChangePointDetector:
     """Orchestrates CUSUM and variance shift detection."""

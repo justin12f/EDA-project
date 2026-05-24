@@ -1,0 +1,75 @@
+"""Factory — domain `geospatial`."""
+from __future__ import annotations
+from typing import Any
+from core.abstract_factory import RegistryFactory
+
+class GeospatialStatisticsFactory(RegistryFactory[str, Any]):
+    pass
+
+def _register() -> None:
+    from statistics.geospatial.backends import pandas_impl as p
+    from statistics.geospatial.backends import polars_impl as pl
+    from statistics.geospatial.backends import spark_impl as sp
+
+    GeospatialStatisticsFactory.register("centroid_calculator", "pandas", p.CentroidCalculatorPandas)
+    GeospatialStatisticsFactory.register("centroid_calculator", "polars", pl.CentroidCalculatorPolars)
+    GeospatialStatisticsFactory.register("centroid_calculator", "spark", sp.CentroidCalculatorSpark)
+    GeospatialStatisticsFactory.register("bounding_box_calculator", "pandas", p.BoundingBoxCalculatorPandas)
+    GeospatialStatisticsFactory.register("bounding_box_calculator", "polars", pl.BoundingBoxCalculatorPolars)
+    GeospatialStatisticsFactory.register("bounding_box_calculator", "spark", sp.BoundingBoxCalculatorSpark)
+    GeospatialStatisticsFactory.register("diagonal_distance_calculator", "pandas", p.DiagonalDistanceCalculatorPandas)
+    GeospatialStatisticsFactory.register("diagonal_distance_calculator", "polars", pl.DiagonalDistanceCalculatorPolars)
+    GeospatialStatisticsFactory.register("diagonal_distance_calculator", "spark", sp.DiagonalDistanceCalculatorSpark)
+    GeospatialStatisticsFactory.register("mean_radius_calculator", "pandas", p.MeanRadiusCalculatorPandas)
+    GeospatialStatisticsFactory.register("mean_radius_calculator", "polars", pl.MeanRadiusCalculatorPolars)
+    GeospatialStatisticsFactory.register("mean_radius_calculator", "spark", sp.MeanRadiusCalculatorSpark)
+    GeospatialStatisticsFactory.register("dispersion_label_assigner", "pandas", p.DispersionLabelAssignerPandas)
+    GeospatialStatisticsFactory.register("dispersion_label_assigner", "polars", pl.DispersionLabelAssignerPolars)
+    GeospatialStatisticsFactory.register("dispersion_label_assigner", "spark", sp.DispersionLabelAssignerSpark)
+    GeospatialStatisticsFactory.register("geo_bounding_box_calculator", "pandas", p.GeoBoundingBoxCalculatorPandas)
+    GeospatialStatisticsFactory.register("geo_bounding_box_calculator", "polars", pl.GeoBoundingBoxCalculatorPolars)
+    GeospatialStatisticsFactory.register("geo_bounding_box_calculator", "spark", sp.GeoBoundingBoxCalculatorSpark)
+    GeospatialStatisticsFactory.register("haversine_distance_matrix", "pandas", p.HaversineDistanceMatrixPandas)
+    GeospatialStatisticsFactory.register("haversine_distance_matrix", "polars", pl.HaversineDistanceMatrixPolars)
+    GeospatialStatisticsFactory.register("haversine_distance_matrix", "spark", sp.HaversineDistanceMatrixSpark)
+    GeospatialStatisticsFactory.register("geo_cluster_profile_builder", "pandas", p.GeoClusterProfileBuilderPandas)
+    GeospatialStatisticsFactory.register("geo_cluster_profile_builder", "polars", pl.GeoClusterProfileBuilderPolars)
+    GeospatialStatisticsFactory.register("geo_cluster_profile_builder", "spark", sp.GeoClusterProfileBuilderSpark)
+    GeospatialStatisticsFactory.register("geo_clustering_calculator", "pandas", p.GeoClusteringCalculatorPandas)
+    GeospatialStatisticsFactory.register("geo_clustering_calculator", "polars", pl.GeoClusteringCalculatorPolars)
+    GeospatialStatisticsFactory.register("geo_clustering_calculator", "spark", sp.GeoClusteringCalculatorSpark)
+    GeospatialStatisticsFactory.register("geo_unit_frequency_calculator", "pandas", p.GeoUnitFrequencyCalculatorPandas)
+    GeospatialStatisticsFactory.register("geo_unit_frequency_calculator", "polars", pl.GeoUnitFrequencyCalculatorPolars)
+    GeospatialStatisticsFactory.register("geo_unit_frequency_calculator", "spark", sp.GeoUnitFrequencyCalculatorSpark)
+    GeospatialStatisticsFactory.register("geo_concentration_calculator", "pandas", p.GeoConcentrationCalculatorPandas)
+    GeospatialStatisticsFactory.register("geo_concentration_calculator", "polars", pl.GeoConcentrationCalculatorPolars)
+    GeospatialStatisticsFactory.register("geo_concentration_calculator", "spark", sp.GeoConcentrationCalculatorSpark)
+    GeospatialStatisticsFactory.register("geo_distribution_calculator", "pandas", p.GeoDistributionCalculatorPandas)
+    GeospatialStatisticsFactory.register("geo_distribution_calculator", "polars", pl.GeoDistributionCalculatorPolars)
+    GeospatialStatisticsFactory.register("geo_distribution_calculator", "spark", sp.GeoDistributionCalculatorSpark)
+    GeospatialStatisticsFactory.register("grid_boundary_computer", "pandas", p.GridBoundaryComputerPandas)
+    GeospatialStatisticsFactory.register("grid_boundary_computer", "polars", pl.GridBoundaryComputerPolars)
+    GeospatialStatisticsFactory.register("grid_boundary_computer", "spark", sp.GridBoundaryComputerSpark)
+    GeospatialStatisticsFactory.register("grid_count_accumulator", "pandas", p.GridCountAccumulatorPandas)
+    GeospatialStatisticsFactory.register("grid_count_accumulator", "polars", pl.GridCountAccumulatorPolars)
+    GeospatialStatisticsFactory.register("grid_count_accumulator", "spark", sp.GridCountAccumulatorSpark)
+    GeospatialStatisticsFactory.register("cell_density_calculator", "pandas", p.CellDensityCalculatorPandas)
+    GeospatialStatisticsFactory.register("cell_density_calculator", "polars", pl.CellDensityCalculatorPolars)
+    GeospatialStatisticsFactory.register("cell_density_calculator", "spark", sp.CellDensityCalculatorSpark)
+    GeospatialStatisticsFactory.register("geo_heatmap_calculator", "pandas", p.GeoHeatmapCalculatorPandas)
+    GeospatialStatisticsFactory.register("geo_heatmap_calculator", "polars", pl.GeoHeatmapCalculatorPolars)
+    GeospatialStatisticsFactory.register("geo_heatmap_calculator", "spark", sp.GeoHeatmapCalculatorSpark)
+    GeospatialStatisticsFactory.register("haversine_vectorized_calculator", "pandas", p.HaversineVectorizedCalculatorPandas)
+    GeospatialStatisticsFactory.register("haversine_vectorized_calculator", "polars", pl.HaversineVectorizedCalculatorPolars)
+    GeospatialStatisticsFactory.register("haversine_vectorized_calculator", "spark", sp.HaversineVectorizedCalculatorSpark)
+    GeospatialStatisticsFactory.register("nearest_neighbor_finder", "pandas", p.NearestNeighborFinderPandas)
+    GeospatialStatisticsFactory.register("nearest_neighbor_finder", "polars", pl.NearestNeighborFinderPolars)
+    GeospatialStatisticsFactory.register("nearest_neighbor_finder", "spark", sp.NearestNeighborFinderSpark)
+    GeospatialStatisticsFactory.register("average_nearest_neighbor_index_calculator", "pandas", p.AverageNearestNeighborIndexCalculatorPandas)
+    GeospatialStatisticsFactory.register("average_nearest_neighbor_index_calculator", "polars", pl.AverageNearestNeighborIndexCalculatorPolars)
+    GeospatialStatisticsFactory.register("average_nearest_neighbor_index_calculator", "spark", sp.AverageNearestNeighborIndexCalculatorSpark)
+    GeospatialStatisticsFactory.register("proximity_analysis_calculator", "pandas", p.ProximityAnalysisCalculatorPandas)
+    GeospatialStatisticsFactory.register("proximity_analysis_calculator", "polars", pl.ProximityAnalysisCalculatorPolars)
+    GeospatialStatisticsFactory.register("proximity_analysis_calculator", "spark", sp.ProximityAnalysisCalculatorSpark)
+
+_register()

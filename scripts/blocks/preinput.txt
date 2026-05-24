@@ -1,0 +1,5 @@
+# #[AI_CONTEXT_START]
+# - CONFIGURACIÓN DE FACTORY: `ModelPreInputFactory` y contenedor DI del módulo, inyectados por la Factory Maestra de Agentes.
+# - ABSTRACCIÓN DEL DATO: Schema de entrada robusto tipado por backend, no dicts ad hoc.
+# - REFACTOR NATIVO: Tests del pipeline de contexto ML en los tres backends configurables.
+# #[AI_CONTEXT_END]

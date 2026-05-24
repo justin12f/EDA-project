@@ -1,12 +1,16 @@
 """Moving average family: SMA, EMA, WMA with crossover detection."""
 
+# #[AI_CONTEXT_START]
+# - CONFIGURACIÓN DE FACTORY: Registrar este calculator en `TimeSeriesStatisticsFactory` (backends pandas | polars | spark) y exponerlo mediante `StatisticsInyeccionDependency`, inyectada por la Factory Maestra de Agentes junto a las demás fábricas de dominio.
+# - ABSTRACCIÓN DEL DATO: Mutar constructores y `analyze`/`compute` para recibir el contenedor abstracto del backend (`pd.DataFrame`, `pl.DataFrame`/`pl.LazyFrame`, `pyspark.sql.DataFrame`) inyectado por la factory; eliminar `np.ndarray`/`pd.Series` sueltos en firmas públicas.
+# - REFACTOR NATIVO: Resolver métricas con expresiones 100 % nativas del backend activo (Polars: `.select`/`.group_by`/`.agg` sin `.collect()` salvo materialización acordada; PySpark: `pyspark.sql.functions` y ventanas distribuidas; Pandas: operaciones vectorizadas). No convertir a NumPy/Pandas desde backends no-pandas.
+# #[AI_CONTEXT_END]
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 
 import numpy as np
-
 
 @dataclass(frozen=True)
 class CrossoverEvent:
@@ -17,14 +21,12 @@ class CrossoverEvent:
     fast_value: float
     slow_value: float
 
-
 class BaseMovingAverage(ABC):
     """Abstract base for all moving average strategies."""
 
     @abstractmethod
     def calculate(self, series: np.ndarray, period: int) -> np.ndarray:
         """Compute moving average values."""
-
 
 class SimpleMovingAverage(BaseMovingAverage):
     """SMA: arithmetic mean over a fixed rolling window."""
@@ -34,7 +36,6 @@ class SimpleMovingAverage(BaseMovingAverage):
         for i in range(period - 1, len(series)):
             result[i] = float(np.mean(series[i - period + 1: i + 1]))
         return result
-
 
 class ExponentialMovingAverage(BaseMovingAverage):
     """EMA: exponentially decaying weights, more responsive to recent data."""
@@ -49,7 +50,6 @@ class ExponentialMovingAverage(BaseMovingAverage):
             result[i] = series[i] * k + result[i - 1] * (1.0 - k)
         return result
 
-
 class WeightedMovingAverage(BaseMovingAverage):
     """WMA: linearly increasing weights, most weight on most recent value."""
 
@@ -62,13 +62,11 @@ class WeightedMovingAverage(BaseMovingAverage):
             result[i] = float(np.dot(chunk, weights) / weight_sum)
         return result
 
-
 _MA_REGISTRY: dict[str, BaseMovingAverage] = {
     "sma": SimpleMovingAverage(),
     "ema": ExponentialMovingAverage(),
     "wma": WeightedMovingAverage(),
 }
-
 
 class CrossoverDetector:
     """Detects golden crosses and death crosses between two MA lines."""
@@ -85,7 +83,6 @@ class CrossoverDetector:
             elif prev_diff >= 0 > curr_diff:
                 events.append(CrossoverEvent(i, "death_cross", float(fast_ma[i]), float(slow_ma[i])))
         return events
-
 
 class MovingAveragesCalculator:
     """Computes multiple MA types with optional crossover detection."""

@@ -1,5 +1,10 @@
 """Hierarchical agglomerative clustering with dendrogram and linkage analysis."""
 
+# #[AI_CONTEXT_START]
+# - CONFIGURACIÓN DE FACTORY: Registrar este calculator en `SegmentationStatisticsFactory` (backends pandas | polars | spark) y exponerlo mediante `StatisticsInyeccionDependency`, inyectada por la Factory Maestra de Agentes junto a las demás fábricas de dominio.
+# - ABSTRACCIÓN DEL DATO: Mutar constructores y `analyze`/`compute` para recibir el contenedor abstracto del backend (`pd.DataFrame`, `pl.DataFrame`/`pl.LazyFrame`, `pyspark.sql.DataFrame`) inyectado por la factory; eliminar `np.ndarray`/`pd.Series` sueltos en firmas públicas.
+# - REFACTOR NATIVO: Resolver métricas con expresiones 100 % nativas del backend activo (Polars: `.select`/`.group_by`/`.agg` sin `.collect()` salvo materialización acordada; PySpark: `pyspark.sql.functions` y ventanas distribuidas; Pandas: operaciones vectorizadas). No convertir a NumPy/Pandas desde backends no-pandas.
+# #[AI_CONTEXT_END]
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -11,7 +16,6 @@ from scipy.spatial.distance import pdist
 from sklearn.metrics import silhouette_score
 from sklearn.preprocessing import StandardScaler
 
-
 @dataclass(frozen=True)
 class HierarchicalClusterProfile:
     """Immutable profile for a single hierarchical cluster."""
@@ -21,7 +25,6 @@ class HierarchicalClusterProfile:
     proportion: float
     feature_means: dict[str, float]
     feature_stds: dict[str, float]
-
 
 class LinkageMatrixBuilder:
     """Builds the hierarchical linkage matrix from scaled data."""
@@ -38,7 +41,6 @@ class LinkageMatrixBuilder:
             )
         return linkage(x_scaled, method=method)
 
-
 class CopheneticCorrelationCalculator:
     """Computes cophenetic correlation coefficient for linkage quality."""
 
@@ -48,7 +50,6 @@ class CopheneticCorrelationCalculator:
         """Compute cophenetic correlation coefficient."""
         c, _ = cophenet(linkage_matrix, pdist(x_scaled))
         return round(float(c), 4)
-
 
 class OptimalCutoffSelector:
     """Selects optimal number of clusters by maximizing silhouette score."""
@@ -74,7 +75,6 @@ class OptimalCutoffSelector:
         optimal_k = max(silhouette_scores, key=silhouette_scores.get)
         return optimal_k, silhouette_scores
 
-
 class DendrogramDataExtractor:
     """Extracts dendrogram structure data for visualization."""
 
@@ -87,7 +87,6 @@ class DendrogramDataExtractor:
             "leaves": ddata["leaves"],
             "color_list": ddata.get("color_list", []),
         }
-
 
 class HierarchicalClusterProfileBuilder:
     """Builds statistical profiles per cluster from hierarchical assignments."""
@@ -120,7 +119,6 @@ class HierarchicalClusterProfileBuilder:
             )
             for cluster_id in sorted(set(labels))
         ]
-
 
 class HierarchicalClusterCalculator:
     """Hierarchical agglomerative clustering with auto K selection."""

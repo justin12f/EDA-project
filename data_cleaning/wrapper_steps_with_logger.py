@@ -1,27 +1,30 @@
 """Wrapper that injects logging / metrics collection into any pipeline step."""
 
-import time
+from __future__ import annotations
 
-from pandas import DataFrame
+import time
+from typing import Any
 
 from data_cleaning.data_cleaning_report import DataCleaningReport, compare_metrics
-from data_cleaning.data_cleaning_step_factory import BaseStep
+from data_cleaning.steps.backends.abstract_steps import AbstractBaseStep
 
 
 def wrapper_steps_with_logger(
-    step: BaseStep, report: DataCleaningReport
-) -> BaseStep:  # BUG-07 fixed: was -> None
+    step: AbstractBaseStep[Any], report: DataCleaningReport
+) -> AbstractBaseStep[Any]:
     """Wrap a step's process() to capture before/after metrics."""
     original_process = step.process
 
-    def wrapped(data: DataFrame) -> DataFrame:
+    def wrapped(data: Any) -> Any:
         start_time = time.time()
-        before = data.copy()
+        before = data.copy() if hasattr(data, "copy") else data
 
         try:
             result = original_process(data)
-        except Exception as e:
-            raise RuntimeError(f"Error in step '{step.__class__.__name__}': {str(e)}") from e
+        except Exception as exc:
+            raise RuntimeError(
+                f"Error in step '{step.__class__.__name__}': {exc}"
+            ) from exc
 
         elapsed_ms = (time.time() - start_time) * 1000
         metrics = compare_metrics(before, result)
@@ -29,5 +32,5 @@ def wrapper_steps_with_logger(
         report.add_steps(step.__class__.__name__, metrics)
         return result
 
-    step.process = wrapped
+    step.process = wrapped  # type: ignore[method-assign]
     return step

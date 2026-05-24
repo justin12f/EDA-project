@@ -1,20 +1,21 @@
-"""Module for parsing arguments"""
+"""CLI argument parser for data cleaning pipelines."""
+
+from __future__ import annotations
 
 import argparse
 
+from core.backend import BACKENDS, DEFAULT_BACKEND
 
-def parser(file_path: str, preset: str = "default") -> None:
-    """Parse the arguments"""
+
+def build_parser(file_path: str, preset: str = "default") -> argparse.ArgumentParser:
+    """Build argument parser (does not parse argv)."""
     parser_object = argparse.ArgumentParser(description="Run data cleaning pipeline")
-    # input
     parser_object.add_argument(
         "-i", "--input", type=str, default=file_path, help="Input file path"
     )
-    # output
     parser_object.add_argument(
         "-o", "--output", type=str, help="Output file path (default: clean_<input>)"
     )
-    # preset
     parser_object.add_argument(
         "-p",
         "--preset",
@@ -23,12 +24,23 @@ def parser(file_path: str, preset: str = "default") -> None:
         default=preset,
         help="Pipeline preset configuration",
     )
-    # report
     parser_object.add_argument(
         "-r",
         "--report",
         type=str,
         help="Path to save the JSON report (default: cleaning_report_<input>.json)",
     )
-    args = parser_object.parse_args()
-    return args
+    parser_object.add_argument(
+        "-b",
+        "--backend",
+        type=str,
+        choices=list(BACKENDS),
+        default=DEFAULT_BACKEND,
+        help="Compute backend for readers and cleaning pipeline",
+    )
+    return parser_object
+
+
+def parser(file_path: str, preset: str = "default") -> argparse.Namespace:
+    """Parse CLI arguments."""
+    return build_parser(file_path, preset).parse_args()

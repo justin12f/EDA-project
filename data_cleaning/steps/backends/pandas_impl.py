@@ -1,3 +1,4 @@
+
 """
 data_cleaning/steps/backends/pandas_impl.py
 
@@ -8,6 +9,11 @@ Toda la lógica analítica interna usa pd.DataFrame nativamente.
 100% compatible con la lógica original de implementations.py.
 """
 
+# #[AI_CONTEXT_START]
+# - CONFIGURACIÓN DE FACTORY: `DataCleaningStepFactory` del backend correspondiente en `data_cleaning/steps/backends/`; inyección vía `DataCleaningInyeccionDependency` → Factory Maestra.
+# - ABSTRACCIÓN DEL DATO: Canonicalizar en `backends/`; deprecar duplicados en `steps/implementations.py` y `steps/polars_impl.py` raíz tras verificar referencias.
+# - REFACTOR NATIVO: Steps en inglés y 100 % API nativa del backend; sin NumPy salvo materialización local explícita.
+# #[AI_CONTEXT_END]
 from __future__ import annotations
 
 import re
@@ -48,7 +54,6 @@ from data_cleaning.steps.backends.abstract_steps import (
     AbstractZScoreOutlierStep,
 )
 
-
 # ─────────────────────────────────────────────────────────────────────────────
 # Domain Types  (Value Objects + Strategy Enums)  ← backend-agnostic, reused
 # ─────────────────────────────────────────────────────────────────────────────
@@ -59,19 +64,16 @@ class ImputationStrategy(str, Enum):
     MEDIAN = "median"
     MODE   = "mode"
 
-
 class CategoricalImputationStrategy(str, Enum):
     """Supported strategies for filling missing categorical values."""
     MODE  = "mode"
     FIXED = "fixed"
-
 
 @dataclass(frozen=True)
 class DomainBounds:
     """Immutable descriptor for domain validation on a single column."""
     lower: float | None = None
     upper: float | None = None
-
 
 @dataclass(frozen=True)
 class CrossColumnRule:
@@ -80,7 +82,6 @@ class CrossColumnRule:
     equals:   object
     then_col: str
     action:   str = "set_nan"
-
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Utility: Column Type Detection
@@ -172,7 +173,6 @@ class ColumnInspector:
         except (ValueError, TypeError):
             return False
 
-
 # ─────────────────────────────────────────────────────────────────────────────
 # Utility: Value Conversion
 # ─────────────────────────────────────────────────────────────────────────────
@@ -218,7 +218,6 @@ class ValueParser:
             pass
         return value
 
-
 # ─────────────────────────────────────────────────────────────────────────────
 # Steps: Schema & Structure
 # ─────────────────────────────────────────────────────────────────────────────
@@ -249,7 +248,6 @@ class ColumnScopedStep(AbstractColumnScopedStep[pd.DataFrame]):
         result = pd.concat([remainder_subset, cleaned_subset], axis=1)
         return result[data.columns]
 
-
 class ColumnsTitlesStep(AbstractColumnsTitlesStep[pd.DataFrame]):
     """Pandas: Normalize column names."""
 
@@ -272,7 +270,6 @@ class ColumnsTitlesStep(AbstractColumnsTitlesStep[pd.DataFrame]):
             for col in df.columns
         ]
         return df
-
 
 class EnforceSchemaStep(AbstractEnforceSchemaStep[pd.DataFrame]):
     """Pandas: Validate minimum structural requirements."""
@@ -299,7 +296,6 @@ class EnforceSchemaStep(AbstractEnforceSchemaStep[pd.DataFrame]):
             warnings.warn(f"Missing required columns: {missing_cols}", stacklevel=2)
         return df
 
-
 class DropHighMissingColumnsStep(AbstractDropHighMissingColumnsStep[pd.DataFrame]):
     """Pandas: Drop columns where null fraction > threshold."""
 
@@ -315,7 +311,6 @@ class DropHighMissingColumnsStep(AbstractDropHighMissingColumnsStep[pd.DataFrame
         cols_to_drop = missing_fractions[missing_fractions > self.threshold].index
         return df.drop(columns=cols_to_drop)
 
-
 class DropConstantColumnsStep(AbstractDropConstantColumnsStep[pd.DataFrame]):
     """Pandas: Drop columns with ≤1 unique non-null value."""
 
@@ -326,7 +321,6 @@ class DropConstantColumnsStep(AbstractDropConstantColumnsStep[pd.DataFrame]):
         df = data.copy()
         constant_cols = [c for c in df.columns if df[c].nunique(dropna=True) <= 1]
         return df.drop(columns=constant_cols)
-
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Steps: Missing Values & Sentinel Handling
@@ -356,7 +350,6 @@ class HandleSentinelValuesStep(AbstractHandleSentinelValuesStep[pd.DataFrame]):
             mask = df[col].astype(str).str.lower().str.strip().isin(self._sentinels)
             df.loc[mask, col] = np.nan
         return df
-
 
 class ImputeCategoricalStep(AbstractImputeCategoricalStep[pd.DataFrame]):
     """Pandas: Impute missing categorical values (mode or fixed)."""
@@ -388,7 +381,6 @@ class ImputeCategoricalStep(AbstractImputeCategoricalStep[pd.DataFrame]):
             else:
                 df[col] = df[col].fillna(self.fill_value)
         return df
-
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Steps: Type Conversion & Parsing
@@ -434,7 +426,6 @@ class SafeConversionStep(AbstractSafeConversionStep[pd.DataFrame]):
         value = ValueParser.detect_numeric(value)
         return ValueParser.smart_date_parse(value)
 
-
 class FixDatesColumnsStep(AbstractFixDatesColumnsStep[pd.DataFrame]):
     """Pandas: Parse string columns to datetime and invalidate out-of-range."""
 
@@ -461,7 +452,6 @@ class FixDatesColumnsStep(AbstractFixDatesColumnsStep[pd.DataFrame]):
             out_of_range = (df[col] < self._MIN_DATE) | (df[col] > max_date)
             df.loc[out_of_range, col] = pd.NaT
         return df
-
 
 class FixBoolsColumnsStep(AbstractFixBoolsColumnsStep[pd.DataFrame]):
     """Pandas: Convert text boolean representations to nullable pd.BooleanDtype."""
@@ -492,7 +482,6 @@ class FixBoolsColumnsStep(AbstractFixBoolsColumnsStep[pd.DataFrame]):
             mapped = df[col].astype(str).str.lower().str.strip().map(self._BOOL_MAP)
             df[col] = mapped.astype("boolean")
         return df
-
 
 class FixColumnsTypesStep(AbstractFixColumnsTypesStep[pd.DataFrame]):
     """Pandas: Cast columns to their final target dtypes."""
@@ -533,7 +522,6 @@ class FixColumnsTypesStep(AbstractFixColumnsTypesStep[pd.DataFrame]):
         for col in date_cols:
             df[col] = pd.to_datetime(df[col], errors="coerce")
         return df
-
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Steps: Numeric Cleaning & Imputation
@@ -594,7 +582,6 @@ class FixNumericColumnsStep(AbstractFixNumericColumnsStep[pd.DataFrame]):
                 return float(mode_vals.iloc[0]) if not mode_vals.empty else None
         return None
 
-
 # ─────────────────────────────────────────────────────────────────────────────
 # Steps: Outlier Handling
 # ─────────────────────────────────────────────────────────────────────────────
@@ -626,7 +613,6 @@ class IQROutlierStep(AbstractIQROutlierStep[pd.DataFrame]):
             c for c in df.select_dtypes(include=[np.number]).columns
             if not c.endswith("_id") and c != "id"
         ]
-
 
 class ZScoreOutlierStep(AbstractZScoreOutlierStep[pd.DataFrame]):
     """Pandas: Nullify values whose absolute Z-score exceeds z_threshold."""
@@ -666,7 +652,6 @@ class ZScoreOutlierStep(AbstractZScoreOutlierStep[pd.DataFrame]):
             df.loc[z_scores > self.z_threshold, col] = np.nan
         return df
 
-
 class CapOutliersStep(AbstractCapOutliersStep[pd.DataFrame]):
     """Pandas: Winsorize outliers at configurable percentile bounds."""
 
@@ -702,7 +687,6 @@ class CapOutliersStep(AbstractCapOutliersStep[pd.DataFrame]):
             q_high = df[col].quantile(self.upper_percentile)
             df[col] = df[col].clip(lower=q_low, upper=q_high)
         return df
-
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Steps: Text Normalization
@@ -740,7 +724,6 @@ class FixNotNumericColumnsStep(AbstractFixNotNumericColumnsStep[pd.DataFrame]):
             )
         return df
 
-
 class NormalizeCategoriesStep(AbstractNormalizeCategoriesStep[pd.DataFrame]):
     """Pandas: Unify category variants using synonym maps."""
 
@@ -761,7 +744,6 @@ class NormalizeCategoriesStep(AbstractNormalizeCategoriesStep[pd.DataFrame]):
                 df[col].astype(str).str.lower().str.strip().replace(mapping)
             )
         return df
-
 
 class TextStandardizationStep(AbstractTextStandardizationStep[pd.DataFrame]):
     """Pandas: NFKD unicode + special char removal + whitespace collapse."""
@@ -804,7 +786,6 @@ class TextStandardizationStep(AbstractTextStandardizationStep[pd.DataFrame]):
         text = self._SPECIAL_CHAR_PATTERN.sub(" ", text)
         return self._WHITESPACE_PATTERN.sub(" ", text).strip().lower()
 
-
 # ─────────────────────────────────────────────────────────────────────────────
 # Steps: Validation
 # ─────────────────────────────────────────────────────────────────────────────
@@ -834,7 +815,6 @@ class ValidateDomainRulesStep(AbstractValidateDomainRulesStep[pd.DataFrame]):
             df.loc[violation_mask, col] = np.nan
         return df
 
-
 class CrossColumnValidationStep(AbstractCrossColumnValidationStep[pd.DataFrame]):
     """Pandas: Validate consistency between pairs of related columns."""
 
@@ -859,7 +839,6 @@ class CrossColumnValidationStep(AbstractCrossColumnValidationStep[pd.DataFrame])
                 ] = np.nan
         return df
 
-
 # ─────────────────────────────────────────────────────────────────────────────
 # Steps: Duplicate Handling
 # ─────────────────────────────────────────────────────────────────────────────
@@ -872,7 +851,6 @@ class RemoveDuplicatesRowsStep(AbstractRemoveDuplicatesRowsStep[pd.DataFrame]):
 
     def process(self, data: pd.DataFrame) -> pd.DataFrame:
         return data.copy().drop_duplicates()
-
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Steps: Quality & Audit
@@ -893,7 +871,6 @@ class FlagDataQualityStep(AbstractFlagDataQualityStep[pd.DataFrame]):
         )
         return df
 
-
 class AddAuditColumnsStep(AbstractAddAuditColumnsStep[pd.DataFrame]):
     """Pandas: Append lineage-tracking columns (_original_index, _cleaned_at)."""
 
@@ -909,7 +886,6 @@ class AddAuditColumnsStep(AbstractAddAuditColumnsStep[pd.DataFrame]):
             df[self._ORIGINAL_INDEX_COL] = df.index
         df[self._CLEANED_AT_COL] = datetime.now(tz=timezone.utc)
         return df
-
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Steps: Feature Scaling

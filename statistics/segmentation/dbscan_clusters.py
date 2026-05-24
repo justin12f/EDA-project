@@ -1,5 +1,10 @@
 """DBSCAN density-based clustering with noise detection and cluster profiling."""
 
+# #[AI_CONTEXT_START]
+# - CONFIGURACIÓN DE FACTORY: Registrar este calculator en `SegmentationStatisticsFactory` (backends pandas | polars | spark) y exponerlo mediante `StatisticsInyeccionDependency`, inyectada por la Factory Maestra de Agentes junto a las demás fábricas de dominio.
+# - ABSTRACCIÓN DEL DATO: Mutar constructores y `analyze`/`compute` para recibir el contenedor abstracto del backend (`pd.DataFrame`, `pl.DataFrame`/`pl.LazyFrame`, `pyspark.sql.DataFrame`) inyectado por la factory; eliminar `np.ndarray`/`pd.Series` sueltos en firmas públicas.
+# - REFACTOR NATIVO: Resolver métricas con expresiones 100 % nativas del backend activo (Polars: `.select`/`.group_by`/`.agg` sin `.collect()` salvo materialización acordada; PySpark: `pyspark.sql.functions` y ventanas distribuidas; Pandas: operaciones vectorizadas). No convertir a NumPy/Pandas desde backends no-pandas.
+# #[AI_CONTEXT_END]
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -10,7 +15,6 @@ from sklearn.cluster import DBSCAN
 from sklearn.metrics import silhouette_score
 from sklearn.neighbors import NearestNeighbors
 from sklearn.preprocessing import StandardScaler
-
 
 @dataclass(frozen=True)
 class DBSCANClusterProfile:
@@ -23,7 +27,6 @@ class DBSCANClusterProfile:
     feature_stds: dict[str, float]
     is_noise: bool
 
-
 class EpsilonEstimator:
     """Estimates optimal epsilon using the k-distance elbow heuristic."""
 
@@ -35,7 +38,6 @@ class EpsilonEstimator:
         second_derivative = np.diff(np.diff(k_distances))
         elbow_idx = int(np.argmax(second_derivative)) + 2
         return round(float(k_distances[elbow_idx]), 4)
-
 
 class DBSCANClusterProfileBuilder:
     """Builds statistical profiles for all DBSCAN clusters including noise."""
@@ -72,7 +74,6 @@ class DBSCANClusterProfileBuilder:
                 )
             )
         return profiles
-
 
 class DBSCANClusterCalculator:
     """DBSCAN clustering with auto epsilon estimation and noise quantification."""

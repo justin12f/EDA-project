@@ -1,0 +1,5 @@
+# #[AI_CONTEXT_START]
+# - CONFIGURACIÓN DE FACTORY: `ContextCreatorAgent` consume `model_tools/*` inyectados por la Factory Maestra; orden estricto meta_data → data_reader → create_context.
+# - ABSTRACCIÓN DEL DATO: El agente debe propagar `backend` elegido a cada tool sin mezclar implementaciones.
+# - REFACTOR NATIVO: Alinear tool-calling con factories reales; documentación y prompts solo en inglés; tests e2e del flujo de tres herramientas.
+# #[AI_CONTEXT_END]

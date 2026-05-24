@@ -1,5 +1,10 @@
 """PCA dimensionality reduction with variance explained analysis."""
 
+# #[AI_CONTEXT_START]
+# - CONFIGURACIÓN DE FACTORY: Registrar este calculator en `MlSupportStatisticsFactory` (backends pandas | polars | spark) y exponerlo mediante `StatisticsInyeccionDependency`, inyectada por la Factory Maestra de Agentes junto a las demás fábricas de dominio.
+# - ABSTRACCIÓN DEL DATO: Mutar constructores y `analyze`/`compute` para recibir el contenedor abstracto del backend (`pd.DataFrame`, `pl.DataFrame`/`pl.LazyFrame`, `pyspark.sql.DataFrame`) inyectado por la factory; eliminar `np.ndarray`/`pd.Series` sueltos en firmas públicas.
+# - REFACTOR NATIVO: Resolver métricas con expresiones 100 % nativas del backend activo (Polars: `.select`/`.group_by`/`.agg` sin `.collect()` salvo materialización acordada; PySpark: `pyspark.sql.functions` y ventanas distribuidas; Pandas: operaciones vectorizadas). No convertir a NumPy/Pandas desde backends no-pandas.
+# #[AI_CONTEXT_END]
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -7,7 +12,6 @@ from dataclasses import dataclass
 import numpy as np
 import pandas as pd
 from sklearn.preprocessing import StandardScaler
-
 
 @dataclass(frozen=True)
 class PrincipalComponent:
@@ -18,7 +22,6 @@ class PrincipalComponent:
     variance_explained: float
     cumulative_variance_explained: float
     loadings: dict[str, float]
-
 
 class CovarianceMatrixComputer:
     """Computes the sample covariance matrix from standardized data.
@@ -41,7 +44,6 @@ class CovarianceMatrixComputer:
         cov_matrix = np.cov(standardized, rowvar=False)
         return standardized, cov_matrix
 
-
 class EigenDecompositionCalculator:
     """Performs eigenvalue decomposition and sorts components by variance explained."""
 
@@ -61,7 +63,6 @@ class EigenDecompositionCalculator:
         # eigh returns ascending order — reverse for descending
         desc_idx = np.argsort(eigenvalues)[::-1]
         return eigenvalues[desc_idx], eigenvectors[:, desc_idx]
-
 
 class OptimalComponentSelector:
     """Selects the minimum number of components to explain a target variance."""
@@ -84,7 +85,6 @@ class OptimalComponentSelector:
             if cum_var >= target_variance:
                 return i + 1
         return len(cumulative_variance)
-
 
 class DimensionalityReductionCalculator:
     """PCA with loadings, variance explained, and optimal component selection.

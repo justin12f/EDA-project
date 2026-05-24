@@ -1,12 +1,16 @@
 """Event density: frequency, inter-event intervals, and temporal clustering."""
 
+# #[AI_CONTEXT_START]
+# - CONFIGURACIÓN DE FACTORY: Registrar este calculator en `SurvivalStatisticsFactory` (backends pandas | polars | spark) y exponerlo mediante `StatisticsInyeccionDependency`, inyectada por la Factory Maestra de Agentes junto a las demás fábricas de dominio.
+# - ABSTRACCIÓN DEL DATO: Mutar constructores y `analyze`/`compute` para recibir el contenedor abstracto del backend (`pd.DataFrame`, `pl.DataFrame`/`pl.LazyFrame`, `pyspark.sql.DataFrame`) inyectado por la factory; eliminar `np.ndarray`/`pd.Series` sueltos en firmas públicas.
+# - REFACTOR NATIVO: Resolver métricas con expresiones 100 % nativas del backend activo (Polars: `.select`/`.group_by`/`.agg` sin `.collect()` salvo materialización acordada; PySpark: `pyspark.sql.functions` y ventanas distribuidas; Pandas: operaciones vectorizadas). No convertir a NumPy/Pandas desde backends no-pandas.
+# #[AI_CONTEXT_END]
 from __future__ import annotations
 
 from dataclasses import dataclass
 
 import numpy as np
 import pandas as pd
-
 
 @dataclass(frozen=True)
 class IntervalStats:
@@ -19,7 +23,6 @@ class IntervalStats:
     max_interval: float
     cv_interval: float
     regularity_label: str
-
 
 class IntervalExtractor:
     """Extracts sorted inter-event intervals from an event time series."""
@@ -43,7 +46,6 @@ class IntervalExtractor:
             )
         sorted_times = np.sort(event_times)
         return np.diff(sorted_times)
-
 
 class RegularityClassifier:
     """Classifies event regularity based on coefficient of variation.
@@ -76,7 +78,6 @@ class RegularityClassifier:
                 return label
         return "highly_regular"
 
-
 class TemporalBurstinessCalculator:
     """Computes Goh-Barabási burstiness parameter B.
 
@@ -103,7 +104,6 @@ class TemporalBurstinessCalculator:
         mu = float(intervals.mean())
         denominator = sigma + mu
         return float((sigma - mu) / denominator) if denominator > 0 else 0.0
-
 
 class RollingEventRateCalculator:
     """Computes event rate over rolling time windows."""
@@ -134,7 +134,6 @@ class RollingEventRateCalculator:
             for c in centers
         ])
         return centers, rates
-
 
 class EventDensityCalculator:
     """Event frequency, inter-event statistics, burstiness, and rolling rate.

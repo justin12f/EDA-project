@@ -1,0 +1,5 @@
+# #[AI_CONTEXT_START]
+# - CONFIGURACIÓN DE FACTORY: CLI resuelve `--backend` vía Factory Maestra y delega a reader/cleaning factories inyectadas.
+# - ABSTRACCIÓN DEL DATO: Argumentos propagan backend seleccionado sin asumir pandas por defecto.
+# - REFACTOR NATIVO: Tests CLI con fixtures por backend para todo el flujo parser → pipeline.
+# #[AI_CONTEXT_END]

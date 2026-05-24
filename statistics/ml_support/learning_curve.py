@@ -1,5 +1,10 @@
 """Learning curve analysis for bias-variance diagnosis."""
 
+# #[AI_CONTEXT_START]
+# - CONFIGURACIÓN DE FACTORY: Registrar este calculator en `MlSupportStatisticsFactory` (backends pandas | polars | spark) y exponerlo mediante `StatisticsInyeccionDependency`, inyectada por la Factory Maestra de Agentes junto a las demás fábricas de dominio.
+# - ABSTRACCIÓN DEL DATO: Mutar constructores y `analyze`/`compute` para recibir el contenedor abstracto del backend (`pd.DataFrame`, `pl.DataFrame`/`pl.LazyFrame`, `pyspark.sql.DataFrame`) inyectado por la factory; eliminar `np.ndarray`/`pd.Series` sueltos en firmas públicas.
+# - REFACTOR NATIVO: Resolver métricas con expresiones 100 % nativas del backend activo (Polars: `.select`/`.group_by`/`.agg` sin `.collect()` salvo materialización acordada; PySpark: `pyspark.sql.functions` y ventanas distribuidas; Pandas: operaciones vectorizadas). No convertir a NumPy/Pandas desde backends no-pandas.
+# #[AI_CONTEXT_END]
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -8,7 +13,6 @@ import numpy as np
 import pandas as pd
 from sklearn.base import BaseEstimator
 from sklearn.model_selection import cross_val_score
-
 
 @dataclass(frozen=True)
 class LearningCurvePoint:
@@ -20,7 +24,6 @@ class LearningCurvePoint:
     val_score_mean: float
     val_score_std: float
     bias_variance_state: str
-
 
 class BiasVarianceDiagnostic:
     """Classifies model state based on training vs validation score gap.
@@ -64,7 +67,6 @@ class BiasVarianceDiagnostic:
             return "insufficient_data"
         return "good_fit"
 
-
 class TrainingSizeGenerator:
     """Generates logarithmically spaced training size checkpoints."""
 
@@ -91,7 +93,6 @@ class TrainingSizeGenerator:
         )
         sizes = sorted(set(int(np.round(s)) for s in raw))
         return [s for s in sizes if min_train_size <= s <= n_total]
-
 
 class LearningCurveCalculator:
     """Generates learning curves to diagnose bias vs variance.

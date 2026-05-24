@@ -1,11 +1,15 @@
 """Chi-square independence and goodness-of-fit tests."""
 
+# #[AI_CONTEXT_START]
+# - CONFIGURACIÓN DE FACTORY: Registrar este calculator en `InferentialStatisticsFactory` (backends pandas | polars | spark) y exponerlo mediante `StatisticsInyeccionDependency`, inyectada por la Factory Maestra de Agentes junto a las demás fábricas de dominio.
+# - ABSTRACCIÓN DEL DATO: Mutar constructores y `analyze`/`compute` para recibir el contenedor abstracto del backend (`pd.DataFrame`, `pl.DataFrame`/`pl.LazyFrame`, `pyspark.sql.DataFrame`) inyectado por la factory; eliminar `np.ndarray`/`pd.Series` sueltos en firmas públicas.
+# - REFACTOR NATIVO: Resolver métricas con expresiones 100 % nativas del backend activo (Polars: `.select`/`.group_by`/`.agg` sin `.collect()` salvo materialización acordada; PySpark: `pyspark.sql.functions` y ventanas distribuidas; Pandas: operaciones vectorizadas). No convertir a NumPy/Pandas desde backends no-pandas.
+# #[AI_CONTEXT_END]
 from __future__ import annotations
 
 import numpy as np
 import pandas as pd
 from scipy import stats
-
 
 class ContingencyTableBuilder:
     """Builds and validates a contingency table from two categorical Series."""
@@ -34,7 +38,6 @@ class ContingencyTableBuilder:
             raise ValueError("Input series cannot be empty.")
 
         return pd.crosstab(series_a, series_b)
-
 
 class CramersVCalculator:
     """Calculates Cramér's V — effect size for chi-square tests.
@@ -66,7 +69,6 @@ class CramersVCalculator:
             return 0.0
 
         return float(np.sqrt(phi2 / denominator))
-
 
 class ChiSquareTestCalculator:
     """Chi-square independence test between two categorical variables.

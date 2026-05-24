@@ -7,6 +7,11 @@ All steps operate on pl.LazyFrame or pl.DataFrame and return the same type.
 Native Polars expressions are used exclusively — no .apply() or to_pandas().
 """
 
+# #[AI_CONTEXT_START]
+# - CONFIGURACIÓN DE FACTORY: `DataCleaningStepFactory` del backend correspondiente en `data_cleaning/steps/backends/`; inyección vía `DataCleaningInyeccionDependency` → Factory Maestra.
+# - ABSTRACCIÓN DEL DATO: Canonicalizar en `backends/`; deprecar duplicados en `steps/implementations.py` y `steps/polars_impl.py` raíz tras verificar referencias.
+# - REFACTOR NATIVO: Steps en inglés y 100 % API nativa del backend; sin NumPy salvo materialización local explícita.
+# #[AI_CONTEXT_END]
 from __future__ import annotations
 
 import re
@@ -22,7 +27,6 @@ import polars as pl
 
 from data_cleaning.steps.base import AbstractStep
 
-
 # ─────────────────────────────────────────────────────────────────────────────
 # Domain Types (reused from original — backend-agnostic)
 # ─────────────────────────────────────────────────────────────────────────────
@@ -33,19 +37,16 @@ class ImputationStrategy(str, Enum):
     MEDIAN = "median"
     MODE = "mode"
 
-
 class CategoricalImputationStrategy(str, Enum):
     """Supported strategies for filling missing categorical values."""
     MODE = "mode"
     FIXED = "fixed"
-
 
 @dataclass(frozen=True)
 class DomainBounds:
     """Immutable descriptor for domain validation on a single column."""
     lower: float | None = None
     upper: float | None = None
-
 
 @dataclass(frozen=True)
 class CrossColumnRule:
@@ -54,7 +55,6 @@ class CrossColumnRule:
     equals: object
     then_col: str
     action: str = "set_nan"
-
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Utility: Column Scope Decorator
@@ -89,7 +89,6 @@ class PolarsColumnScopedStep(AbstractStep[pl.DataFrame]):
 
         return pl.concat([remainder, cleaned], how="horizontal").select(data.columns)
 
-
 # ─────────────────────────────────────────────────────────────────────────────
 # Steps: Schema & Structure
 # ─────────────────────────────────────────────────────────────────────────────
@@ -115,7 +114,6 @@ class PolarsColumnsTitlesStep(AbstractStep[pl.DataFrame]):
             new_names[col] = clean
         return data.rename(new_names)
 
-
 class PolarsEnforceSchemaStep(AbstractStep[pl.DataFrame]):
     """Validate that required columns exist and minimum row count is met."""
 
@@ -139,7 +137,6 @@ class PolarsEnforceSchemaStep(AbstractStep[pl.DataFrame]):
             warnings.warn(f"Missing required columns: {missing}")
         return data
 
-
 class PolarsDropHighMissingColumnsStep(AbstractStep[pl.DataFrame]):
     """Drop columns where the null fraction exceeds a threshold."""
 
@@ -161,7 +158,6 @@ class PolarsDropHighMissingColumnsStep(AbstractStep[pl.DataFrame]):
         ]
         return data.drop(cols_to_drop) if cols_to_drop else data
 
-
 class PolarsDropConstantColumnsStep(AbstractStep[pl.DataFrame]):
     """Drop columns with only one unique non-null value."""
 
@@ -174,7 +170,6 @@ class PolarsDropConstantColumnsStep(AbstractStep[pl.DataFrame]):
             if data[col].drop_nulls().n_unique() <= 1
         ]
         return data.drop(cols_to_drop) if cols_to_drop else data
-
 
 class PolarsHandleSentinelValuesStep(AbstractStep[pl.DataFrame]):
     """Replace common sentinel values with null."""
@@ -204,7 +199,6 @@ class PolarsHandleSentinelValuesStep(AbstractStep[pl.DataFrame]):
             else:
                 exprs.append(pl.col(col))
         return data.select(exprs)
-
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Steps: Imputation
@@ -250,7 +244,6 @@ class PolarsImputeCategoricalStep(AbstractStep[pl.DataFrame]):
                 exprs.append(pl.col(col))
         return data.select(exprs)
 
-
 # ─────────────────────────────────────────────────────────────────────────────
 # Steps: Type Conversion
 # ─────────────────────────────────────────────────────────────────────────────
@@ -280,7 +273,6 @@ class PolarsSafeConversionStep(AbstractStep[pl.DataFrame]):
                 exprs.append(pl.col(col))
         return data.select(exprs)
 
-
 class PolarsFixDatesColumnsStep(AbstractStep[pl.DataFrame]):
     """Convert detected date columns to Date/Datetime type."""
 
@@ -302,7 +294,6 @@ class PolarsFixDatesColumnsStep(AbstractStep[pl.DataFrame]):
                     pass
             exprs.append(pl.col(col))
         return data.select(exprs)
-
 
 class PolarsFixBoolsColumnsStep(AbstractStep[pl.DataFrame]):
     """Convert columns with boolean-like values to Boolean type."""
@@ -338,7 +329,6 @@ class PolarsFixBoolsColumnsStep(AbstractStep[pl.DataFrame]):
                 exprs.append(pl.col(col))
         return data.select(exprs)
 
-
 class PolarsFixColumnsTypesStep(AbstractStep[pl.DataFrame]):
     """Final pass: cast columns to their most appropriate type."""
 
@@ -360,7 +350,6 @@ class PolarsFixColumnsTypesStep(AbstractStep[pl.DataFrame]):
                         continue
             exprs.append(pl.col(col))
         return data.select(exprs)
-
 
 class PolarsFixNumericColumnsStep(AbstractStep[pl.DataFrame]):
     """Impute missing numeric values using mean, median, or mode."""
@@ -401,7 +390,6 @@ class PolarsFixNumericColumnsStep(AbstractStep[pl.DataFrame]):
                 exprs.append(pl.col(col))
         return data.select(exprs)
 
-
 # ─────────────────────────────────────────────────────────────────────────────
 # Steps: Outliers
 # ─────────────────────────────────────────────────────────────────────────────
@@ -438,7 +426,6 @@ class PolarsIQROutlierStep(AbstractStep[pl.DataFrame]):
             )
         return data.filter(mask)
 
-
 class PolarsZScoreOutlierStep(AbstractStep[pl.DataFrame]):
     """Remove rows with outliers based on Z-score."""
 
@@ -465,7 +452,6 @@ class PolarsZScoreOutlierStep(AbstractStep[pl.DataFrame]):
             z_score = ((pl.col(col) - mean_val) / std_val).abs()
             mask = mask & (pl.col(col).is_null() | (z_score <= self._z_threshold))
         return data.filter(mask)
-
 
 class PolarsCapOutliersStep(AbstractStep[pl.DataFrame]):
     """Cap outliers at the specified percentiles (winsorization)."""
@@ -499,7 +485,6 @@ class PolarsCapOutliersStep(AbstractStep[pl.DataFrame]):
                 exprs.append(pl.col(col))
         return data.select(exprs)
 
-
 # ─────────────────────────────────────────────────────────────────────────────
 # Steps: Text & Normalization
 # ─────────────────────────────────────────────────────────────────────────────
@@ -518,7 +503,6 @@ class PolarsFixNotNumericColumnsStep(AbstractStep[pl.DataFrame]):
             else:
                 exprs.append(pl.col(col))
         return data.select(exprs)
-
 
 class PolarsTextStandardizationStep(AbstractStep[pl.DataFrame]):
     """Standardize text columns: strip, lowercase, collapse whitespace."""
@@ -541,7 +525,6 @@ class PolarsTextStandardizationStep(AbstractStep[pl.DataFrame]):
                 exprs.append(pl.col(col))
         return data.select(exprs)
 
-
 class PolarsNormalizeCategoriesStep(AbstractStep[pl.DataFrame]):
     """Normalize categorical values: strip + lowercase."""
 
@@ -562,7 +545,6 @@ class PolarsNormalizeCategoriesStep(AbstractStep[pl.DataFrame]):
                 exprs.append(pl.col(col))
         return data.select(exprs)
 
-
 # ─────────────────────────────────────────────────────────────────────────────
 # Steps: Deduplication & Quality
 # ─────────────────────────────────────────────────────────────────────────────
@@ -575,7 +557,6 @@ class PolarsRemoveDuplicatesRowsStep(AbstractStep[pl.DataFrame]):
 
     def process(self, data: pl.DataFrame) -> pl.DataFrame:
         return data.unique()
-
 
 class PolarsFlagDataQualityStep(AbstractStep[pl.DataFrame]):
     """Add a ``_data_quality_score`` column: fraction of non-null values per row."""
@@ -595,7 +576,6 @@ class PolarsFlagDataQualityStep(AbstractStep[pl.DataFrame]):
             (non_null_expr / n_cols).round(4).alias("_data_quality_score")
         )
 
-
 class PolarsAddAuditColumnsStep(AbstractStep[pl.DataFrame]):
     """Add audit metadata: ``_cleaned_at`` timestamp and ``_row_hash``."""
 
@@ -608,7 +588,6 @@ class PolarsAddAuditColumnsStep(AbstractStep[pl.DataFrame]):
             pl.lit(now_str).alias("_cleaned_at"),
             pl.arange(0, data.height).alias("_row_id"),
         )
-
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Steps: Validation
@@ -640,7 +619,6 @@ class PolarsValidateDomainRulesStep(AbstractStep[pl.DataFrame]):
                 exprs.append(pl.col(col))
         return data.select(exprs) if exprs else data
 
-
 class PolarsCrossColumnValidationStep(AbstractStep[pl.DataFrame]):
     """Apply cross-column validation rules."""
 
@@ -663,7 +641,6 @@ class PolarsCrossColumnValidationStep(AbstractStep[pl.DataFrame]):
                         .alias(rule.then_col)
                     )
         return data
-
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Steps: Scaling

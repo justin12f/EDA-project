@@ -1,5 +1,10 @@
 """Tree-based feature importance extraction and permutation importance."""
 
+# #[AI_CONTEXT_START]
+# - CONFIGURACIÓN DE FACTORY: Registrar este calculator en `MlSupportStatisticsFactory` (backends pandas | polars | spark) y exponerlo mediante `StatisticsInyeccionDependency`, inyectada por la Factory Maestra de Agentes junto a las demás fábricas de dominio.
+# - ABSTRACCIÓN DEL DATO: Mutar constructores y `analyze`/`compute` para recibir el contenedor abstracto del backend (`pd.DataFrame`, `pl.DataFrame`/`pl.LazyFrame`, `pyspark.sql.DataFrame`) inyectado por la factory; eliminar `np.ndarray`/`pd.Series` sueltos en firmas públicas.
+# - REFACTOR NATIVO: Resolver métricas con expresiones 100 % nativas del backend activo (Polars: `.select`/`.group_by`/`.agg` sin `.collect()` salvo materialización acordada; PySpark: `pyspark.sql.functions` y ventanas distribuidas; Pandas: operaciones vectorizadas). No convertir a NumPy/Pandas desde backends no-pandas.
+# #[AI_CONTEXT_END]
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
@@ -9,7 +14,6 @@ import numpy as np
 import pandas as pd
 from sklearn.ensemble import RandomForestClassifier, RandomForestRegressor
 from sklearn.inspection import permutation_importance
-
 
 @dataclass(frozen=True)
 class ImportanceScore:
@@ -21,7 +25,6 @@ class ImportanceScore:
     std: float | None
     normalized_importance: float
     method: str
-
 
 class BaseImportanceExtractor(ABC):
     """Abstract base for all feature importance extraction strategies."""
@@ -52,7 +55,6 @@ class BaseImportanceExtractor(ABC):
         Returns:
             List of ImportanceScore objects (unranked).
         """
-
 
 class GiniImportanceExtractor(BaseImportanceExtractor):
     """Mean Decrease in Impurity (MDI / Gini importance) from a Random Forest.
@@ -105,7 +107,6 @@ class GiniImportanceExtractor(BaseImportanceExtractor):
             )
             for name, imp, std in zip(feature_names, importances, stds)
         ]
-
 
 class PermutationImportanceExtractor(BaseImportanceExtractor):
     """Permutation feature importance (MDA — Mean Decrease in Accuracy).
@@ -166,12 +167,10 @@ class PermutationImportanceExtractor(BaseImportanceExtractor):
             for name, imp, std in zip(feature_names, importances, stds)
         ]
 
-
 _EXTRACTOR_REGISTRY: dict[str, BaseImportanceExtractor] = {
     "gini": GiniImportanceExtractor(),
     "permutation": PermutationImportanceExtractor(),
 }
-
 
 class ImportanceRanker:
     """Sorts and ranks ImportanceScore objects descending by |importance|."""
@@ -192,7 +191,6 @@ class ImportanceRanker:
             for i, s in enumerate(sorted_scores)
         ]
         return ranked[:top_n] if top_n is not None else ranked
-
 
 class FeatureImportanceCalculator:
     """Tree-based feature importance with Gini and/or permutation methods.

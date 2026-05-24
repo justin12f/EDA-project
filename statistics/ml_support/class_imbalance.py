@@ -1,12 +1,16 @@
 """Class imbalance detection and resampling strategy recommendation."""
 
+# #[AI_CONTEXT_START]
+# - CONFIGURACIÓN DE FACTORY: Registrar este calculator en `MlSupportStatisticsFactory` (backends pandas | polars | spark) y exponerlo mediante `StatisticsInyeccionDependency`, inyectada por la Factory Maestra de Agentes junto a las demás fábricas de dominio.
+# - ABSTRACCIÓN DEL DATO: Mutar constructores y `analyze`/`compute` para recibir el contenedor abstracto del backend (`pd.DataFrame`, `pl.DataFrame`/`pl.LazyFrame`, `pyspark.sql.DataFrame`) inyectado por la factory; eliminar `np.ndarray`/`pd.Series` sueltos en firmas públicas.
+# - REFACTOR NATIVO: Resolver métricas con expresiones 100 % nativas del backend activo (Polars: `.select`/`.group_by`/`.agg` sin `.collect()` salvo materialización acordada; PySpark: `pyspark.sql.functions` y ventanas distribuidas; Pandas: operaciones vectorizadas). No convertir a NumPy/Pandas desde backends no-pandas.
+# #[AI_CONTEXT_END]
 from __future__ import annotations
 
 from dataclasses import dataclass
 
 import numpy as np
 import pandas as pd
-
 
 @dataclass(frozen=True)
 class ClassMetrics:
@@ -16,7 +20,6 @@ class ClassMetrics:
     count: int
     proportion: float
     is_minority: bool
-
 
 class GiniImpurityCalculator:
     """Computes Gini impurity as a class imbalance severity measure.
@@ -36,7 +39,6 @@ class GiniImpurityCalculator:
             Gini impurity value in [0, 1).
         """
         return float(1.0 - np.sum(proportions ** 2))
-
 
 class ImbalanceRatioCalculator:
     """Computes the imbalance ratio: majority_count / minority_count.
@@ -58,7 +60,6 @@ class ImbalanceRatioCalculator:
         minority = float(class_counts.min())
         majority = float(class_counts.max())
         return majority / minority if minority > 0 else float("inf")
-
 
 class StrategyAdvisor:
     """Recommends a resampling or algorithmic strategy based on imbalance ratio.
@@ -90,7 +91,6 @@ class StrategyAdvisor:
             if imbalance_ratio >= threshold:
                 return strategy
         return "no_resampling_needed"
-
 
 class ClassImbalanceCalculator:
     """Detects and quantifies class imbalance with resampling recommendations.

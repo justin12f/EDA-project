@@ -2,6 +2,12 @@
 analyze_data/analyzers/backends/spark_impl.py
 PySpark implementations for analyzers. Collects subset to pandas for sklearn/scipy interop.
 """
+
+# #[AI_CONTEXT_START]
+# - CONFIGURACIÓN DE FACTORY: `DataAnalyzerFactory` / `AnalyzeContextFactory` backend spark; inyectar vía `AnalyzeDataInyeccionDependency` desde la Factory Maestra de Agentes.
+# - ABSTRACCIÓN DEL DATO: Analyzers reciben `pyspark.sql.DataFrame` inyectado; sin conversiones locales a pandas.
+# - REFACTOR NATIVO: Análisis con calculadoras `statistics/*` vía expresiones Spark distribuidas; docstrings en inglés; tests backend spark.
+# #[AI_CONTEXT_END]
 from __future__ import annotations
 from pyspark.sql import DataFrame as SparkDataFrame
 import pandas as pd
@@ -104,7 +110,6 @@ from statistics.time_series.seasonal import SeasonalDecomposition
 from pyspark.sql import DataFrame as SparkDataFrame
 import pandas as pd
 
-
 from models.linear_regression import LinearRegression
 
 import numpy as np
@@ -182,7 +187,6 @@ from statistics.business.customer_lifetime_value import CustomerLifetimeValueCal
 from statistics.business.pareto_analysis import ParetoAnalysisCalculator
 from statistics.business.run_rate import RunRateCalculator
 
-
 # ── DOMAIN 10 IMPORTS ─────────────────────────────────────────────────────────
 from statistics.graphs.network_density import NetworkDensityCalculator
 from statistics.graphs.centrality_analysis import CentralityAnalysisCalculator
@@ -197,7 +201,6 @@ from statistics.survival.time_to_event import TimeToEventCalculator
 
 # ── BASIC DATAFRAME INSPECTORS ────────────────────────────────────────────────
 
-
 class AnalyseDataTypesSpark(AbstractAnalyseDataTypes[SparkDataFrame]):
     """Return a dict of column → dtype string for the DataFrame."""
 
@@ -206,7 +209,6 @@ class AnalyseDataTypesSpark(AbstractAnalyseDataTypes[SparkDataFrame]):
         self._data_frame = self._data_frame.toPandas() if hasattr(self._data_frame, 'toPandas') else self._data_frame
         return {"dtypes": self._data_frame.dtypes.astype(str).to_dict()}
 
-
 class AnalyseDataShapeSpark(AbstractAnalyseDataShape[SparkDataFrame]):
     """Return the (rows, columns) shape of the DataFrame."""
 
@@ -214,7 +216,6 @@ class AnalyseDataShapeSpark(AbstractAnalyseDataShape[SparkDataFrame]):
         # [ACTION puntual: collect a pandas local para calculadoras]
         self._data_frame = self._data_frame.toPandas() if hasattr(self._data_frame, 'toPandas') else self._data_frame
         return {"rows": self._data_frame.shape[0], "columns": self._data_frame.shape[1]}
-
 
 class AnalyseDataInfoSpark(AbstractAnalyseDataInfo[SparkDataFrame]):
     """Return column names, dtypes, and non-null counts."""
@@ -232,7 +233,6 @@ class AnalyseDataInfoSpark(AbstractAnalyseDataInfo[SparkDataFrame]):
         }
         return {"info": info, "n_rows": len(self._data_frame)}
 
-
 class AnalyseDataDescribeSpark(AbstractAnalyseDataDescribe[SparkDataFrame]):
     """Return pandas describe() as a nested dict."""
 
@@ -242,7 +242,6 @@ class AnalyseDataDescribeSpark(AbstractAnalyseDataDescribe[SparkDataFrame]):
         include = kwargs.get("include", "all")
         return self._data_frame.describe(include=include).to_dict()
 
-
 class AnalyseDataColumnsSpark(AbstractAnalyseDataColumns[SparkDataFrame]):
     """Return the list of column names."""
 
@@ -250,7 +249,6 @@ class AnalyseDataColumnsSpark(AbstractAnalyseDataColumns[SparkDataFrame]):
         # [ACTION puntual: collect a pandas local para calculadoras]
         self._data_frame = self._data_frame.toPandas() if hasattr(self._data_frame, 'toPandas') else self._data_frame
         return {"columns": self._data_frame.columns.tolist()}
-
 
 class AnalyseDataIndexSpark(AbstractAnalyseDataIndex[SparkDataFrame]):
     """Return index information."""
@@ -267,7 +265,6 @@ class AnalyseDataIndexSpark(AbstractAnalyseDataIndex[SparkDataFrame]):
             "n": len(idx),
         }
 
-
 class AnalyseDataHeadSpark(AbstractAnalyseDataHead[SparkDataFrame]):
     """Return the first N rows as a dict."""
 
@@ -277,7 +274,6 @@ class AnalyseDataHeadSpark(AbstractAnalyseDataHead[SparkDataFrame]):
         n: int = kwargs.get("n", 5)
         return self._data_frame.head(n).to_dict(orient="records")
 
-
 class AnalyseDataTailSpark(AbstractAnalyseDataTail[SparkDataFrame]):
     """Return the last N rows as a dict."""
 
@@ -286,7 +282,6 @@ class AnalyseDataTailSpark(AbstractAnalyseDataTail[SparkDataFrame]):
         self._data_frame = self._data_frame.toPandas() if hasattr(self._data_frame, 'toPandas') else self._data_frame
         n: int = kwargs.get("n", 5)
         return self._data_frame.tail(n).to_dict(orient="records")
-
 
 class AnalyseDataSampleSpark(AbstractAnalyseDataSample[SparkDataFrame]):
     """Return a random sample of N rows as a dict."""
@@ -301,13 +296,10 @@ class AnalyseDataSampleSpark(AbstractAnalyseDataSample[SparkDataFrame]):
             orient="records"
         )
 
-
 # ==================== ANALYZERS DE FEATURES ENGINEERING ====================
-
 
 # TENDENCIAS Y PATRONES
 # ("trend_analysis", AnalyseTrendPatterns)      # Tendencia temporal
-
 
 class AnalyseSeasonalitySpark(AbstractAnalyseSeasonality[SparkDataFrame]):
     """Analyse the seasonality of the data frame"""
@@ -351,7 +343,6 @@ class AnalyseSeasonalitySpark(AbstractAnalyseSeasonality[SparkDataFrame]):
             },
         }
 
-
 # ("volatility", AnalyseVolatility)             # Volatilidad en series
 
 # ("momentum", AnalyseMomentum)                 # Cambios acelerados
@@ -393,7 +384,6 @@ class AnalyseSeasonalitySpark(AbstractAnalyseSeasonality[SparkDataFrame]):
 # ("feature_variance", AnalyseFeatureVariance)  # Qué variables varían más
 # ("feature_selection", AnalyseFeatureSelection) # Mutual info, chi2
 # ("information_content", AnalyseInformationContent) # Entropy, MI
-
 
 class AnalyseTrendPatternsSpark(AbstractAnalyseTrendPatterns[SparkDataFrame]):
     """Analyse the trend patterns of the dataframe"
@@ -465,9 +455,7 @@ class AnalyseTrendPatternsSpark(AbstractAnalyseTrendPatterns[SparkDataFrame]):
 
         return return_dictionary
 
-
 # ── DOMAIN 1 — DESCRIPTIVE STATISTICS ─────────────────────────────────────────
-
 
 class AnalyseDistributionTypeSpark(AbstractAnalyseDistributionType[SparkDataFrame]):
     """Classify the statistical distribution of a numerical column.
@@ -491,7 +479,6 @@ class AnalyseDistributionTypeSpark(AbstractAnalyseDistributionType[SparkDataFram
 
         data: np.ndarray = self._data_frame[column].dropna().to_numpy()
         return DistributionClassifier().classify(data)
-
 
 class AnalyseSkewnessKurtosisSpark(AbstractAnalyseSkewnessKurtosis[SparkDataFrame]):
     """Analyse skewness and kurtosis across numerical columns.
@@ -530,7 +517,6 @@ class AnalyseSkewnessKurtosisSpark(AbstractAnalyseSkewnessKurtosis[SparkDataFram
 
         return {"columns": column_results, "bias": bias}
 
-
 class AnalyseNormalityTestsSpark(AbstractAnalyseNormalityTests[SparkDataFrame]):
     """Run a full normality test suite on a numerical column.
 
@@ -555,7 +541,6 @@ class AnalyseNormalityTestsSpark(AbstractAnalyseNormalityTests[SparkDataFrame]):
 
         data: np.ndarray = self._data_frame[column].dropna().to_numpy()
         return NormalityTestSuite().run(data, significance_level=significance_level)
-
 
 class AnalyseValueCountsSpark(AbstractAnalyseValueCounts[SparkDataFrame]):
     """Analyse value frequencies for any column (numeric or categorical).
@@ -587,7 +572,6 @@ class AnalyseValueCountsSpark(AbstractAnalyseValueCounts[SparkDataFrame]):
             include_missing=include_missing,
         )
 
-
 class AnalysePercentilesSpark(AbstractAnalysePercentiles[SparkDataFrame]):
     """Analyse percentile distribution of a numerical column.
 
@@ -617,7 +601,6 @@ class AnalysePercentilesSpark(AbstractAnalysePercentiles[SparkDataFrame]):
             data, percentiles=percentiles, outlier_bounds=outlier_bounds
         )
 
-
 class AnalyseFrequencyDistributionSpark(AbstractAnalyseFrequencyDistribution[SparkDataFrame]):
     """Analyse frequency distribution (histogram as table) of a numerical column.
 
@@ -646,7 +629,6 @@ class AnalyseFrequencyDistributionSpark(AbstractAnalyseFrequencyDistribution[Spa
         return FrequencyDistributionBuilder().build(
             data, n_bins=n_bins, bin_method=bin_method
         )
-
 
 class AnalyseCentralTendencySpark(AbstractAnalyseCentralTendency[SparkDataFrame]):
     """Analyse central tendency measures across numerical columns.
@@ -688,7 +670,6 @@ class AnalyseCentralTendencySpark(AbstractAnalyseCentralTendency[SparkDataFrame]
 
         return {"columns": column_results, "trim_proportion": trim_proportion}
 
-
 class AnalyseDispersionSpark(AbstractAnalyseDispersion[SparkDataFrame]):
     """Analyse dispersion measures across numerical columns.
 
@@ -725,7 +706,6 @@ class AnalyseDispersionSpark(AbstractAnalyseDispersion[SparkDataFrame]):
         }
 
         return {"columns": column_results, "ddof": ddof}
-
 
 class AnalyseHypothesisTestSpark(AbstractAnalyseHypothesisTest[SparkDataFrame]):
     """Run a parametric or non-parametric hypothesis test on two DataFrame columns.
@@ -769,7 +749,6 @@ class AnalyseHypothesisTestSpark(AbstractAnalyseHypothesisTest[SparkDataFrame]):
             alternative=kwargs.get("alternative", "two-sided"),
         )
 
-
 class AnalyseAnovaSpark(AbstractAnalyseAnova[SparkDataFrame]):
     """Run one-way ANOVA across multiple DataFrame columns as groups.
 
@@ -810,7 +789,6 @@ class AnalyseAnovaSpark(AbstractAnalyseAnova[SparkDataFrame]):
             run_post_hoc=kwargs.get("run_post_hoc", True),
         )
 
-
 class AnalyseChiSquareSpark(AbstractAnalyseChiSquare[SparkDataFrame]):
     """Chi-square independence test between two categorical columns.
 
@@ -840,7 +818,6 @@ class AnalyseChiSquareSpark(AbstractAnalyseChiSquare[SparkDataFrame]):
             series_b=self._data_frame[column_b].dropna(),
             significance_level=kwargs.get("significance_level", 0.05),
         )
-
 
 class AnalyseCorrelationSignificanceSpark(AbstractAnalyseCorrelationSignificance[SparkDataFrame]):
     """Correlation with significance test and confidence interval.
@@ -877,7 +854,6 @@ class AnalyseCorrelationSignificanceSpark(AbstractAnalyseCorrelationSignificance
             significance_level=kwargs.get("significance_level", 0.05),
             confidence_level=kwargs.get("confidence_level", 0.95),
         )
-
 
 class AnalyseConfidenceIntervalsSpark(AbstractAnalyseConfidenceIntervals[SparkDataFrame]):
     """Compute confidence intervals for mean, proportion, or mean difference.
@@ -960,7 +936,6 @@ class AnalyseConfidenceIntervalsSpark(AbstractAnalyseConfidenceIntervals[SparkDa
             f"Available: 'mean', 'proportion', 'mean_difference'."
         )
 
-
 class AnalyseEffectSizeSpark(AbstractAnalyseEffectSize[SparkDataFrame]):
     """Calculate effect size (Cohen's d or Eta-squared) from DataFrame columns.
 
@@ -1017,7 +992,6 @@ class AnalyseEffectSizeSpark(AbstractAnalyseEffectSize[SparkDataFrame]):
             f"effect_type '{effect_type}' not recognized. "
             f"Available: 'cohens_d', 'eta_squared'."
         )
-
 
 class AnalysePowerAnalysisSpark(AbstractAnalysePowerAnalysis[SparkDataFrame]):
     """Statistical power analysis from DataFrame context.
@@ -1083,7 +1057,6 @@ class AnalysePowerAnalysisSpark(AbstractAnalysePowerAnalysis[SparkDataFrame]):
             f"Available: 'minimum_n', 'observed_power'."
         )
 
-
 class AnalyseBootstrapSpark(AbstractAnalyseBootstrap[SparkDataFrame]):
     """Non-parametric bootstrap CI for any statistic on a column.
 
@@ -1118,7 +1091,6 @@ class AnalyseBootstrapSpark(AbstractAnalyseBootstrap[SparkDataFrame]):
             confidence_level=kwargs.get("confidence_level", 0.95),
             random_seed=kwargs.get("random_seed", 42),
         )
-
 
 class AnalyseCorrelationMatrixSpark(AbstractAnalyseCorrelationMatrix[SparkDataFrame]):
     """Full correlation matrix with ranked pairs and multicollinearity flags.
@@ -1157,7 +1129,6 @@ class AnalyseCorrelationMatrixSpark(AbstractAnalyseCorrelationMatrix[SparkDataFr
             high_correlation_flag=kwargs.get("high_correlation_flag", 0.85),
         )
 
-
 class AnalyseMulticollinearitySpark(AbstractAnalyseMulticollinearity[SparkDataFrame]):
     """VIF-based multicollinearity detection for linear model preparation.
 
@@ -1188,7 +1159,6 @@ class AnalyseMulticollinearitySpark(AbstractAnalyseMulticollinearity[SparkDataFr
             data_frame=numeric_df,
             high_vif_threshold=kwargs.get("high_vif_threshold", 10.0),
         )
-
 
 class AnalyseMutualInformationSpark(AbstractAnalyseMutualInformation[SparkDataFrame]):
     """MI-based feature relevance scoring against a target variable.
@@ -1231,7 +1201,6 @@ class AnalyseMutualInformationSpark(AbstractAnalyseMutualInformation[SparkDataFr
             random_seed=kwargs.get("random_seed", 42),
         )
 
-
 class AnalysePartialCorrelationSpark(AbstractAnalysePartialCorrelation[SparkDataFrame]):
     """Partial correlation between two columns controlling for confounders.
 
@@ -1267,7 +1236,6 @@ class AnalysePartialCorrelationSpark(AbstractAnalysePartialCorrelation[SparkData
             significance_level=kwargs.get("significance_level", 0.05),
         )
 
-
 class AnalyseCrossCorrelationSpark(AbstractAnalyseCrossCorrelation[SparkDataFrame]):
     """Cross-correlation between two time series across a range of lags.
 
@@ -1295,7 +1263,6 @@ class AnalyseCrossCorrelationSpark(AbstractAnalyseCrossCorrelation[SparkDataFram
             column_y=column_y,
             max_lag=kwargs.get("max_lag", 10),
         )
-
 
 class AnalyseGrangerCausalitySpark(AbstractAnalyseGrangerCausality[SparkDataFrame]):
     """Granger causality test: does x improve forecasts of y?
@@ -1327,7 +1294,6 @@ class AnalyseGrangerCausalitySpark(AbstractAnalyseGrangerCausality[SparkDataFram
             significance_level=kwargs.get("significance_level", 0.05),
         )
 
-
 class AnalyseContingencySpark(AbstractAnalyseContingency[SparkDataFrame]):
     """Full 2×2 contingency analysis: chi-square, OR, RR, Cramér's V.
 
@@ -1358,7 +1324,6 @@ class AnalyseContingencySpark(AbstractAnalyseContingency[SparkDataFrame]):
             confidence_level=kwargs.get("confidence_level", 0.95),
         )
 
-
 class AnalyseInteractionEffectsSpark(AbstractAnalyseInteractionEffects[SparkDataFrame]):
     """Detect feature pairs whose interaction improves target R².
 
@@ -1387,7 +1352,6 @@ class AnalyseInteractionEffectsSpark(AbstractAnalyseInteractionEffects[SparkData
             top_n=kwargs.get("top_n"),
         )
 
-
 # ── DOMAIN 5 IMPORTS ──────────────────────────────────────────────────────────
 from statistics.ml_support.feature_variance import FeatureVarianceCalculator
 from statistics.ml_support.feature_selection import FeatureSelectionCalculator
@@ -1397,7 +1361,6 @@ from statistics.ml_support.class_imbalance import ClassImbalanceCalculator
 from statistics.ml_support.model_residuals import ModelResidualsCalculator
 from statistics.ml_support.learning_curve import LearningCurveCalculator
 from statistics.ml_support.cross_validation import CrossValidationCalculator
-
 
 class AnalyseFeatureVarianceSpark(AbstractAnalyseFeatureVariance[SparkDataFrame]):
     """Near-zero variance detection across all numeric columns.
@@ -1420,7 +1383,6 @@ class AnalyseFeatureVarianceSpark(AbstractAnalyseFeatureVariance[SparkDataFrame]
             unique_ratio_threshold=kwargs.get("unique_ratio_threshold", 0.01),
             frequency_ratio_threshold=kwargs.get("frequency_ratio_threshold", 0.95),
         )
-
 
 class AnalyseFeatureSelectionSpark(AbstractAnalyseFeatureSelection[SparkDataFrame]):
     """Univariate feature scoring: chi2, ANOVA F, mutual information.
@@ -1454,7 +1416,6 @@ class AnalyseFeatureSelectionSpark(AbstractAnalyseFeatureSelection[SparkDataFram
             top_n=kwargs.get("top_n"),
             random_seed=kwargs.get("random_seed", 42),
         )
-
 
 class AnalyseFeatureImportanceSpark(AbstractAnalyseFeatureImportance[SparkDataFrame]):
     """Random Forest Gini and permutation importance.
@@ -1492,7 +1453,6 @@ class AnalyseFeatureImportanceSpark(AbstractAnalyseFeatureImportance[SparkDataFr
             random_seed=kwargs.get("random_seed", 42),
         )
 
-
 class AnalyseDimensionalityReductionSpark(AbstractAnalyseDimensionalityReduction[SparkDataFrame]):
     """PCA with variance explained, loadings, and optimal component selection.
 
@@ -1526,7 +1486,6 @@ class AnalyseDimensionalityReductionSpark(AbstractAnalyseDimensionalityReduction
             target_variance_explained=kwargs.get("target_variance_explained", 0.95),
         )
 
-
 class AnalyseClassImbalanceSpark(AbstractAnalyseClassImbalance[SparkDataFrame]):
     """Class distribution analysis with resampling strategy recommendation.
 
@@ -1551,7 +1510,6 @@ class AnalyseClassImbalanceSpark(AbstractAnalyseClassImbalance[SparkDataFrame]):
             series=self._data_frame[target_column],
             minority_threshold=kwargs.get("minority_threshold", 0.3),
         )
-
 
 class AnalyseModelResidualsSpark(AbstractAnalyseModelResiduals[SparkDataFrame]):
     """Residual diagnostics: normality, homoscedasticity, autocorrelation.
@@ -1583,7 +1541,6 @@ class AnalyseModelResidualsSpark(AbstractAnalyseModelResiduals[SparkDataFrame]):
             y_pred=paired[predicted_column].to_numpy(dtype=float),
             significance_level=kwargs.get("significance_level", 0.05),
         )
-
 
 class AnalyseLearningCurveSpark(AbstractAnalyseLearningCurve[SparkDataFrame]):
     """Learning curve for bias-variance diagnosis across training sizes.
@@ -1631,7 +1588,6 @@ class AnalyseLearningCurveSpark(AbstractAnalyseLearningCurve[SparkDataFrame]):
             random_seed=kwargs.get("random_seed", 42),
         )
 
-
 class AnalyseCrossValidationSpark(AbstractAnalyseCrossValidation[SparkDataFrame]):
     """K-Fold / Stratified / Repeated cross-validation with CI.
 
@@ -1678,7 +1634,6 @@ class AnalyseCrossValidationSpark(AbstractAnalyseCrossValidation[SparkDataFrame]
             n_jobs=kwargs.get("n_jobs", -1),
         )
 
-
 # ── DOMAIN 4 IMPORTS ──────────────────────────────────────────────────────────
 from statistics.time_series.volatility import VolatilityCalculator
 from statistics.time_series.momentum import MomentumCalculator
@@ -1689,7 +1644,6 @@ from statistics.time_series.change_points import ChangePointDetector
 from statistics.time_series.forecast_accuracy import ForecastAccuracyCalculator
 from statistics.time_series.cyclical_patterns import CyclicalPatternsCalculator
 from statistics.time_series.rolling_statistics import RollingStatisticsCalculator
-
 
 class AnalyseVolatilitySpark(AbstractAnalyseVolatility[SparkDataFrame]):
     """Rolling std, EWMA volatility, CV and regime detection."""
@@ -1709,7 +1663,6 @@ class AnalyseVolatilitySpark(AbstractAnalyseVolatility[SparkDataFrame]):
             decay_factor=kwargs.get("decay_factor", 0.94),
         )
 
-
 class AnalyseMomentumSpark(AbstractAnalyseMomentum[SparkDataFrame]):
     """Rate of change, acceleration, and momentum signal classification."""
 
@@ -1726,7 +1679,6 @@ class AnalyseMomentumSpark(AbstractAnalyseMomentum[SparkDataFrame]):
             series=series,
             period=kwargs.get("period", 14),
         )
-
 
 class AnalyseMovingAveragesSpark(AbstractAnalyseMovingAverages[SparkDataFrame]):
     """SMA, EMA, WMA computation with optional crossover detection."""
@@ -1750,7 +1702,6 @@ class AnalyseMovingAveragesSpark(AbstractAnalyseMovingAverages[SparkDataFrame]):
             crossover_ma_type=kwargs.get("crossover_ma_type", "ema"),
         )
 
-
 class AnalyseStationaritySpark(AbstractAnalyseStationarity[SparkDataFrame]):
     """ADF + KPSS combined stationarity test with recommendation."""
 
@@ -1768,7 +1719,6 @@ class AnalyseStationaritySpark(AbstractAnalyseStationarity[SparkDataFrame]):
             max_lags=kwargs.get("max_lags", 4),
             significance_level=kwargs.get("significance_level", 0.05),
         )
-
 
 class AnalyseLagFeaturesSpark(AbstractAnalyseLagFeatures[SparkDataFrame]):
     """ACF, PACF analysis and lag feature generation."""
@@ -1788,7 +1738,6 @@ class AnalyseLagFeaturesSpark(AbstractAnalyseLagFeatures[SparkDataFrame]):
             significance_level=kwargs.get("significance_level", 0.05),
         )
 
-
 class AnalyseChangePointsSpark(AbstractAnalyseChangePoints[SparkDataFrame]):
     """CUSUM mean-shift and variance change point detection."""
 
@@ -1807,7 +1756,6 @@ class AnalyseChangePointsSpark(AbstractAnalyseChangePoints[SparkDataFrame]):
             h_multiplier=kwargs.get("h_multiplier", 4.0),
             variance_ratio_threshold=kwargs.get("variance_ratio_threshold", 2.0),
         )
-
 
 class AnalyseForecastAccuracySpark(AbstractAnalyseForecastAccuracy[SparkDataFrame]):
     """MAE, RMSE, MAPE, MASE forecast accuracy metrics."""
@@ -1829,7 +1777,6 @@ class AnalyseForecastAccuracySpark(AbstractAnalyseForecastAccuracy[SparkDataFram
             metrics=kwargs.get("metrics"),
         )
 
-
 class AnalyseCyclicalPatternsSpark(AbstractAnalyseCyclicalPatterns[SparkDataFrame]):
     """FFT-based dominant cycle detection."""
 
@@ -1849,7 +1796,6 @@ class AnalyseCyclicalPatternsSpark(AbstractAnalyseCyclicalPatterns[SparkDataFram
             apply_window=kwargs.get("apply_window", True),
         )
 
-
 class AnalyseRollingStatisticsSpark(AbstractAnalyseRollingStatistics[SparkDataFrame]):
     """Configurable rolling statistics: mean, std, min, max, median, skewness."""
 
@@ -1867,7 +1813,6 @@ class AnalyseRollingStatisticsSpark(AbstractAnalyseRollingStatistics[SparkDataFr
             window=kwargs.get("window", 20),
             statistics=kwargs.get("statistics"),
         )
-
 
 class AnalyseTextBasicStatsSpark(AbstractAnalyseTextBasicStats[SparkDataFrame]):
     """Per-document and corpus-level text statistics.
@@ -1893,7 +1838,6 @@ class AnalyseTextBasicStatsSpark(AbstractAnalyseTextBasicStats[SparkDataFrame]):
             series=self._data_frame[column],
             sample_n=kwargs.get("sample_n"),
         )
-
 
 class AnalyseWordFrequencySpark(AbstractAnalyseWordFrequency[SparkDataFrame]):
     """TF and TF-IDF term frequency ranking across a text corpus.
@@ -1924,7 +1868,6 @@ class AnalyseWordFrequencySpark(AbstractAnalyseWordFrequency[SparkDataFrame]):
             custom_stopwords=kwargs.get("custom_stopwords"),
         )
 
-
 class AnalyseSentimentSpark(AbstractAnalyseSentiment[SparkDataFrame]):
     """Lexicon-based polarity and subjectivity analysis.
 
@@ -1949,7 +1892,6 @@ class AnalyseSentimentSpark(AbstractAnalyseSentiment[SparkDataFrame]):
             series=self._data_frame[column],
             sample_n=kwargs.get("sample_n"),
         )
-
 
 class AnalyseTopicDetectionSpark(AbstractAnalyseTopicDetection[SparkDataFrame]):
     """NMF-based latent topic discovery in a text corpus.
@@ -1984,7 +1926,6 @@ class AnalyseTopicDetectionSpark(AbstractAnalyseTopicDetection[SparkDataFrame]):
             random_seed=kwargs.get("random_seed", 42),
         )
 
-
 class AnalyseLanguageDetectionSpark(AbstractAnalyseLanguageDetection[SparkDataFrame]):
     """Character trigram-based language detection per document.
 
@@ -2009,7 +1950,6 @@ class AnalyseLanguageDetectionSpark(AbstractAnalyseLanguageDetection[SparkDataFr
             series=self._data_frame[column],
             top_n_candidates=kwargs.get("top_n_candidates", 3),
         )
-
 
 class AnalyseTextSimilaritySpark(AbstractAnalyseTextSimilarity[SparkDataFrame]):
     """Pairwise TF-IDF cosine similarity between two text columns.
@@ -2040,7 +1980,6 @@ class AnalyseTextSimilaritySpark(AbstractAnalyseTextSimilarity[SparkDataFrame]):
             column_b=column_b,
         )
 
-
 class AnalyseNamedEntityDensitySpark(AbstractAnalyseNamedEntityDensity[SparkDataFrame]):
     """Rule-based named entity detection and density analysis.
 
@@ -2068,11 +2007,7 @@ class AnalyseNamedEntityDensitySpark(AbstractAnalyseNamedEntityDensity[SparkData
             sample_n=kwargs.get("sample_n"),
         )
 
-
-
-
 # ── DOMAIN 7 — SEGMENTATION ───────────────────────────────────────────────────
-
 
 class AnalyseKMeansClustersSpark(AbstractAnalyseKMeansClusters[SparkDataFrame]):
     """K-Means clustering with auto K selection via silhouette score.
@@ -2102,7 +2037,6 @@ class AnalyseKMeansClustersSpark(AbstractAnalyseKMeansClusters[SparkDataFrame]):
             k_range=kwargs.get("k_range", (2, 8)),
             random_seed=kwargs.get("random_seed", 42),
         )
-
 
 class AnalyseRFMSegmentationSpark(AbstractAnalyseRFMSegmentation[SparkDataFrame]):
     """RFM segmentation from transactional data.
@@ -2139,7 +2073,6 @@ class AnalyseRFMSegmentationSpark(AbstractAnalyseRFMSegmentation[SparkDataFrame]
             reference_date=kwargs.get("reference_date"),
         )
 
-
 class AnalyseCohortAnalysisSpark(AbstractAnalyseCohortAnalysis[SparkDataFrame]):
     """Cohort retention matrix by acquisition period.
 
@@ -2168,7 +2101,6 @@ class AnalyseCohortAnalysisSpark(AbstractAnalyseCohortAnalysis[SparkDataFrame]):
             date_column=date_column,
             period=kwargs.get("period", "M"),
         )
-
 
 class AnalysePopulationSplitsSpark(AbstractAnalysePopulationSplits[SparkDataFrame]):
     """Statistical feature comparison between two population groups.
@@ -2205,7 +2137,6 @@ class AnalysePopulationSplitsSpark(AbstractAnalysePopulationSplits[SparkDataFram
             significance_level=kwargs.get("significance_level", 0.05),
         )
 
-
 class AnalyseDBSCANClustersSpark(AbstractAnalyseDBSCANClusters[SparkDataFrame]):
     """DBSCAN density-based clustering with auto epsilon estimation.
 
@@ -2233,7 +2164,6 @@ class AnalyseDBSCANClustersSpark(AbstractAnalyseDBSCANClusters[SparkDataFrame]):
             min_samples=kwargs.get("min_samples", 5),
             random_seed=kwargs.get("random_seed", 42),
         )
-
 
 class AnalyseHierarchicalClustersSpark(AbstractAnalyseHierarchicalClusters[SparkDataFrame]):
     """Hierarchical agglomerative clustering with cophenetic correlation.
@@ -2266,7 +2196,6 @@ class AnalyseHierarchicalClustersSpark(AbstractAnalyseHierarchicalClusters[Spark
             extract_dendrogram=kwargs.get("extract_dendrogram", False),
         )
 
-
 class AnalyseGrowthRatesSpark(AbstractAnalyseGrowthRates[SparkDataFrame]):
     """MoM/YoY period-over-period growth, CAGR, and rolling growth.
 
@@ -2297,7 +2226,6 @@ class AnalyseGrowthRatesSpark(AbstractAnalyseGrowthRates[SparkDataFrame]):
             n_years=kwargs.get("n_years"),
             periods_per_year=kwargs.get("periods_per_year", 12),
         )
-
 
 class AnalyseRiskMetricsSpark(AbstractAnalyseRiskMetrics[SparkDataFrame]):
     """VaR, CVaR, Sharpe, Sortino, Max Drawdown, and Calmar ratio.
@@ -2332,7 +2260,6 @@ class AnalyseRiskMetricsSpark(AbstractAnalyseRiskMetrics[SparkDataFrame]):
             periods_per_year=kwargs.get("periods_per_year", 252),
         )
 
-
 class AnalyseFinancialRatiosSpark(AbstractAnalyseFinancialRatios[SparkDataFrame]):
     """Profitability, liquidity, leverage, and efficiency ratios.
 
@@ -2355,7 +2282,6 @@ class AnalyseFinancialRatiosSpark(AbstractAnalyseFinancialRatios[SparkDataFrame]
             data_frame=self._data_frame,
             ratios=kwargs.get("ratios"),
         )
-
 
 class AnalyseConversionFunnelSpark(AbstractAnalyseConversionFunnel[SparkDataFrame]):
     """Funnel analysis with stage conversion rates and bottleneck detection.
@@ -2401,7 +2327,6 @@ class AnalyseConversionFunnelSpark(AbstractAnalyseConversionFunnel[SparkDataFram
             bottleneck_threshold=kwargs.get("bottleneck_threshold", 0.5),
         )
 
-
 class AnalyseChurnRateSpark(AbstractAnalyseChurnRate[SparkDataFrame]):
     """Period-level churn rate from aggregated data or event logs.
 
@@ -2442,7 +2367,6 @@ class AnalyseChurnRateSpark(AbstractAnalyseChurnRate[SparkDataFrame]):
             user_column=kwargs.get("user_column"),
         )
 
-
 class AnalyseCustomerLifetimeValueSpark(AbstractAnalyseCustomerLifetimeValue[SparkDataFrame]):
     """Discounted and simple CLV per customer from transactional data.
 
@@ -2481,7 +2405,6 @@ class AnalyseCustomerLifetimeValueSpark(AbstractAnalyseCustomerLifetimeValue[Spa
             periods_per_year=kwargs.get("periods_per_year", 12),
         )
 
-
 class AnalyseParetoAnalysisSpark(AbstractAnalyseParetoAnalysis[SparkDataFrame]):
     """Pareto (80/20) analysis with Gini concentration coefficient.
 
@@ -2512,7 +2435,6 @@ class AnalyseParetoAnalysisSpark(AbstractAnalyseParetoAnalysis[SparkDataFrame]):
             value_column=value_column,
             target_share=kwargs.get("target_share", 0.8),
         )
-
 
 class AnalyseRunRateSpark(AbstractAnalyseRunRate[SparkDataFrame]):
     """Run rate projection: simple, trailing average, and weighted recent.
@@ -2555,7 +2477,6 @@ class AnalyseRunRateSpark(AbstractAnalyseRunRate[SparkDataFrame]):
             methods=kwargs.get("methods"),
         )
 
-
 class AnalyseGeoDistributionSpark(AbstractAnalyseGeoDistribution[SparkDataFrame]):
     """Geographic frequency distribution with HHI concentration metric.
 
@@ -2583,7 +2504,6 @@ class AnalyseGeoDistributionSpark(AbstractAnalyseGeoDistribution[SparkDataFrame]
             top_n=kwargs.get("top_n", 20),
             secondary_column=kwargs.get("secondary_column"),
         )
-
 
 class AnalyseGeoClusteringSpark(AbstractAnalyseGeoClustering[SparkDataFrame]):
     """Haversine-DBSCAN geographic point clustering.
@@ -2618,7 +2538,6 @@ class AnalyseGeoClusteringSpark(AbstractAnalyseGeoClustering[SparkDataFrame]):
             min_samples=kwargs.get("min_samples", 5),
         )
 
-
 class AnalyseGeoBoundingBoxSpark(AbstractAnalyseGeoBoundingBox[SparkDataFrame]):
     """Bounding box, centroid, diagonal, and dispersion label.
 
@@ -2647,7 +2566,6 @@ class AnalyseGeoBoundingBoxSpark(AbstractAnalyseGeoBoundingBox[SparkDataFrame]):
             lat_column=lat_column,
             lon_column=lon_column,
         )
-
 
 class AnalyseGeoHeatmapSpark(AbstractAnalyseGeoHeatmap[SparkDataFrame]):
     """Grid-based geographic density heatmap (points per km²).
@@ -2684,7 +2602,6 @@ class AnalyseGeoHeatmapSpark(AbstractAnalyseGeoHeatmap[SparkDataFrame]):
             include_empty_cells=kwargs.get("include_empty_cells", False),
         )
 
-
 class AnalyseProximitySpark(AbstractAnalyseProximity[SparkDataFrame]):
     """Nearest neighbor distances and ANN spatial pattern analysis.
 
@@ -2717,7 +2634,6 @@ class AnalyseProximitySpark(AbstractAnalyseProximity[SparkDataFrame]):
             include_all_nn=kwargs.get("include_all_nn", False),
             max_points=kwargs.get("max_points", 2_000),
         )
-
 
 # ─────────────────────────────────────────────────────────────────────────────
 # DOMAIN 10 — GRAPH ANALYZERS
@@ -2756,7 +2672,6 @@ class AnalyseNetworkDensitySpark(AbstractAnalyseNetworkDensity[SparkDataFrame]):
             weight_column=kwargs.get("weight_column"),
         )
 
-
 class AnalyseCentralitySpark(AbstractAnalyseCentrality[SparkDataFrame]):
     """Degree, betweenness, closeness, and PageRank centrality.
 
@@ -2794,7 +2709,6 @@ class AnalyseCentralitySpark(AbstractAnalyseCentrality[SparkDataFrame]):
             weight_column=kwargs.get("weight_column"),
         )
 
-
 class AnalyseCommunityDetectionSpark(AbstractAnalyseCommunityDetection[SparkDataFrame]):
     """Louvain-style community detection with modularity Q scoring.
 
@@ -2828,7 +2742,6 @@ class AnalyseCommunityDetectionSpark(AbstractAnalyseCommunityDetection[SparkData
             weight_column=kwargs.get("weight_column"),
         )
 
-
 class AnalysePathAnalysisSpark(AbstractAnalysePathAnalysis[SparkDataFrame]):
     """Average path length, diameter, clustering coefficient, small-world σ.
 
@@ -2861,7 +2774,6 @@ class AnalysePathAnalysisSpark(AbstractAnalysePathAnalysis[SparkDataFrame]):
             graph_type=kwargs.get("graph_type", "undirected"),
             weight_column=kwargs.get("weight_column"),
         )
-
 
 # ─────────────────────────────────────────────────────────────────────────────
 # DOMAIN 11 — SURVIVAL ANALYZERS
@@ -2904,7 +2816,6 @@ class AnalyseKaplanMeierSpark(AbstractAnalyseKaplanMeier[SparkDataFrame]):
             group_column=group_column,
         )
 
-
 class AnalyseHazardRateSpark(AbstractAnalyseHazardRate[SparkDataFrame]):
     """Nelson-Aalen cumulative hazard with Gaussian-smoothed instantaneous hazard.
 
@@ -2935,7 +2846,6 @@ class AnalyseHazardRateSpark(AbstractAnalyseHazardRate[SparkDataFrame]):
             event_column=event_column,
             n_smooth_points=kwargs.get("n_smooth_points", 100),
         )
-
 
 class AnalyseEventDensitySpark(AbstractAnalyseEventDensity[SparkDataFrame]):
     """Event frequency, inter-event intervals, burstiness B, and rolling rate.
@@ -2971,7 +2881,6 @@ class AnalyseEventDensitySpark(AbstractAnalyseEventDensity[SparkDataFrame]):
             window_size=kwargs.get("window_size"),
             n_rate_windows=kwargs.get("n_rate_windows", 20),
         )
-
 
 class AnalyseTimeToEventSpark(AbstractAnalyseTimeToEvent[SparkDataFrame]):
     """Time-to-event descriptive statistics, threshold analysis, exponential fit.

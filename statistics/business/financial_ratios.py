@@ -1,5 +1,10 @@
 """Financial ratio analysis: profitability, liquidity, leverage, and efficiency."""
 
+# #[AI_CONTEXT_START]
+# - CONFIGURACIÓN DE FACTORY: Registrar este calculator en `BusinessStatisticsFactory` (backends pandas | polars | spark) y exponerlo mediante `StatisticsInyeccionDependency`, inyectada por la Factory Maestra de Agentes junto a las demás fábricas de dominio.
+# - ABSTRACCIÓN DEL DATO: Mutar constructores y `analyze`/`compute` para recibir el contenedor abstracto del backend (`pd.DataFrame`, `pl.DataFrame`/`pl.LazyFrame`, `pyspark.sql.DataFrame`) inyectado por la factory; eliminar `np.ndarray`/`pd.Series` sueltos en firmas públicas.
+# - REFACTOR NATIVO: Resolver métricas con expresiones 100 % nativas del backend activo (Polars: `.select`/`.group_by`/`.agg` sin `.collect()` salvo materialización acordada; PySpark: `pyspark.sql.functions` y ventanas distribuidas; Pandas: operaciones vectorizadas). No convertir a NumPy/Pandas desde backends no-pandas.
+# #[AI_CONTEXT_END]
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
@@ -8,7 +13,6 @@ from enum import Enum
 
 import pandas as pd
 
-
 class RatioCategory(str, Enum):
     """Financial ratio category classification."""
 
@@ -16,7 +20,6 @@ class RatioCategory(str, Enum):
     LIQUIDITY = "liquidity"
     LEVERAGE = "leverage"
     EFFICIENCY = "efficiency"
-
 
 @dataclass(frozen=True)
 class FinancialRatio:
@@ -27,7 +30,6 @@ class FinancialRatio:
     category: str
     interpretation: str
     benchmark: str | None
-
 
 class BaseRatioCalculator(ABC):
     """Abstract base for all financial ratio calculators."""
@@ -68,7 +70,6 @@ class BaseRatioCalculator(ABC):
             return None
         return float(val)
 
-
 class GrossMarginCalculator(BaseRatioCalculator):
     """Gross Margin = (Revenue - COGS) / Revenue.
 
@@ -99,7 +100,6 @@ class GrossMarginCalculator(BaseRatioCalculator):
             benchmark=">40%",
         )
 
-
 class NetMarginCalculator(BaseRatioCalculator):
     """Net Profit Margin = Net Income / Revenue.
 
@@ -128,7 +128,6 @@ class NetMarginCalculator(BaseRatioCalculator):
                            + ("Profitable." if value > 0 else "Operating at a loss."),
             benchmark=">10% for most industries",
         )
-
 
 class ROECalculator(BaseRatioCalculator):
     """Return on Equity = Net Income / Shareholders' Equity.
@@ -159,7 +158,6 @@ class ROECalculator(BaseRatioCalculator):
             benchmark=">15%",
         )
 
-
 class ROACalculator(BaseRatioCalculator):
     """Return on Assets = Net Income / Total Assets.
 
@@ -188,7 +186,6 @@ class ROACalculator(BaseRatioCalculator):
                            + ("Efficient asset use." if value > 0.05 else "Below 5% benchmark."),
             benchmark=">5%",
         )
-
 
 class CurrentRatioCalculator(BaseRatioCalculator):
     """Current Ratio = Current Assets / Current Liabilities.
@@ -221,7 +218,6 @@ class CurrentRatioCalculator(BaseRatioCalculator):
             benchmark="1.5 – 3.0",
         )
 
-
 class QuickRatioCalculator(BaseRatioCalculator):
     """Quick Ratio = (Current Assets - Inventory) / Current Liabilities.
 
@@ -252,7 +248,6 @@ class QuickRatioCalculator(BaseRatioCalculator):
                               else "May struggle to meet short-term obligations."),
             benchmark=">1.0",
         )
-
 
 class DebtToEquityCalculator(BaseRatioCalculator):
     """Debt-to-Equity = Total Debt / Shareholders' Equity.
@@ -285,7 +280,6 @@ class DebtToEquityCalculator(BaseRatioCalculator):
             benchmark="<2.0",
         )
 
-
 class AssetTurnoverCalculator(BaseRatioCalculator):
     """Asset Turnover = Revenue / Total Assets.
 
@@ -316,7 +310,6 @@ class AssetTurnoverCalculator(BaseRatioCalculator):
                               else "Low asset utilization."),
             benchmark=">1.0x for non-capital-intensive industries",
         )
-
 
 class InventoryTurnoverCalculator(BaseRatioCalculator):
     """Inventory Turnover = COGS / Average Inventory.
@@ -349,7 +342,6 @@ class InventoryTurnoverCalculator(BaseRatioCalculator):
             benchmark=">6x for retail; industry-dependent",
         )
 
-
 _RATIO_REGISTRY: dict[str, BaseRatioCalculator] = {
     "gross_margin": GrossMarginCalculator(),
     "net_margin": NetMarginCalculator(),
@@ -361,7 +353,6 @@ _RATIO_REGISTRY: dict[str, BaseRatioCalculator] = {
     "asset_turnover": AssetTurnoverCalculator(),
     "inventory_turnover": InventoryTurnoverCalculator(),
 }
-
 
 class FinancialRatiosCalculator:
     """Configurable financial ratio suite from a named financial data Series/row.

@@ -1,12 +1,16 @@
 """Cohort retention analysis: user retention matrix by acquisition cohort."""
 
+# #[AI_CONTEXT_START]
+# - CONFIGURACIÓN DE FACTORY: Registrar este calculator en `SegmentationStatisticsFactory` (backends pandas | polars | spark) y exponerlo mediante `StatisticsInyeccionDependency`, inyectada por la Factory Maestra de Agentes junto a las demás fábricas de dominio.
+# - ABSTRACCIÓN DEL DATO: Mutar constructores y `analyze`/`compute` para recibir el contenedor abstracto del backend (`pd.DataFrame`, `pl.DataFrame`/`pl.LazyFrame`, `pyspark.sql.DataFrame`) inyectado por la factory; eliminar `np.ndarray`/`pd.Series` sueltos en firmas públicas.
+# - REFACTOR NATIVO: Resolver métricas con expresiones 100 % nativas del backend activo (Polars: `.select`/`.group_by`/`.agg` sin `.collect()` salvo materialización acordada; PySpark: `pyspark.sql.functions` y ventanas distribuidas; Pandas: operaciones vectorizadas). No convertir a NumPy/Pandas desde backends no-pandas.
+# #[AI_CONTEXT_END]
 from __future__ import annotations
 
 from dataclasses import dataclass
 
 import numpy as np
 import pandas as pd
-
 
 @dataclass(frozen=True)
 class CohortRetentionRow:
@@ -16,7 +20,6 @@ class CohortRetentionRow:
     cohort_size: int
     retention_rates: dict[int, float]
     periods_observed: int
-
 
 class CohortAssigner:
     """Assigns each user to their acquisition cohort based on first activity date."""
@@ -40,7 +43,6 @@ class CohortAssigner:
         df = df.join(cohort_map, on=user_column)
         return df
 
-
 class CohortPeriodOffsetCalculator:
     """Computes the integer period offset between cohort and activity periods."""
 
@@ -51,7 +53,6 @@ class CohortPeriodOffsetCalculator:
             df["activity_period"] - df["cohort_period"]
         ).apply(lambda x: x.n)
         return df
-
 
 class RetentionMatrixBuilder:
     """Builds the cohort × period retention count matrix."""
@@ -71,7 +72,6 @@ class RetentionMatrixBuilder:
         )
         return matrix
 
-
 class RetentionRateNormalizer:
     """Normalizes retention counts to rates by dividing by cohort size (period 0)."""
 
@@ -79,7 +79,6 @@ class RetentionRateNormalizer:
         """Divide each row by its period-0 value."""
         cohort_sizes = count_matrix.iloc[:, 0]
         return count_matrix.div(cohort_sizes, axis=0).round(4)
-
 
 class CohortAnalysisCalculator:
     """Cohort retention analysis: acquisition cohorts tracked over time."""

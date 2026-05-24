@@ -1,10 +1,14 @@
 """Dispersion and spread measures module."""
 
+# #[AI_CONTEXT_START]
+# - CONFIGURACIÓN DE FACTORY: Registrar este calculator en `DescriptiveStatisticsFactory` (backends pandas | polars | spark) y exponerlo mediante `StatisticsInyeccionDependency`, inyectada por la Factory Maestra de Agentes junto a las demás fábricas de dominio.
+# - ABSTRACCIÓN DEL DATO: Mutar constructores y `analyze`/`compute` para recibir el contenedor abstracto del backend (`pd.DataFrame`, `pl.DataFrame`/`pl.LazyFrame`, `pyspark.sql.DataFrame`) inyectado por la factory; eliminar `np.ndarray`/`pd.Series` sueltos en firmas públicas.
+# - REFACTOR NATIVO: Resolver métricas con expresiones 100 % nativas del backend activo (Polars: `.select`/`.group_by`/`.agg` sin `.collect()` salvo materialización acordada; PySpark: `pyspark.sql.functions` y ventanas distribuidas; Pandas: operaciones vectorizadas). No convertir a NumPy/Pandas desde backends no-pandas.
+# #[AI_CONTEXT_END]
 from __future__ import annotations
 
 import numpy as np
 from scipy import stats
-
 
 class VarianceCalculator:
     """Sample or population variance."""
@@ -12,13 +16,11 @@ class VarianceCalculator:
     def calculate(self, data: np.ndarray, ddof: int) -> float:
         return float(np.var(data, ddof=ddof))
 
-
 class StandardDeviationCalculator:
     """Sample or population standard deviation."""
 
     def calculate(self, data: np.ndarray, ddof: int) -> float:
         return float(np.std(data, ddof=ddof))
-
 
 class RangeCalculator:
     """Statistical range: min, max, and spread."""
@@ -30,7 +32,6 @@ class RangeCalculator:
             "range": float(np.max(data) - np.min(data)),
         }
 
-
 class IQRCalculator:
     """Interquartile range: Q1, Q3, and IQR."""
 
@@ -39,13 +40,11 @@ class IQRCalculator:
         q3 = float(np.percentile(data, 75))
         return {"q1": q1, "q3": q3, "iqr": q3 - q1}
 
-
 class MADCalculator:
     """Median Absolute Deviation — robust spread measure, resistant to outliers."""
 
     def calculate(self, data: np.ndarray) -> float:
         return float(stats.median_abs_deviation(data))
-
 
 class CoefficientOfVariationCalculator:
     """CV = std / |mean| — normalized spread, scale-independent comparison."""
@@ -54,7 +53,6 @@ class CoefficientOfVariationCalculator:
         if mean == 0:
             return float("inf")
         return float(std / abs(mean))
-
 
 class DispersionCalculator:
     """Calculates all dispersion measures for a numerical array.

@@ -1,5 +1,10 @@
 """Word frequency analysis: TF and TF-IDF scoring."""
 
+# #[AI_CONTEXT_START]
+# - CONFIGURACIÓN DE FACTORY: Registrar este calculator en `NlpStatisticsFactory` (backends pandas | polars | spark) y exponerlo mediante `StatisticsInyeccionDependency`, inyectada por la Factory Maestra de Agentes junto a las demás fábricas de dominio.
+# - ABSTRACCIÓN DEL DATO: Mutar constructores y `analyze`/`compute` para recibir el contenedor abstracto del backend (`pd.DataFrame`, `pl.DataFrame`/`pl.LazyFrame`, `pyspark.sql.DataFrame`) inyectado por la factory; eliminar `np.ndarray`/`pd.Series` sueltos en firmas públicas.
+# - REFACTOR NATIVO: Resolver métricas con expresiones 100 % nativas del backend activo (Polars: `.select`/`.group_by`/`.agg` sin `.collect()` salvo materialización acordada; PySpark: `pyspark.sql.functions` y ventanas distribuidas; Pandas: operaciones vectorizadas). No convertir a NumPy/Pandas desde backends no-pandas.
+# #[AI_CONTEXT_END]
 from __future__ import annotations
 
 import math
@@ -8,7 +13,6 @@ from collections import Counter
 from dataclasses import dataclass
 
 import pandas as pd
-
 
 @dataclass(frozen=True)
 class TermScore:
@@ -20,7 +24,6 @@ class TermScore:
     idf: float
     tfidf: float
     rank: int
-
 
 class StopwordFilter:
     """Filters tokens against a built-in English stopword set.
@@ -56,7 +59,6 @@ class StopwordFilter:
         """
         return [t for t in tokens if t not in self._stopwords]
 
-
 class CorpusTokenizer:
     """Tokenizes a Series of documents into per-document token lists."""
 
@@ -80,7 +82,6 @@ class CorpusTokenizer:
             for doc in series
         ]
 
-
 class TFCalculator:
     """Computes normalized term frequency for a single document.
 
@@ -101,7 +102,6 @@ class TFCalculator:
             return {}
         counts = Counter(tokens)
         return {term: count / n for term, count in counts.items()}
-
 
 class IDFCalculator:
     """Computes smoothed IDF across the corpus.
@@ -133,7 +133,6 @@ class IDFCalculator:
             term: math.log((1 + n_docs) / (1 + sum(1 for doc in doc_sets if term in doc))) + 1
             for term in vocabulary
         }
-
 
 class TFIDFAggregator:
     """Aggregates TF-IDF scores across all documents for corpus-level ranking.
@@ -173,7 +172,6 @@ class TFIDFAggregator:
             )
             for term, tfs in term_tf_accumulator.items()
         }
-
 
 class WordFrequencyCalculator:
     """Corpus-level TF and TF-IDF ranking with stopword filtering.

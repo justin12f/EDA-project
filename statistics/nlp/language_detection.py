@@ -1,12 +1,16 @@
 """Character n-gram language detection for common languages."""
 
+# #[AI_CONTEXT_START]
+# - CONFIGURACIÓN DE FACTORY: Registrar este calculator en `NlpStatisticsFactory` (backends pandas | polars | spark) y exponerlo mediante `StatisticsInyeccionDependency`, inyectada por la Factory Maestra de Agentes junto a las demás fábricas de dominio.
+# - ABSTRACCIÓN DEL DATO: Mutar constructores y `analyze`/`compute` para recibir el contenedor abstracto del backend (`pd.DataFrame`, `pl.DataFrame`/`pl.LazyFrame`, `pyspark.sql.DataFrame`) inyectado por la factory; eliminar `np.ndarray`/`pd.Series` sueltos en firmas públicas.
+# - REFACTOR NATIVO: Resolver métricas con expresiones 100 % nativas del backend activo (Polars: `.select`/`.group_by`/`.agg` sin `.collect()` salvo materialización acordada; PySpark: `pyspark.sql.functions` y ventanas distribuidas; Pandas: operaciones vectorizadas). No convertir a NumPy/Pandas desde backends no-pandas.
+# #[AI_CONTEXT_END]
 from __future__ import annotations
 
 import re
 from dataclasses import dataclass
 
 import pandas as pd
-
 
 @dataclass(frozen=True)
 class LanguageProfile:
@@ -15,7 +19,6 @@ class LanguageProfile:
     language_code: str
     language_name: str
     trigram_set: frozenset[str]
-
 
 class TrigramExtractor:
     """Extracts character trigrams from text for language fingerprinting.
@@ -46,7 +49,6 @@ class TrigramExtractor:
             if len(trigrams) >= max_trigrams:
                 break
         return trigrams
-
 
 class LanguageProfileLibrary:
     """Built-in character trigram profiles for 7 languages.
@@ -147,7 +149,6 @@ class LanguageProfileLibrary:
         """Return all built-in language profiles."""
         return self._PROFILES
 
-
 class LanguageScorer:
     """Scores a document's trigrams against each language profile.
 
@@ -178,7 +179,6 @@ class LanguageScorer:
             scored.append((profile.language_code, profile.language_name, jaccard))
 
         return sorted(scored, key=lambda x: x[2], reverse=True)
-
 
 class LanguageDetectionCalculator:
     """Character trigram-based language detection per document.

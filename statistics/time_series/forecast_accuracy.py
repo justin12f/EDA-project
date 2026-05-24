@@ -1,12 +1,16 @@
 """Forecast accuracy metrics for time series evaluation."""
 
+# #[AI_CONTEXT_START]
+# - CONFIGURACIÓN DE FACTORY: Registrar este calculator en `TimeSeriesStatisticsFactory` (backends pandas | polars | spark) y exponerlo mediante `StatisticsInyeccionDependency`, inyectada por la Factory Maestra de Agentes junto a las demás fábricas de dominio.
+# - ABSTRACCIÓN DEL DATO: Mutar constructores y `analyze`/`compute` para recibir el contenedor abstracto del backend (`pd.DataFrame`, `pl.DataFrame`/`pl.LazyFrame`, `pyspark.sql.DataFrame`) inyectado por la factory; eliminar `np.ndarray`/`pd.Series` sueltos en firmas públicas.
+# - REFACTOR NATIVO: Resolver métricas con expresiones 100 % nativas del backend activo (Polars: `.select`/`.group_by`/`.agg` sin `.collect()` salvo materialización acordada; PySpark: `pyspark.sql.functions` y ventanas distribuidas; Pandas: operaciones vectorizadas). No convertir a NumPy/Pandas desde backends no-pandas.
+# #[AI_CONTEXT_END]
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 
 import numpy as np
-
 
 @dataclass(frozen=True)
 class AccuracyMetric:
@@ -17,14 +21,12 @@ class AccuracyMetric:
     unit: str
     interpretation: str
 
-
 class BaseAccuracyMetric(ABC):
     """Abstract base for all forecast accuracy metrics."""
 
     @abstractmethod
     def calculate(self, y_true: np.ndarray, y_pred: np.ndarray) -> AccuracyMetric:
         """Compute the accuracy metric."""
-
 
 class MAEMetric(BaseAccuracyMetric):
     """Mean Absolute Error."""
@@ -33,14 +35,12 @@ class MAEMetric(BaseAccuracyMetric):
         value = float(np.mean(np.abs(y_true - y_pred)))
         return AccuracyMetric(name="mae", value=round(value, 6), unit="original units", interpretation=f"Average absolute error of {value:.4f} units.")
 
-
 class RMSEMetric(BaseAccuracyMetric):
     """Root Mean Squared Error."""
 
     def calculate(self, y_true: np.ndarray, y_pred: np.ndarray) -> AccuracyMetric:
         value = float(np.sqrt(np.mean((y_true - y_pred) ** 2)))
         return AccuracyMetric(name="rmse", value=round(value, 6), unit="original units", interpretation=f"RMSE of {value:.4f}. Sensitive to outlier errors.")
-
 
 class MAPEMetric(BaseAccuracyMetric):
     """Mean Absolute Percentage Error."""
@@ -52,7 +52,6 @@ class MAPEMetric(BaseAccuracyMetric):
         value = float(np.mean(np.abs((y_true[non_zero] - y_pred[non_zero]) / y_true[non_zero])) * 100)
         quality = "Excellent." if value < 5 else "Good." if value < 10 else "Acceptable." if value < 20 else "Poor."
         return AccuracyMetric(name="mape", value=round(value, 4), unit="%", interpretation=f"Average percentage error of {value:.2f}%. {quality}")
-
 
 class MASEMetric(BaseAccuracyMetric):
     """Mean Absolute Scaled Error."""
@@ -67,14 +66,12 @@ class MASEMetric(BaseAccuracyMetric):
         verdict = "Model beats naive forecast." if value < 1.0 else "Naive forecast is better."
         return AccuracyMetric(name="mase", value=round(value, 6), unit="scaled", interpretation=f"MASE={value:.4f}. {verdict}")
 
-
 _METRIC_REGISTRY: dict[str, BaseAccuracyMetric] = {
     "mae": MAEMetric(),
     "rmse": RMSEMetric(),
     "mape": MAPEMetric(),
     "mase": MASEMetric(),
 }
-
 
 class ForecastAccuracyCalculator:
     """Computes a suite of forecast accuracy metrics."""

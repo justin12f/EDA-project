@@ -1,0 +1,5 @@
+# #[AI_CONTEXT_START]
+# - CONFIGURACIÓN DE FACTORY: Crear `AbstractDataCleaningStepFactory`, `PolarsDataCleaningStepFactory`, `SparkDataCleaningStepFactory` y `PandasDataCleaningStepFactory`; encadenar con `DataCleaningInyeccionDependency` → Factory Maestra.
+# - ABSTRACCIÓN DEL DATO: `create(step_name, data_frame, **kwargs)` debe tipar `data_frame` con el contenedor del backend, no `pd.DataFrame` fijo.
+# - REFACTOR NATIVO: Registros apuntan a `data_cleaning/steps/backends/*`; eliminar `import pandas` de la factory abstracta.
+# #[AI_CONTEXT_END]

@@ -1,12 +1,15 @@
 """Stationarity testing: ADF and KPSS with combined verdict."""
 
+# #[AI_CONTEXT_START]
+# - CONFIGURACIÓN DE FACTORY: Registrar este calculator en `TimeSeriesStatisticsFactory` (backends pandas | polars | spark) y exponerlo mediante `StatisticsInyeccionDependency`, inyectada por la Factory Maestra de Agentes junto a las demás fábricas de dominio.
+# - ABSTRACCIÓN DEL DATO: Mutar constructores y `analyze`/`compute` para recibir el contenedor abstracto del backend (`pd.DataFrame`, `pl.DataFrame`/`pl.LazyFrame`, `pyspark.sql.DataFrame`) inyectado por la factory; eliminar `np.ndarray`/`pd.Series` sueltos en firmas públicas.
+# - REFACTOR NATIVO: Resolver métricas con expresiones 100 % nativas del backend activo (Polars: `.select`/`.group_by`/`.agg` sin `.collect()` salvo materialización acordada; PySpark: `pyspark.sql.functions` y ventanas distribuidas; Pandas: operaciones vectorizadas). No convertir a NumPy/Pandas desde backends no-pandas.
+# #[AI_CONTEXT_END]
 from __future__ import annotations
 
 from dataclasses import dataclass
 
 import numpy as np
-
-
 
 @dataclass(frozen=True)
 class StationarityTestResult:
@@ -18,7 +21,6 @@ class StationarityTestResult:
     critical_values: dict[str, float]
     is_stationary: bool
     note: str
-
 
 class AugmentedDickeyFullerTest:
     """ADF test for unit root — H0: series has a unit root (non-stationary)."""
@@ -56,7 +58,6 @@ class AugmentedDickeyFullerTest:
             note=f"H0: unit root. Stationary if t-stat < critical value. t={t_stat:.4f}, threshold={threshold}.",
         )
 
-
 class KPSSTest:
     """KPSS test for stationarity — H0: series IS stationary."""
 
@@ -93,7 +94,6 @@ class KPSSTest:
             weighted_sum += 2 * bartlett_weight * gamma_j
         return gamma_0 + weighted_sum
 
-
 class StationarityVerdictInterpreter:
     """Combines ADF and KPSS results into a unified stationarity verdict."""
 
@@ -103,7 +103,6 @@ class StationarityVerdictInterpreter:
         if not adf.is_stationary and not kpss.is_stationary:
             return "non_stationary"
         return "inconclusive"
-
 
 class StationarityCalculator:
     """Runs ADF + KPSS tests and returns a combined stationarity verdict."""

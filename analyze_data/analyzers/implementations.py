@@ -1,12 +1,16 @@
 """Module for data analysis"""
 
+# #[AI_CONTEXT_START]
+# - CONFIGURACIÓN DE FACTORY: Verificar si es capa abstracta/legacy; registrar solo contratos en factory maestra y delegar implementaciones a `analyze_data/analyzers/backends/`.
+# - ABSTRACCIÓN DEL DATO: Contratos sin tipos pandas fijos; usar TypeVar del contenedor por backend.
+# - REFACTOR NATIVO: Eliminar archivo si está obsoleto y sin referencias; si se conserva, solo ABC + registro sin lógica NumPy/Pandas.
+# #[AI_CONTEXT_END]
 from statistics.time_series.seasonal import SeasonalDecomposition
 
 import pandas as pd
 
 from analyze_data.analyzers.base import BaseDataAnalysis
 from models.linear_regression import LinearRegression
-
 import numpy as np
 from statistics.descriptive.distribution import DistributionClassifier
 from statistics.descriptive.normality import NormalityTestSuite
@@ -82,7 +86,6 @@ from statistics.business.customer_lifetime_value import CustomerLifetimeValueCal
 from statistics.business.pareto_analysis import ParetoAnalysisCalculator
 from statistics.business.run_rate import RunRateCalculator
 
-
 # ── DOMAIN 10 IMPORTS ─────────────────────────────────────────────────────────
 from statistics.graphs.network_density import NetworkDensityCalculator
 from statistics.graphs.centrality_analysis import CentralityAnalysisCalculator
@@ -97,20 +100,17 @@ from statistics.survival.time_to_event import TimeToEventCalculator
 
 # ── BASIC DATAFRAME INSPECTORS ────────────────────────────────────────────────
 
-
 class AnalyseDataTypes(BaseDataAnalysis):
     """Return a dict of column → dtype string for the DataFrame."""
 
     def analyze(self, **kwargs) -> dict:
         return {"dtypes": self._data_frame.dtypes.astype(str).to_dict()}
 
-
 class AnalyseDataShape(BaseDataAnalysis):
     """Return the (rows, columns) shape of the DataFrame."""
 
     def analyze(self, **kwargs) -> dict:
         return {"rows": self._data_frame.shape[0], "columns": self._data_frame.shape[1]}
-
 
 class AnalyseDataInfo(BaseDataAnalysis):
     """Return column names, dtypes, and non-null counts."""
@@ -126,7 +126,6 @@ class AnalyseDataInfo(BaseDataAnalysis):
         }
         return {"info": info, "n_rows": len(self._data_frame)}
 
-
 class AnalyseDataDescribe(BaseDataAnalysis):
     """Return pandas describe() as a nested dict."""
 
@@ -134,13 +133,11 @@ class AnalyseDataDescribe(BaseDataAnalysis):
         include = kwargs.get("include", "all")
         return self._data_frame.describe(include=include).to_dict()
 
-
 class AnalyseDataColumns(BaseDataAnalysis):
     """Return the list of column names."""
 
     def analyze(self, **kwargs) -> dict:
         return {"columns": self._data_frame.columns.tolist()}
-
 
 class AnalyseDataIndex(BaseDataAnalysis):
     """Return index information."""
@@ -155,7 +152,6 @@ class AnalyseDataIndex(BaseDataAnalysis):
             "n": len(idx),
         }
 
-
 class AnalyseDataHead(BaseDataAnalysis):
     """Return the first N rows as a dict."""
 
@@ -163,14 +159,12 @@ class AnalyseDataHead(BaseDataAnalysis):
         n: int = kwargs.get("n", 5)
         return self._data_frame.head(n).to_dict(orient="records")
 
-
 class AnalyseDataTail(BaseDataAnalysis):
     """Return the last N rows as a dict."""
 
     def analyze(self, **kwargs) -> dict:
         n: int = kwargs.get("n", 5)
         return self._data_frame.tail(n).to_dict(orient="records")
-
 
 class AnalyseDataSample(BaseDataAnalysis):
     """Return a random sample of N rows as a dict."""
@@ -183,13 +177,10 @@ class AnalyseDataSample(BaseDataAnalysis):
             orient="records"
         )
 
-
 # ==================== ANALYZERS DE FEATURES ENGINEERING ====================
-
 
 # TENDENCIAS Y PATRONES
 # ("trend_analysis", AnalyseTrendPatterns)      # Tendencia temporal
-
 
 class AnalyseSeasonality(BaseDataAnalysis):
     """Analyse the seasonality of the data frame"""
@@ -230,7 +221,6 @@ class AnalyseSeasonality(BaseDataAnalysis):
                 "resid": seasonal_decomposition["resid"],
             },
         }
-
 
 # ("volatility", AnalyseVolatility)             # Volatilidad en series
 
@@ -273,7 +263,6 @@ class AnalyseSeasonality(BaseDataAnalysis):
 # ("feature_variance", AnalyseFeatureVariance)  # Qué variables varían más
 # ("feature_selection", AnalyseFeatureSelection) # Mutual info, chi2
 # ("information_content", AnalyseInformationContent) # Entropy, MI
-
 
 class AnalyseTrendPatterns(BaseDataAnalysis):
     """Analyse the trend patterns of the dataframe"
@@ -343,9 +332,7 @@ class AnalyseTrendPatterns(BaseDataAnalysis):
 
         return return_dictionary
 
-
 # ── DOMAIN 1 — DESCRIPTIVE STATISTICS ─────────────────────────────────────────
-
 
 class AnalyseDistributionType(BaseDataAnalysis):
     """Classify the statistical distribution of a numerical column.
@@ -367,7 +354,6 @@ class AnalyseDistributionType(BaseDataAnalysis):
 
         data: np.ndarray = self._data_frame[column].dropna().to_numpy()
         return DistributionClassifier().classify(data)
-
 
 class AnalyseSkewnessKurtosis(BaseDataAnalysis):
     """Analyse skewness and kurtosis across numerical columns.
@@ -404,7 +390,6 @@ class AnalyseSkewnessKurtosis(BaseDataAnalysis):
 
         return {"columns": column_results, "bias": bias}
 
-
 class AnalyseNormalityTests(BaseDataAnalysis):
     """Run a full normality test suite on a numerical column.
 
@@ -427,7 +412,6 @@ class AnalyseNormalityTests(BaseDataAnalysis):
 
         data: np.ndarray = self._data_frame[column].dropna().to_numpy()
         return NormalityTestSuite().run(data, significance_level=significance_level)
-
 
 class AnalyseValueCounts(BaseDataAnalysis):
     """Analyse value frequencies for any column (numeric or categorical).
@@ -457,7 +441,6 @@ class AnalyseValueCounts(BaseDataAnalysis):
             include_missing=include_missing,
         )
 
-
 class AnalysePercentiles(BaseDataAnalysis):
     """Analyse percentile distribution of a numerical column.
 
@@ -485,7 +468,6 @@ class AnalysePercentiles(BaseDataAnalysis):
             data, percentiles=percentiles, outlier_bounds=outlier_bounds
         )
 
-
 class AnalyseFrequencyDistribution(BaseDataAnalysis):
     """Analyse frequency distribution (histogram as table) of a numerical column.
 
@@ -512,7 +494,6 @@ class AnalyseFrequencyDistribution(BaseDataAnalysis):
         return FrequencyDistributionBuilder().build(
             data, n_bins=n_bins, bin_method=bin_method
         )
-
 
 class AnalyseCentralTendency(BaseDataAnalysis):
     """Analyse central tendency measures across numerical columns.
@@ -552,7 +533,6 @@ class AnalyseCentralTendency(BaseDataAnalysis):
 
         return {"columns": column_results, "trim_proportion": trim_proportion}
 
-
 class AnalyseDispersion(BaseDataAnalysis):
     """Analyse dispersion measures across numerical columns.
 
@@ -587,7 +567,6 @@ class AnalyseDispersion(BaseDataAnalysis):
         }
 
         return {"columns": column_results, "ddof": ddof}
-
 
 class AnalyseHypothesisTest(BaseDataAnalysis):
     """Run a parametric or non-parametric hypothesis test on two DataFrame columns.
@@ -629,7 +608,6 @@ class AnalyseHypothesisTest(BaseDataAnalysis):
             alternative=kwargs.get("alternative", "two-sided"),
         )
 
-
 class AnalyseAnova(BaseDataAnalysis):
     """Run one-way ANOVA across multiple DataFrame columns as groups.
 
@@ -668,7 +646,6 @@ class AnalyseAnova(BaseDataAnalysis):
             run_post_hoc=kwargs.get("run_post_hoc", True),
         )
 
-
 class AnalyseChiSquare(BaseDataAnalysis):
     """Chi-square independence test between two categorical columns.
 
@@ -696,7 +673,6 @@ class AnalyseChiSquare(BaseDataAnalysis):
             series_b=self._data_frame[column_b].dropna(),
             significance_level=kwargs.get("significance_level", 0.05),
         )
-
 
 class AnalyseCorrelationSignificance(BaseDataAnalysis):
     """Correlation with significance test and confidence interval.
@@ -731,7 +707,6 @@ class AnalyseCorrelationSignificance(BaseDataAnalysis):
             significance_level=kwargs.get("significance_level", 0.05),
             confidence_level=kwargs.get("confidence_level", 0.95),
         )
-
 
 class AnalyseConfidenceIntervals(BaseDataAnalysis):
     """Compute confidence intervals for mean, proportion, or mean difference.
@@ -812,7 +787,6 @@ class AnalyseConfidenceIntervals(BaseDataAnalysis):
             f"Available: 'mean', 'proportion', 'mean_difference'."
         )
 
-
 class AnalyseEffectSize(BaseDataAnalysis):
     """Calculate effect size (Cohen's d or Eta-squared) from DataFrame columns.
 
@@ -867,7 +841,6 @@ class AnalyseEffectSize(BaseDataAnalysis):
             f"effect_type '{effect_type}' not recognized. "
             f"Available: 'cohens_d', 'eta_squared'."
         )
-
 
 class AnalysePowerAnalysis(BaseDataAnalysis):
     """Statistical power analysis from DataFrame context.
@@ -931,7 +904,6 @@ class AnalysePowerAnalysis(BaseDataAnalysis):
             f"Available: 'minimum_n', 'observed_power'."
         )
 
-
 class AnalyseBootstrap(BaseDataAnalysis):
     """Non-parametric bootstrap CI for any statistic on a column.
 
@@ -964,7 +936,6 @@ class AnalyseBootstrap(BaseDataAnalysis):
             confidence_level=kwargs.get("confidence_level", 0.95),
             random_seed=kwargs.get("random_seed", 42),
         )
-
 
 class AnalyseCorrelationMatrix(BaseDataAnalysis):
     """Full correlation matrix with ranked pairs and multicollinearity flags.
@@ -1001,7 +972,6 @@ class AnalyseCorrelationMatrix(BaseDataAnalysis):
             high_correlation_flag=kwargs.get("high_correlation_flag", 0.85),
         )
 
-
 class AnalyseMulticollinearity(BaseDataAnalysis):
     """VIF-based multicollinearity detection for linear model preparation.
 
@@ -1030,7 +1000,6 @@ class AnalyseMulticollinearity(BaseDataAnalysis):
             data_frame=numeric_df,
             high_vif_threshold=kwargs.get("high_vif_threshold", 10.0),
         )
-
 
 class AnalyseMutualInformation(BaseDataAnalysis):
     """MI-based feature relevance scoring against a target variable.
@@ -1071,7 +1040,6 @@ class AnalyseMutualInformation(BaseDataAnalysis):
             random_seed=kwargs.get("random_seed", 42),
         )
 
-
 class AnalysePartialCorrelation(BaseDataAnalysis):
     """Partial correlation between two columns controlling for confounders.
 
@@ -1105,7 +1073,6 @@ class AnalysePartialCorrelation(BaseDataAnalysis):
             significance_level=kwargs.get("significance_level", 0.05),
         )
 
-
 class AnalyseCrossCorrelation(BaseDataAnalysis):
     """Cross-correlation between two time series across a range of lags.
 
@@ -1131,7 +1098,6 @@ class AnalyseCrossCorrelation(BaseDataAnalysis):
             column_y=column_y,
             max_lag=kwargs.get("max_lag", 10),
         )
-
 
 class AnalyseGrangerCausality(BaseDataAnalysis):
     """Granger causality test: does x improve forecasts of y?
@@ -1161,7 +1127,6 @@ class AnalyseGrangerCausality(BaseDataAnalysis):
             significance_level=kwargs.get("significance_level", 0.05),
         )
 
-
 class AnalyseContingency(BaseDataAnalysis):
     """Full 2×2 contingency analysis: chi-square, OR, RR, Cramér's V.
 
@@ -1190,7 +1155,6 @@ class AnalyseContingency(BaseDataAnalysis):
             confidence_level=kwargs.get("confidence_level", 0.95),
         )
 
-
 class AnalyseInteractionEffects(BaseDataAnalysis):
     """Detect feature pairs whose interaction improves target R².
 
@@ -1217,7 +1181,6 @@ class AnalyseInteractionEffects(BaseDataAnalysis):
             top_n=kwargs.get("top_n"),
         )
 
-
 # ── DOMAIN 5 IMPORTS ──────────────────────────────────────────────────────────
 from statistics.ml_support.feature_variance import FeatureVarianceCalculator
 from statistics.ml_support.feature_selection import FeatureSelectionCalculator
@@ -1227,7 +1190,6 @@ from statistics.ml_support.class_imbalance import ClassImbalanceCalculator
 from statistics.ml_support.model_residuals import ModelResidualsCalculator
 from statistics.ml_support.learning_curve import LearningCurveCalculator
 from statistics.ml_support.cross_validation import CrossValidationCalculator
-
 
 class AnalyseFeatureVariance(BaseDataAnalysis):
     """Near-zero variance detection across all numeric columns.
@@ -1248,7 +1210,6 @@ class AnalyseFeatureVariance(BaseDataAnalysis):
             unique_ratio_threshold=kwargs.get("unique_ratio_threshold", 0.01),
             frequency_ratio_threshold=kwargs.get("frequency_ratio_threshold", 0.95),
         )
-
 
 class AnalyseFeatureSelection(BaseDataAnalysis):
     """Univariate feature scoring: chi2, ANOVA F, mutual information.
@@ -1280,7 +1241,6 @@ class AnalyseFeatureSelection(BaseDataAnalysis):
             top_n=kwargs.get("top_n"),
             random_seed=kwargs.get("random_seed", 42),
         )
-
 
 class AnalyseFeatureImportance(BaseDataAnalysis):
     """Random Forest Gini and permutation importance.
@@ -1316,7 +1276,6 @@ class AnalyseFeatureImportance(BaseDataAnalysis):
             random_seed=kwargs.get("random_seed", 42),
         )
 
-
 class AnalyseDimensionalityReduction(BaseDataAnalysis):
     """PCA with variance explained, loadings, and optimal component selection.
 
@@ -1348,7 +1307,6 @@ class AnalyseDimensionalityReduction(BaseDataAnalysis):
             target_variance_explained=kwargs.get("target_variance_explained", 0.95),
         )
 
-
 class AnalyseClassImbalance(BaseDataAnalysis):
     """Class distribution analysis with resampling strategy recommendation.
 
@@ -1371,7 +1329,6 @@ class AnalyseClassImbalance(BaseDataAnalysis):
             series=self._data_frame[target_column],
             minority_threshold=kwargs.get("minority_threshold", 0.3),
         )
-
 
 class AnalyseModelResiduals(BaseDataAnalysis):
     """Residual diagnostics: normality, homoscedasticity, autocorrelation.
@@ -1401,7 +1358,6 @@ class AnalyseModelResiduals(BaseDataAnalysis):
             y_pred=paired[predicted_column].to_numpy(dtype=float),
             significance_level=kwargs.get("significance_level", 0.05),
         )
-
 
 class AnalyseLearningCurve(BaseDataAnalysis):
     """Learning curve for bias-variance diagnosis across training sizes.
@@ -1447,7 +1403,6 @@ class AnalyseLearningCurve(BaseDataAnalysis):
             random_seed=kwargs.get("random_seed", 42),
         )
 
-
 class AnalyseCrossValidation(BaseDataAnalysis):
     """K-Fold / Stratified / Repeated cross-validation with CI.
 
@@ -1492,7 +1447,6 @@ class AnalyseCrossValidation(BaseDataAnalysis):
             n_jobs=kwargs.get("n_jobs", -1),
         )
 
-
 # ── DOMAIN 4 IMPORTS ──────────────────────────────────────────────────────────
 from statistics.time_series.volatility import VolatilityCalculator
 from statistics.time_series.momentum import MomentumCalculator
@@ -1503,7 +1457,6 @@ from statistics.time_series.change_points import ChangePointDetector
 from statistics.time_series.forecast_accuracy import ForecastAccuracyCalculator
 from statistics.time_series.cyclical_patterns import CyclicalPatternsCalculator
 from statistics.time_series.rolling_statistics import RollingStatisticsCalculator
-
 
 class AnalyseVolatility(BaseDataAnalysis):
     """Rolling std, EWMA volatility, CV and regime detection."""
@@ -1521,7 +1474,6 @@ class AnalyseVolatility(BaseDataAnalysis):
             decay_factor=kwargs.get("decay_factor", 0.94),
         )
 
-
 class AnalyseMomentum(BaseDataAnalysis):
     """Rate of change, acceleration, and momentum signal classification."""
 
@@ -1536,7 +1488,6 @@ class AnalyseMomentum(BaseDataAnalysis):
             series=series,
             period=kwargs.get("period", 14),
         )
-
 
 class AnalyseMovingAverages(BaseDataAnalysis):
     """SMA, EMA, WMA computation with optional crossover detection."""
@@ -1558,7 +1509,6 @@ class AnalyseMovingAverages(BaseDataAnalysis):
             crossover_ma_type=kwargs.get("crossover_ma_type", "ema"),
         )
 
-
 class AnalyseStationarity(BaseDataAnalysis):
     """ADF + KPSS combined stationarity test with recommendation."""
 
@@ -1574,7 +1524,6 @@ class AnalyseStationarity(BaseDataAnalysis):
             max_lags=kwargs.get("max_lags", 4),
             significance_level=kwargs.get("significance_level", 0.05),
         )
-
 
 class AnalyseLagFeatures(BaseDataAnalysis):
     """ACF, PACF analysis and lag feature generation."""
@@ -1592,7 +1541,6 @@ class AnalyseLagFeatures(BaseDataAnalysis):
             significance_level=kwargs.get("significance_level", 0.05),
         )
 
-
 class AnalyseChangePoints(BaseDataAnalysis):
     """CUSUM mean-shift and variance change point detection."""
 
@@ -1609,7 +1557,6 @@ class AnalyseChangePoints(BaseDataAnalysis):
             h_multiplier=kwargs.get("h_multiplier", 4.0),
             variance_ratio_threshold=kwargs.get("variance_ratio_threshold", 2.0),
         )
-
 
 class AnalyseForecastAccuracy(BaseDataAnalysis):
     """MAE, RMSE, MAPE, MASE forecast accuracy metrics."""
@@ -1629,7 +1576,6 @@ class AnalyseForecastAccuracy(BaseDataAnalysis):
             metrics=kwargs.get("metrics"),
         )
 
-
 class AnalyseCyclicalPatterns(BaseDataAnalysis):
     """FFT-based dominant cycle detection."""
 
@@ -1647,7 +1593,6 @@ class AnalyseCyclicalPatterns(BaseDataAnalysis):
             apply_window=kwargs.get("apply_window", True),
         )
 
-
 class AnalyseRollingStatistics(BaseDataAnalysis):
     """Configurable rolling statistics: mean, std, min, max, median, skewness."""
 
@@ -1663,7 +1608,6 @@ class AnalyseRollingStatistics(BaseDataAnalysis):
             window=kwargs.get("window", 20),
             statistics=kwargs.get("statistics"),
         )
-
 
 class AnalyseTextBasicStats(BaseDataAnalysis):
     """Per-document and corpus-level text statistics.
@@ -1687,7 +1631,6 @@ class AnalyseTextBasicStats(BaseDataAnalysis):
             series=self._data_frame[column],
             sample_n=kwargs.get("sample_n"),
         )
-
 
 class AnalyseWordFrequency(BaseDataAnalysis):
     """TF and TF-IDF term frequency ranking across a text corpus.
@@ -1716,7 +1659,6 @@ class AnalyseWordFrequency(BaseDataAnalysis):
             custom_stopwords=kwargs.get("custom_stopwords"),
         )
 
-
 class AnalyseSentiment(BaseDataAnalysis):
     """Lexicon-based polarity and subjectivity analysis.
 
@@ -1739,7 +1681,6 @@ class AnalyseSentiment(BaseDataAnalysis):
             series=self._data_frame[column],
             sample_n=kwargs.get("sample_n"),
         )
-
 
 class AnalyseTopicDetection(BaseDataAnalysis):
     """NMF-based latent topic discovery in a text corpus.
@@ -1772,7 +1713,6 @@ class AnalyseTopicDetection(BaseDataAnalysis):
             random_seed=kwargs.get("random_seed", 42),
         )
 
-
 class AnalyseLanguageDetection(BaseDataAnalysis):
     """Character trigram-based language detection per document.
 
@@ -1795,7 +1735,6 @@ class AnalyseLanguageDetection(BaseDataAnalysis):
             series=self._data_frame[column],
             top_n_candidates=kwargs.get("top_n_candidates", 3),
         )
-
 
 class AnalyseTextSimilarity(BaseDataAnalysis):
     """Pairwise TF-IDF cosine similarity between two text columns.
@@ -1824,7 +1763,6 @@ class AnalyseTextSimilarity(BaseDataAnalysis):
             column_b=column_b,
         )
 
-
 class AnalyseNamedEntityDensity(BaseDataAnalysis):
     """Rule-based named entity detection and density analysis.
 
@@ -1850,11 +1788,7 @@ class AnalyseNamedEntityDensity(BaseDataAnalysis):
             sample_n=kwargs.get("sample_n"),
         )
 
-
-
-
 # ── DOMAIN 7 — SEGMENTATION ───────────────────────────────────────────────────
-
 
 class AnalyseKMeansClusters(BaseDataAnalysis):
     """K-Means clustering with auto K selection via silhouette score.
@@ -1882,7 +1816,6 @@ class AnalyseKMeansClusters(BaseDataAnalysis):
             k_range=kwargs.get("k_range", (2, 8)),
             random_seed=kwargs.get("random_seed", 42),
         )
-
 
 class AnalyseRFMSegmentation(BaseDataAnalysis):
     """RFM segmentation from transactional data.
@@ -1917,7 +1850,6 @@ class AnalyseRFMSegmentation(BaseDataAnalysis):
             reference_date=kwargs.get("reference_date"),
         )
 
-
 class AnalyseCohortAnalysis(BaseDataAnalysis):
     """Cohort retention matrix by acquisition period.
 
@@ -1944,7 +1876,6 @@ class AnalyseCohortAnalysis(BaseDataAnalysis):
             date_column=date_column,
             period=kwargs.get("period", "M"),
         )
-
 
 class AnalysePopulationSplits(BaseDataAnalysis):
     """Statistical feature comparison between two population groups.
@@ -1979,7 +1910,6 @@ class AnalysePopulationSplits(BaseDataAnalysis):
             significance_level=kwargs.get("significance_level", 0.05),
         )
 
-
 class AnalyseDBSCANClusters(BaseDataAnalysis):
     """DBSCAN density-based clustering with auto epsilon estimation.
 
@@ -2005,7 +1935,6 @@ class AnalyseDBSCANClusters(BaseDataAnalysis):
             min_samples=kwargs.get("min_samples", 5),
             random_seed=kwargs.get("random_seed", 42),
         )
-
 
 class AnalyseHierarchicalClusters(BaseDataAnalysis):
     """Hierarchical agglomerative clustering with cophenetic correlation.
@@ -2036,7 +1965,6 @@ class AnalyseHierarchicalClusters(BaseDataAnalysis):
             extract_dendrogram=kwargs.get("extract_dendrogram", False),
         )
 
-
 class AnalyseGrowthRates(BaseDataAnalysis):
     """MoM/YoY period-over-period growth, CAGR, and rolling growth.
 
@@ -2065,7 +1993,6 @@ class AnalyseGrowthRates(BaseDataAnalysis):
             n_years=kwargs.get("n_years"),
             periods_per_year=kwargs.get("periods_per_year", 12),
         )
-
 
 class AnalyseRiskMetrics(BaseDataAnalysis):
     """VaR, CVaR, Sharpe, Sortino, Max Drawdown, and Calmar ratio.
@@ -2098,7 +2025,6 @@ class AnalyseRiskMetrics(BaseDataAnalysis):
             periods_per_year=kwargs.get("periods_per_year", 252),
         )
 
-
 class AnalyseFinancialRatios(BaseDataAnalysis):
     """Profitability, liquidity, leverage, and efficiency ratios.
 
@@ -2119,7 +2045,6 @@ class AnalyseFinancialRatios(BaseDataAnalysis):
             data_frame=self._data_frame,
             ratios=kwargs.get("ratios"),
         )
-
 
 class AnalyseConversionFunnel(BaseDataAnalysis):
     """Funnel analysis with stage conversion rates and bottleneck detection.
@@ -2163,7 +2088,6 @@ class AnalyseConversionFunnel(BaseDataAnalysis):
             bottleneck_threshold=kwargs.get("bottleneck_threshold", 0.5),
         )
 
-
 class AnalyseChurnRate(BaseDataAnalysis):
     """Period-level churn rate from aggregated data or event logs.
 
@@ -2202,7 +2126,6 @@ class AnalyseChurnRate(BaseDataAnalysis):
             user_column=kwargs.get("user_column"),
         )
 
-
 class AnalyseCustomerLifetimeValue(BaseDataAnalysis):
     """Discounted and simple CLV per customer from transactional data.
 
@@ -2239,7 +2162,6 @@ class AnalyseCustomerLifetimeValue(BaseDataAnalysis):
             periods_per_year=kwargs.get("periods_per_year", 12),
         )
 
-
 class AnalyseParetoAnalysis(BaseDataAnalysis):
     """Pareto (80/20) analysis with Gini concentration coefficient.
 
@@ -2268,7 +2190,6 @@ class AnalyseParetoAnalysis(BaseDataAnalysis):
             value_column=value_column,
             target_share=kwargs.get("target_share", 0.8),
         )
-
 
 class AnalyseRunRate(BaseDataAnalysis):
     """Run rate projection: simple, trailing average, and weighted recent.
@@ -2309,7 +2230,6 @@ class AnalyseRunRate(BaseDataAnalysis):
             methods=kwargs.get("methods"),
         )
 
-
 class AnalyseGeoDistribution(BaseDataAnalysis):
     """Geographic frequency distribution with HHI concentration metric.
 
@@ -2335,7 +2255,6 @@ class AnalyseGeoDistribution(BaseDataAnalysis):
             top_n=kwargs.get("top_n", 20),
             secondary_column=kwargs.get("secondary_column"),
         )
-
 
 class AnalyseGeoClustering(BaseDataAnalysis):
     """Haversine-DBSCAN geographic point clustering.
@@ -2368,7 +2287,6 @@ class AnalyseGeoClustering(BaseDataAnalysis):
             min_samples=kwargs.get("min_samples", 5),
         )
 
-
 class AnalyseGeoBoundingBox(BaseDataAnalysis):
     """Bounding box, centroid, diagonal, and dispersion label.
 
@@ -2395,7 +2313,6 @@ class AnalyseGeoBoundingBox(BaseDataAnalysis):
             lat_column=lat_column,
             lon_column=lon_column,
         )
-
 
 class AnalyseGeoHeatmap(BaseDataAnalysis):
     """Grid-based geographic density heatmap (points per km²).
@@ -2430,7 +2347,6 @@ class AnalyseGeoHeatmap(BaseDataAnalysis):
             include_empty_cells=kwargs.get("include_empty_cells", False),
         )
 
-
 class AnalyseProximity(BaseDataAnalysis):
     """Nearest neighbor distances and ANN spatial pattern analysis.
 
@@ -2461,7 +2377,6 @@ class AnalyseProximity(BaseDataAnalysis):
             include_all_nn=kwargs.get("include_all_nn", False),
             max_points=kwargs.get("max_points", 2_000),
         )
-
 
 # ─────────────────────────────────────────────────────────────────────────────
 # DOMAIN 10 — GRAPH ANALYZERS
@@ -2498,7 +2413,6 @@ class AnalyseNetworkDensity(BaseDataAnalysis):
             weight_column=kwargs.get("weight_column"),
         )
 
-
 class AnalyseCentrality(BaseDataAnalysis):
     """Degree, betweenness, closeness, and PageRank centrality.
 
@@ -2534,7 +2448,6 @@ class AnalyseCentrality(BaseDataAnalysis):
             weight_column=kwargs.get("weight_column"),
         )
 
-
 class AnalyseCommunityDetection(BaseDataAnalysis):
     """Louvain-style community detection with modularity Q scoring.
 
@@ -2566,7 +2479,6 @@ class AnalyseCommunityDetection(BaseDataAnalysis):
             weight_column=kwargs.get("weight_column"),
         )
 
-
 class AnalysePathAnalysis(BaseDataAnalysis):
     """Average path length, diameter, clustering coefficient, small-world σ.
 
@@ -2597,7 +2509,6 @@ class AnalysePathAnalysis(BaseDataAnalysis):
             graph_type=kwargs.get("graph_type", "undirected"),
             weight_column=kwargs.get("weight_column"),
         )
-
 
 # ─────────────────────────────────────────────────────────────────────────────
 # DOMAIN 11 — SURVIVAL ANALYZERS
@@ -2638,7 +2549,6 @@ class AnalyseKaplanMeier(BaseDataAnalysis):
             group_column=group_column,
         )
 
-
 class AnalyseHazardRate(BaseDataAnalysis):
     """Nelson-Aalen cumulative hazard with Gaussian-smoothed instantaneous hazard.
 
@@ -2667,7 +2577,6 @@ class AnalyseHazardRate(BaseDataAnalysis):
             event_column=event_column,
             n_smooth_points=kwargs.get("n_smooth_points", 100),
         )
-
 
 class AnalyseEventDensity(BaseDataAnalysis):
     """Event frequency, inter-event intervals, burstiness B, and rolling rate.
@@ -2701,7 +2610,6 @@ class AnalyseEventDensity(BaseDataAnalysis):
             window_size=kwargs.get("window_size"),
             n_rate_windows=kwargs.get("n_rate_windows", 20),
         )
-
 
 class AnalyseTimeToEvent(BaseDataAnalysis):
     """Time-to-event descriptive statistics, threshold analysis, exponential fit.

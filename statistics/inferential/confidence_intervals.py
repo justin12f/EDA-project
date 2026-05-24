@@ -1,12 +1,16 @@
 """Confidence interval calculators for means, proportions and differences."""
 
+# #[AI_CONTEXT_START]
+# - CONFIGURACIÓN DE FACTORY: Registrar este calculator en `InferentialStatisticsFactory` (backends pandas | polars | spark) y exponerlo mediante `StatisticsInyeccionDependency`, inyectada por la Factory Maestra de Agentes junto a las demás fábricas de dominio.
+# - ABSTRACCIÓN DEL DATO: Mutar constructores y `analyze`/`compute` para recibir el contenedor abstracto del backend (`pd.DataFrame`, `pl.DataFrame`/`pl.LazyFrame`, `pyspark.sql.DataFrame`) inyectado por la factory; eliminar `np.ndarray`/`pd.Series` sueltos en firmas públicas.
+# - REFACTOR NATIVO: Resolver métricas con expresiones 100 % nativas del backend activo (Polars: `.select`/`.group_by`/`.agg` sin `.collect()` salvo materialización acordada; PySpark: `pyspark.sql.functions` y ventanas distribuidas; Pandas: operaciones vectorizadas). No convertir a NumPy/Pandas desde backends no-pandas.
+# #[AI_CONTEXT_END]
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
 
 import numpy as np
 from scipy import stats
-
 
 class BaseConfidenceInterval(ABC):
     """Abstract base for all confidence interval calculators."""
@@ -22,7 +26,6 @@ class BaseConfidenceInterval(ABC):
         Returns:
             Dict with lower, upper, center, margin_of_error and metadata.
         """
-
 
 class MeanConfidenceInterval(BaseConfidenceInterval):
     """T-distribution based CI for a population mean.
@@ -69,7 +72,6 @@ class MeanConfidenceInterval(BaseConfidenceInterval):
             "n": n,
             "confidence_level": confidence_level,
         }
-
 
 class ProportionConfidenceInterval(BaseConfidenceInterval):
     """Wilson score CI for a population proportion.
@@ -124,7 +126,6 @@ class ProportionConfidenceInterval(BaseConfidenceInterval):
             "z_critical": z,
             "confidence_level": confidence_level,
         }
-
 
 class MeanDifferenceConfidenceInterval(BaseConfidenceInterval):
     """Welch's CI for the difference between two independent group means.
@@ -206,13 +207,11 @@ class MeanDifferenceConfidenceInterval(BaseConfidenceInterval):
         denominator = (var_a / n_a) ** 2 / (n_a - 1) + (var_b / n_b) ** 2 / (n_b - 1)
         return numerator / denominator if denominator > 0 else 1.0
 
-
 _CI_REGISTRY: dict[str, BaseConfidenceInterval] = {
     "mean": MeanConfidenceInterval(),
     "proportion": ProportionConfidenceInterval(),
     "mean_difference": MeanDifferenceConfidenceInterval(),
 }
-
 
 class ConfidenceIntervalCalculator:
     """Unified entry point for all confidence interval types.

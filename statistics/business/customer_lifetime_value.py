@@ -1,12 +1,16 @@
 """Customer Lifetime Value (CLV) — simple and probabilistic estimation."""
 
+# #[AI_CONTEXT_START]
+# - CONFIGURACIÓN DE FACTORY: Registrar este calculator en `BusinessStatisticsFactory` (backends pandas | polars | spark) y exponerlo mediante `StatisticsInyeccionDependency`, inyectada por la Factory Maestra de Agentes junto a las demás fábricas de dominio.
+# - ABSTRACCIÓN DEL DATO: Mutar constructores y `analyze`/`compute` para recibir el contenedor abstracto del backend (`pd.DataFrame`, `pl.DataFrame`/`pl.LazyFrame`, `pyspark.sql.DataFrame`) inyectado por la factory; eliminar `np.ndarray`/`pd.Series` sueltos en firmas públicas.
+# - REFACTOR NATIVO: Resolver métricas con expresiones 100 % nativas del backend activo (Polars: `.select`/`.group_by`/`.agg` sin `.collect()` salvo materialización acordada; PySpark: `pyspark.sql.functions` y ventanas distribuidas; Pandas: operaciones vectorizadas). No convertir a NumPy/Pandas desde backends no-pandas.
+# #[AI_CONTEXT_END]
 from __future__ import annotations
 
 from dataclasses import dataclass
 
 import numpy as np
 import pandas as pd
-
 
 @dataclass(frozen=True)
 class CLVRecord:
@@ -19,7 +23,6 @@ class CLVRecord:
     simple_clv: float
     discounted_clv: float
     segment: str
-
 
 class SimpleCLVCalculator:
     """Simple (non-probabilistic) CLV formula.
@@ -46,7 +49,6 @@ class SimpleCLVCalculator:
             Simple CLV value.
         """
         return avg_order_value * purchase_frequency * customer_lifespan
-
 
 class DiscountedCLVCalculator:
     """Discounted CLV using geometric series present value formula.
@@ -88,7 +90,6 @@ class DiscountedCLVCalculator:
         pv_factor = (1 - discount_factor ** n) / (1 - discount_factor) if discount_factor != 1 else n
         return margin_per_period * pv_factor
 
-
 class CLVSegmentAssigner:
     """Assigns CLV-based segment label using percentile thresholds.
 
@@ -116,7 +117,6 @@ class CLVSegmentAssigner:
             else "mid_value"
             for v in clv_values
         ]
-
 
 class CustomerLifetimeValueCalculator:
     """CLV computation from transactional data per customer.

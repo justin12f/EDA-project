@@ -1,10 +1,14 @@
 """Central tendency measures module."""
 
+# #[AI_CONTEXT_START]
+# - CONFIGURACIÓN DE FACTORY: Registrar este calculator en `DescriptiveStatisticsFactory` (backends pandas | polars | spark) y exponerlo mediante `StatisticsInyeccionDependency`, inyectada por la Factory Maestra de Agentes junto a las demás fábricas de dominio.
+# - ABSTRACCIÓN DEL DATO: Mutar constructores y `analyze`/`compute` para recibir el contenedor abstracto del backend (`pd.DataFrame`, `pl.DataFrame`/`pl.LazyFrame`, `pyspark.sql.DataFrame`) inyectado por la factory; eliminar `np.ndarray`/`pd.Series` sueltos en firmas públicas.
+# - REFACTOR NATIVO: Resolver métricas con expresiones 100 % nativas del backend activo (Polars: `.select`/`.group_by`/`.agg` sin `.collect()` salvo materialización acordada; PySpark: `pyspark.sql.functions` y ventanas distribuidas; Pandas: operaciones vectorizadas). No convertir a NumPy/Pandas desde backends no-pandas.
+# #[AI_CONTEXT_END]
 from __future__ import annotations
 
 import numpy as np
 from scipy import stats
-
 
 class MeanCalculator:
     """Arithmetic mean."""
@@ -12,13 +16,11 @@ class MeanCalculator:
     def calculate(self, data: np.ndarray) -> float:
         return float(np.mean(data))
 
-
 class MedianCalculator:
     """Median — 50th percentile, robust to outliers."""
 
     def calculate(self, data: np.ndarray) -> float:
         return float(np.median(data))
-
 
 class ModeCalculator:
     """Mode — most frequent value. Returns value and its count."""
@@ -30,13 +32,11 @@ class ModeCalculator:
             "count": int(mode_result.count[0]),
         }
 
-
 class TrimmedMeanCalculator:
     """Trimmed mean — mean after removing extreme proportions on both ends."""
 
     def calculate(self, data: np.ndarray, trim_proportion: float) -> float:
         return float(stats.trim_mean(data, trim_proportion))
-
 
 class CentralTendencyInterpreter:
     """Interprets the relationship between mean and median to hint at skewness."""
@@ -61,7 +61,6 @@ class CentralTendencyInterpreter:
         if relative_difference < self._SYMMETRY_THRESHOLD:
             return "symmetric"
         return "right_skewed" if mean > median else "left_skewed"
-
 
 class CentralTendencyCalculator:
     """Calculates all central tendency measures with interpretation.

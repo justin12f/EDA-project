@@ -13,6 +13,11 @@ Reglas estrictas:
       SOLO cuando son necesarias para calcular el valor de imputación.
 """
 
+# #[AI_CONTEXT_START]
+# - CONFIGURACIÓN DE FACTORY: `DataCleaningStepFactory` del backend correspondiente en `data_cleaning/steps/backends/`; inyección vía `DataCleaningInyeccionDependency` → Factory Maestra.
+# - ABSTRACCIÓN DEL DATO: Canonicalizar en `backends/`; deprecar duplicados en `steps/implementations.py` y `steps/polars_impl.py` raíz tras verificar referencias.
+# - REFACTOR NATIVO: Steps en inglés y 100 % API nativa del backend; sin NumPy salvo materialización local explícita.
+# #[AI_CONTEXT_END]
 from __future__ import annotations
 
 import re
@@ -60,7 +65,6 @@ from data_cleaning.steps.backends.pandas_impl import (
     ImputationStrategy,
 )
 
-
 # ─────────────────────────────────────────────────────────────────────────────
 # Internal helpers
 # ─────────────────────────────────────────────────────────────────────────────
@@ -69,18 +73,15 @@ def _is_string_dtype(dtype: pl.DataType) -> bool:
     """Return True for Utf8 / String / Categorical Polars dtypes."""
     return dtype in (pl.Utf8, pl.String, pl.Categorical)
 
-
 def _is_numeric_dtype(dtype: pl.DataType) -> bool:
     """Return True for any numeric Polars dtype."""
     return dtype.is_numeric()
-
 
 _NUMERIC_DTYPES = (
     pl.Int8, pl.Int16, pl.Int32, pl.Int64,
     pl.UInt8, pl.UInt16, pl.UInt32, pl.UInt64,
     pl.Float32, pl.Float64,
 )
-
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Steps: Schema & Structure
@@ -118,7 +119,6 @@ class ColumnScopedStep(AbstractColumnScopedStep[pl.DataFrame]):
         result = pl.concat([rest, cleaned], how="horizontal")
         return result.select(data.columns)   # Restore original column order
 
-
 class ColumnsTitlesStep(AbstractColumnsTitlesStep[pl.DataFrame]):
     """Polars: Normalize column names (lowercase, underscored, no diacritics)."""
 
@@ -136,7 +136,6 @@ class ColumnsTitlesStep(AbstractColumnsTitlesStep[pl.DataFrame]):
             )
             rename_map[col] = clean
         return data.rename(rename_map)
-
 
 class EnforceSchemaStep(AbstractEnforceSchemaStep[pl.DataFrame]):
     """Polars: Validate minimum structural requirements."""
@@ -162,7 +161,6 @@ class EnforceSchemaStep(AbstractEnforceSchemaStep[pl.DataFrame]):
             warnings.warn(f"Missing required columns: {missing}", stacklevel=2)
         return data
 
-
 class DropHighMissingColumnsStep(AbstractDropHighMissingColumnsStep[pl.DataFrame]):
     """Polars: Drop columns where null fraction > threshold."""
 
@@ -183,7 +181,6 @@ class DropHighMissingColumnsStep(AbstractDropHighMissingColumnsStep[pl.DataFrame
         ]
         return data.drop(cols_to_drop) if cols_to_drop else data
 
-
 class DropConstantColumnsStep(AbstractDropConstantColumnsStep[pl.DataFrame]):
     """Polars: Drop columns with ≤1 unique non-null value."""
 
@@ -199,7 +196,6 @@ class DropConstantColumnsStep(AbstractDropConstantColumnsStep[pl.DataFrame]):
             if count <= 1
         ]
         return data.drop(constant_cols) if constant_cols else data
-
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Steps: Missing Values & Sentinel Handling
@@ -242,7 +238,6 @@ class HandleSentinelValuesStep(AbstractHandleSentinelValuesStep[pl.DataFrame]):
             else:
                 exprs.append(pl.col(col))
         return data.select(exprs)
-
 
 class ImputeCategoricalStep(AbstractImputeCategoricalStep[pl.DataFrame]):
     """Polars: Impute missing categorical values (mode or fixed)."""
@@ -287,7 +282,6 @@ class ImputeCategoricalStep(AbstractImputeCategoricalStep[pl.DataFrame]):
                     pl.col(col).fill_null(pl.lit(self.fill_value)).alias(col)
                 )
         return df
-
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Steps: Type Conversion & Parsing
@@ -365,7 +359,6 @@ class SafeConversionStep(AbstractSafeConversionStep[pl.DataFrame]):
                 result.append(col)
         return result
 
-
 class FixDatesColumnsStep(AbstractFixDatesColumnsStep[pl.DataFrame]):
     """Polars: Parse string columns to datetime and invalidate out-of-range."""
 
@@ -413,7 +406,6 @@ class FixDatesColumnsStep(AbstractFixDatesColumnsStep[pl.DataFrame]):
             return False
         parsed = sample_vals.str.to_datetime(strict=False)
         return parsed.drop_nulls().len() / sample_vals.len() >= 0.5
-
 
 class FixBoolsColumnsStep(AbstractFixBoolsColumnsStep[pl.DataFrame]):
     """Polars: Convert text boolean representations to Boolean type."""
@@ -465,7 +457,6 @@ class FixBoolsColumnsStep(AbstractFixBoolsColumnsStep[pl.DataFrame]):
                 result.append(col)
         return result
 
-
 class FixColumnsTypesStep(AbstractFixColumnsTypesStep[pl.DataFrame]):
     """Polars: Cast columns to their final target dtypes."""
 
@@ -510,7 +501,6 @@ class FixColumnsTypesStep(AbstractFixColumnsTypesStep[pl.DataFrame]):
             else:
                 exprs.append(pl.col(col))
         return data.select(exprs)
-
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Steps: Numeric Cleaning & Imputation
@@ -585,7 +575,6 @@ class FixNumericColumnsStep(AbstractFixNumericColumnsStep[pl.DataFrame]):
                 return float(vc.get_column(series.name)[0])
         return None
 
-
 # ─────────────────────────────────────────────────────────────────────────────
 # Steps: Outlier Handling
 # ─────────────────────────────────────────────────────────────────────────────
@@ -628,7 +617,6 @@ class IQROutlierStep(AbstractIQROutlierStep[pl.DataFrame]):
             if _is_numeric_dtype(data[c].dtype)
             and not c.endswith("_id") and c != "id"
         ]
-
 
 class ZScoreOutlierStep(AbstractZScoreOutlierStep[pl.DataFrame]):
     """Polars: Nullify values whose absolute Z-score exceeds z_threshold."""
@@ -681,7 +669,6 @@ class ZScoreOutlierStep(AbstractZScoreOutlierStep[pl.DataFrame]):
             )
         return data.select(exprs)
 
-
 class CapOutliersStep(AbstractCapOutliersStep[pl.DataFrame]):
     """Polars: Winsorize outliers at configurable percentile bounds."""
 
@@ -726,7 +713,6 @@ class CapOutliersStep(AbstractCapOutliersStep[pl.DataFrame]):
                 exprs.append(pl.col(col))
         return data.select(exprs)
 
-
 # ─────────────────────────────────────────────────────────────────────────────
 # Steps: Text Normalization
 # ─────────────────────────────────────────────────────────────────────────────
@@ -762,7 +748,6 @@ class FixNotNumericColumnsStep(AbstractFixNotNumericColumnsStep[pl.DataFrame]):
                 exprs.append(pl.col(col))
         return data.select(exprs)
 
-
 class NormalizeCategoriesStep(AbstractNormalizeCategoriesStep[pl.DataFrame]):
     """Polars: Unify category variants using synonym maps."""
 
@@ -789,7 +774,6 @@ class NormalizeCategoriesStep(AbstractNormalizeCategoriesStep[pl.DataFrame]):
                 .alias(col)
             )
         return data.with_columns(exprs) if exprs else data
-
 
 class TextStandardizationStep(AbstractTextStandardizationStep[pl.DataFrame]):
     """Polars: NFKD unicode + special char removal + whitespace collapse.
@@ -837,7 +821,6 @@ class TextStandardizationStep(AbstractTextStandardizationStep[pl.DataFrame]):
         text = self._SPECIAL_CHAR_PATTERN.sub(" ", text)
         return self._WHITESPACE_PATTERN.sub(" ", text).strip().lower()
 
-
 # ─────────────────────────────────────────────────────────────────────────────
 # Steps: Validation
 # ─────────────────────────────────────────────────────────────────────────────
@@ -871,7 +854,6 @@ class ValidateDomainRulesStep(AbstractValidateDomainRulesStep[pl.DataFrame]):
             exprs.append(expr.alias(col))
         return data.select(exprs)
 
-
 class CrossColumnValidationStep(AbstractCrossColumnValidationStep[pl.DataFrame]):
     """Polars: Validate consistency between pairs of related columns."""
 
@@ -898,7 +880,6 @@ class CrossColumnValidationStep(AbstractCrossColumnValidationStep[pl.DataFrame])
                 )
         return df
 
-
 # ─────────────────────────────────────────────────────────────────────────────
 # Steps: Duplicate Handling
 # ─────────────────────────────────────────────────────────────────────────────
@@ -911,7 +892,6 @@ class RemoveDuplicatesRowsStep(AbstractRemoveDuplicatesRowsStep[pl.DataFrame]):
 
     def process(self, data: pl.DataFrame) -> pl.DataFrame:
         return data.unique(maintain_order=True)
-
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Steps: Quality & Audit
@@ -936,7 +916,6 @@ class FlagDataQualityStep(AbstractFlagDataQualityStep[pl.DataFrame]):
             (non_null_expr / pl.lit(n_cols)).alias(self._QUALITY_COLUMN)
         )
 
-
 class AddAuditColumnsStep(AbstractAddAuditColumnsStep[pl.DataFrame]):
     """Polars: Append lineage-tracking columns (_original_index, _cleaned_at)."""
 
@@ -956,7 +935,6 @@ class AddAuditColumnsStep(AbstractAddAuditColumnsStep[pl.DataFrame]):
             pl.lit(datetime.now(tz=timezone.utc).isoformat()).alias(self._CLEANED_AT_COL)
         )
         return df
-
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Steps: Feature Scaling

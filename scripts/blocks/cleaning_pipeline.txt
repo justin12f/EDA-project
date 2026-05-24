@@ -1,0 +1,5 @@
+# #[AI_CONTEXT_START]
+# - CONFIGURACIÓN DE FACTORY: `AbstractDataCleaningPipeline` + implementaciones por backend inyectadas vía `DataCleaningInyeccionDependency`.
+# - ABSTRACCIÓN DEL DATO: Pipeline opera sobre el frame lazy/eager del backend inyectado en construcción.
+# - REFACTOR NATIVO: Orquestación de steps solo vía factories del mismo backend; sin conversiones implícitas a pandas.
+# #[AI_CONTEXT_END]

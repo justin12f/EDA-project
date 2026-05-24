@@ -1,12 +1,16 @@
 """Near-zero variance feature detection and filtering."""
 
+# #[AI_CONTEXT_START]
+# - CONFIGURACIÓN DE FACTORY: Registrar este calculator en `MlSupportStatisticsFactory` (backends pandas | polars | spark) y exponerlo mediante `StatisticsInyeccionDependency`, inyectada por la Factory Maestra de Agentes junto a las demás fábricas de dominio.
+# - ABSTRACCIÓN DEL DATO: Mutar constructores y `analyze`/`compute` para recibir el contenedor abstracto del backend (`pd.DataFrame`, `pl.DataFrame`/`pl.LazyFrame`, `pyspark.sql.DataFrame`) inyectado por la factory; eliminar `np.ndarray`/`pd.Series` sueltos en firmas públicas.
+# - REFACTOR NATIVO: Resolver métricas con expresiones 100 % nativas del backend activo (Polars: `.select`/`.group_by`/`.agg` sin `.collect()` salvo materialización acordada; PySpark: `pyspark.sql.functions` y ventanas distribuidas; Pandas: operaciones vectorizadas). No convertir a NumPy/Pandas desde backends no-pandas.
+# #[AI_CONTEXT_END]
 from __future__ import annotations
 
 from dataclasses import dataclass
 
 import numpy as np
 import pandas as pd
-
 
 @dataclass(frozen=True)
 class FeatureVarianceResult:
@@ -20,7 +24,6 @@ class FeatureVarianceResult:
     most_frequent_ratio: float
     is_near_zero_variance: bool
     reason: str
-
 
 class VarianceComputer:
     """Computes raw variance, std, and CV for a single feature array."""
@@ -39,7 +42,6 @@ class VarianceComputer:
         mean = float(np.mean(values))
         cv = std / abs(mean) if mean != 0.0 else float("inf")
         return variance, std, cv
-
 
 class FrequencyRatioComputer:
     """Computes unique value ratio and most-frequent value ratio.
@@ -67,7 +69,6 @@ class FrequencyRatioComputer:
         most_frequent_ratio = most_frequent_count / n
 
         return unique_ratio, most_frequent_ratio
-
 
 class NearZeroVarianceClassifier:
     """Classifies a feature as near-zero variance based on configurable thresholds.
@@ -112,7 +113,6 @@ class NearZeroVarianceClassifier:
                 f"> threshold={frequency_ratio_threshold}"
             )
         return False, "acceptable"
-
 
 class FeatureVarianceCalculator:
     """Detects near-zero variance features across all numeric columns.

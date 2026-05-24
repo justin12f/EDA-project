@@ -4,13 +4,17 @@ All readers return ``pl.LazyFrame`` as the preferred type.
 The caller can materialise with ``.collect()`` when needed.
 """
 
+# #[AI_CONTEXT_START]
+# - CONFIGURACIÓN DE FACTORY: `ReaderFactory` local por extensión y backend; `ReadersInyeccionDependency` como capa superior para Agentes.
+# - ABSTRACCIÓN DEL DATO: Retorno de `read()` como `pl.LazyFrame` (polars), `pyspark.sql.DataFrame` (spark) o `pd.DataFrame` (pandas); registrar readers pandas faltantes en la factory.
+# - REFACTOR NATIVO: Ampliar formatos con APIs nativas (`pl.scan_*`, `spark.read`, `pd.read_*`) sin mezclar backends en una misma clase.
+# #[AI_CONTEXT_END]
 from __future__ import annotations
 
 import polars as pl
 
 from readers.base import AbstractReader
 from readers.exceptions import ReaderError
-
 
 class PolarsCSVReader(AbstractReader[pl.LazyFrame]):
     """Read CSV files into a Polars LazyFrame.
@@ -40,7 +44,6 @@ class PolarsCSVReader(AbstractReader[pl.LazyFrame]):
                 f"Failed to read CSV '{self._file}': {exc}"
             ) from exc
 
-
 class PolarsParquetReader(AbstractReader[pl.LazyFrame]):
     """Read Parquet files into a Polars LazyFrame.
 
@@ -54,7 +57,6 @@ class PolarsParquetReader(AbstractReader[pl.LazyFrame]):
             raise ReaderError(
                 f"Failed to read Parquet '{self._file}': {exc}"
             ) from exc
-
 
 class PolarsJSONReader(AbstractReader[pl.LazyFrame]):
     """Read JSON (newline-delimited) files into a Polars LazyFrame.
@@ -71,7 +73,6 @@ class PolarsJSONReader(AbstractReader[pl.LazyFrame]):
                 f"Failed to read JSON '{self._file}': {exc}"
             ) from exc
 
-
 class PolarsExcelReader(AbstractReader[pl.LazyFrame]):
     """Read Excel (.xlsx / .xls) files into a Polars LazyFrame.
 
@@ -85,3 +86,4 @@ class PolarsExcelReader(AbstractReader[pl.LazyFrame]):
             raise ReaderError(
                 f"Failed to read Excel '{self._file}': {exc}"
             ) from exc
+

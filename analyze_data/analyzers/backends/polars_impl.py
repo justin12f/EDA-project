@@ -2,14 +2,22 @@
 analyze_data/analyzers/backends/polars_impl.py
 Polars implementations for analyzers. Converts locally to pandas for sklearn/scipy interop.
 """
+
+# #[AI_CONTEXT_START]
+# - CONFIGURACIÓN DE FACTORY: `DataAnalyzerFactory` / `AnalyzeContextFactory` backend polars; inyectar vía `AnalyzeDataInyeccionDependency` desde la Factory Maestra de Agentes.
+# - ABSTRACCIÓN DEL DATO: Analyzers reciben `pl.DataFrame` o `pl.LazyFrame` inyectados; eliminar `.to_pandas()` y dependencias `pandas`/`numpy` en esta implementación.
+# - REFACTOR NATIVO: Análisis con calculadoras `statistics/*` resueltas por `*Polars` factories; docstrings en inglés; tests de integración polars.
+# #[AI_CONTEXT_END]
 from __future__ import annotations
 import polars as pl
 import pandas as pd
 import numpy as np
 
+from analyze_data.analyzers.backends.pl_utils import ensure_frame, dtypes_dict, describe_dict
+from analyze_data.analyzers.backends.stats_runner import run_statistics
 from analyze_data.analyzers.backends.abstract_analyzers import (
     AbstractBaseDataAnalysis,
-AbstractAnalyseDataTypes,
+    AbstractAnalyseDataTypes,
     AbstractAnalyseDataShape,
     AbstractAnalyseDataInfo,
     AbstractAnalyseDataDescribe,
@@ -104,7 +112,6 @@ from statistics.time_series.seasonal import SeasonalDecomposition
 import polars as pl
 import pandas as pd
 
-
 from models.linear_regression import LinearRegression
 
 import numpy as np
@@ -182,7 +189,6 @@ from statistics.business.customer_lifetime_value import CustomerLifetimeValueCal
 from statistics.business.pareto_analysis import ParetoAnalysisCalculator
 from statistics.business.run_rate import RunRateCalculator
 
-
 # ── DOMAIN 10 IMPORTS ─────────────────────────────────────────────────────────
 from statistics.graphs.network_density import NetworkDensityCalculator
 from statistics.graphs.centrality_analysis import CentralityAnalysisCalculator
@@ -197,31 +203,23 @@ from statistics.survival.time_to_event import TimeToEventCalculator
 
 # ── BASIC DATAFRAME INSPECTORS ────────────────────────────────────────────────
 
-
 class AnalyseDataTypesPolars(AbstractAnalyseDataTypes[pl.DataFrame]):
-    """Return a dict of column → dtype string for the DataFrame."""
+    """Return column dtypes (native Polars)."""
 
     def analyze(self, **kwargs) -> dict:
-        # [ACTION puntual: conversio a pandas para calculadoras]
-        self._data_frame = self._data_frame.to_pandas() if hasattr(self._data_frame, 'to_pandas') else self._data_frame
-        return {"dtypes": self._data_frame.dtypes.astype(str).to_dict()}
-
+        frame = ensure_frame(self._data_frame)
+        return {"dtypes": dtypes_dict(frame)}
 
 class AnalyseDataShapePolars(AbstractAnalyseDataShape[pl.DataFrame]):
-    """Return the (rows, columns) shape of the DataFrame."""
-
     def analyze(self, **kwargs) -> dict:
-        # [ACTION puntual: conversio a pandas para calculadoras]
-        self._data_frame = self._data_frame.to_pandas() if hasattr(self._data_frame, 'to_pandas') else self._data_frame
-        return {"rows": self._data_frame.shape[0], "columns": self._data_frame.shape[1]}
-
+        frame = ensure_frame(self._data_frame)
+        return {"rows": frame.height, "columns": frame.width}
 
 class AnalyseDataInfoPolars(AbstractAnalyseDataInfo[pl.DataFrame]):
     """Return column names, dtypes, and non-null counts."""
 
     def analyze(self, **kwargs) -> dict:
         # [ACTION puntual: conversio a pandas para calculadoras]
-        self._data_frame = self._data_frame.to_pandas() if hasattr(self._data_frame, 'to_pandas') else self._data_frame
         info = {
             col: {
                 "dtype": str(self._data_frame[col].dtype),
@@ -232,32 +230,24 @@ class AnalyseDataInfoPolars(AbstractAnalyseDataInfo[pl.DataFrame]):
         }
         return {"info": info, "n_rows": len(self._data_frame)}
 
-
 class AnalyseDataDescribePolars(AbstractAnalyseDataDescribe[pl.DataFrame]):
     """Return pandas describe() as a nested dict."""
 
     def analyze(self, **kwargs) -> dict:
         # [ACTION puntual: conversio a pandas para calculadoras]
-        self._data_frame = self._data_frame.to_pandas() if hasattr(self._data_frame, 'to_pandas') else self._data_frame
         include = kwargs.get("include", "all")
         return self._data_frame.describe(include=include).to_dict()
 
-
 class AnalyseDataColumnsPolars(AbstractAnalyseDataColumns[pl.DataFrame]):
-    """Return the list of column names."""
-
     def analyze(self, **kwargs) -> dict:
-        # [ACTION puntual: conversio a pandas para calculadoras]
-        self._data_frame = self._data_frame.to_pandas() if hasattr(self._data_frame, 'to_pandas') else self._data_frame
-        return {"columns": self._data_frame.columns.tolist()}
-
+        frame = ensure_frame(self._data_frame)
+        return {"columns": frame.columns}
 
 class AnalyseDataIndexPolars(AbstractAnalyseDataIndex[pl.DataFrame]):
     """Return index information."""
 
     def analyze(self, **kwargs) -> dict:
         # [ACTION puntual: conversio a pandas para calculadoras]
-        self._data_frame = self._data_frame.to_pandas() if hasattr(self._data_frame, 'to_pandas') else self._data_frame
         idx = self._data_frame.index
         return {
             "index_name": idx.name,
@@ -267,33 +257,27 @@ class AnalyseDataIndexPolars(AbstractAnalyseDataIndex[pl.DataFrame]):
             "n": len(idx),
         }
 
-
 class AnalyseDataHeadPolars(AbstractAnalyseDataHead[pl.DataFrame]):
     """Return the first N rows as a dict."""
 
     def analyze(self, **kwargs) -> dict:
         # [ACTION puntual: conversio a pandas para calculadoras]
-        self._data_frame = self._data_frame.to_pandas() if hasattr(self._data_frame, 'to_pandas') else self._data_frame
         n: int = kwargs.get("n", 5)
         return self._data_frame.head(n).to_dict(orient="records")
-
 
 class AnalyseDataTailPolars(AbstractAnalyseDataTail[pl.DataFrame]):
     """Return the last N rows as a dict."""
 
     def analyze(self, **kwargs) -> dict:
         # [ACTION puntual: conversio a pandas para calculadoras]
-        self._data_frame = self._data_frame.to_pandas() if hasattr(self._data_frame, 'to_pandas') else self._data_frame
         n: int = kwargs.get("n", 5)
         return self._data_frame.tail(n).to_dict(orient="records")
-
 
 class AnalyseDataSamplePolars(AbstractAnalyseDataSample[pl.DataFrame]):
     """Return a random sample of N rows as a dict."""
 
     def analyze(self, **kwargs) -> dict:
         # [ACTION puntual: conversio a pandas para calculadoras]
-        self._data_frame = self._data_frame.to_pandas() if hasattr(self._data_frame, 'to_pandas') else self._data_frame
         n: int = kwargs.get("n", 5)
         random_state: int = kwargs.get("random_state", 42)
         sample_n = min(n, len(self._data_frame))
@@ -301,20 +285,16 @@ class AnalyseDataSamplePolars(AbstractAnalyseDataSample[pl.DataFrame]):
             orient="records"
         )
 
-
 # ==================== ANALYZERS DE FEATURES ENGINEERING ====================
-
 
 # TENDENCIAS Y PATRONES
 # ("trend_analysis", AnalyseTrendPatterns)      # Tendencia temporal
-
 
 class AnalyseSeasonalityPolars(AbstractAnalyseSeasonality[pl.DataFrame]):
     """Analyse the seasonality of the data frame"""
 
     def analyze(self, **kwargs) -> dict:
         # [ACTION puntual: conversio a pandas para calculadoras]
-        self._data_frame = self._data_frame.to_pandas() if hasattr(self._data_frame, 'to_pandas') else self._data_frame
         """return the seasonality of the data frame"""
 
         data_frame: pd.DataFrame = self._data_frame
@@ -337,8 +317,14 @@ class AnalyseSeasonalityPolars(AbstractAnalyseSeasonality[pl.DataFrame]):
                 f"The column '{target_column}' does not exist in the data frame"
             )
 
-        seasonal_decomposition = SeasonalDecomposition().calculate(
-            data_frame[target_column], window=period
+        frame = ensure_frame(self._data_frame)
+        seasonal_decomposition = run_statistics(
+            "time_series",
+            "seasonal_decomposition",
+            frame,
+            column=target_column,
+            method="decompose",
+            window=period,
         )
 
         return {
@@ -350,7 +336,6 @@ class AnalyseSeasonalityPolars(AbstractAnalyseSeasonality[pl.DataFrame]):
                 "resid": seasonal_decomposition["resid"],
             },
         }
-
 
 # ("volatility", AnalyseVolatility)             # Volatilidad en series
 
@@ -394,7 +379,6 @@ class AnalyseSeasonalityPolars(AbstractAnalyseSeasonality[pl.DataFrame]):
 # ("feature_selection", AnalyseFeatureSelection) # Mutual info, chi2
 # ("information_content", AnalyseInformationContent) # Entropy, MI
 
-
 class AnalyseTrendPatternsPolars(AbstractAnalyseTrendPatterns[pl.DataFrame]):
     """Analyse the trend patterns of the dataframe"
     Work Flow:
@@ -412,7 +396,6 @@ class AnalyseTrendPatternsPolars(AbstractAnalyseTrendPatterns[pl.DataFrame]):
 
     def analyze(self, **kwargs) -> dict:
         # [ACTION puntual: conversio a pandas para calculadoras]
-        self._data_frame = self._data_frame.to_pandas() if hasattr(self._data_frame, 'to_pandas') else self._data_frame
         """return the trend patterns of the data frame"""
 
         x_name = kwargs.get("x")
@@ -465,9 +448,7 @@ class AnalyseTrendPatternsPolars(AbstractAnalyseTrendPatterns[pl.DataFrame]):
 
         return return_dictionary
 
-
 # ── DOMAIN 1 — DESCRIPTIVE STATISTICS ─────────────────────────────────────────
-
 
 class AnalyseDistributionTypePolars(AbstractAnalyseDistributionType[pl.DataFrame]):
     """Classify the statistical distribution of a numerical column.
@@ -482,16 +463,20 @@ class AnalyseDistributionTypePolars(AbstractAnalyseDistributionType[pl.DataFrame
 
     def analyze(self, **kwargs) -> dict:
         # [ACTION puntual: conversio a pandas para calculadoras]
-        self._data_frame = self._data_frame.to_pandas() if hasattr(self._data_frame, 'to_pandas') else self._data_frame
         column: str = kwargs.get("column")
         if column is None:
             raise ValueError("'column' parameter is required.")
         if column not in self._data_frame.columns:
             raise KeyError(f"Column '{column}' does not exist in the DataFrame.")
 
-        data: np.ndarray = self._data_frame[column].dropna().to_numpy()
-        return DistributionClassifier().classify(data)
-
+        frame = ensure_frame(self._data_frame)
+        return run_statistics(
+            "descriptive",
+            "distribution_classifier",
+            frame,
+            column=column,
+            method="classify",
+        )
 
 class AnalyseSkewnessKurtosisPolars(AbstractAnalyseSkewnessKurtosis[pl.DataFrame]):
     """Analyse skewness and kurtosis across numerical columns.
@@ -506,30 +491,38 @@ class AnalyseSkewnessKurtosisPolars(AbstractAnalyseSkewnessKurtosis[pl.DataFrame
 
     def analyze(self, **kwargs) -> dict:
         # [ACTION puntual: conversio a pandas para calculadoras]
-        self._data_frame = self._data_frame.to_pandas() if hasattr(self._data_frame, 'to_pandas') else self._data_frame
         columns: list[str] | None = kwargs.get("columns")
         bias: bool = kwargs.get("bias", True)
 
-        numeric_df = self._data_frame.select_dtypes(include=[np.number])
-
+        frame = ensure_frame(self._data_frame)
+        numeric_cols = [
+            c
+            for c in frame.columns
+            if frame[c].dtype in pl.NUMERIC_DTYPES
+        ]
         if columns is not None:
-            missing = [c for c in columns if c not in self._data_frame.columns]
+            missing = [c for c in columns if c not in frame.columns]
             if missing:
                 raise KeyError(f"Columns not found in DataFrame: {missing}")
-            numeric_df = numeric_df[columns]
+            numeric_cols = [c for c in columns if c in numeric_cols]
 
-        if numeric_df.empty:
+        if not numeric_cols:
             raise ValueError("No numeric columns found in the DataFrame.")
 
-        calculator = SkewnessKurtosisCalculator()
-        column_results = {
-            col: calculator.calculate(numeric_df[col].dropna().to_numpy(), bias=bias)
-            for col in numeric_df.columns
-            if len(numeric_df[col].dropna()) >= 4
-        }
+        column_results = {}
+        for col in numeric_cols:
+            s = frame[col].drop_nulls()
+            if s.len() >= 4:
+                column_results[col] = run_statistics(
+                    "descriptive",
+                    "skewness_kurtosis_calculator",
+                    frame,
+                    column=col,
+                    method="calculate",
+                    bias=bias,
+                )
 
         return {"columns": column_results, "bias": bias}
-
 
 class AnalyseNormalityTestsPolars(AbstractAnalyseNormalityTests[pl.DataFrame]):
     """Run a full normality test suite on a numerical column.
@@ -544,7 +537,6 @@ class AnalyseNormalityTestsPolars(AbstractAnalyseNormalityTests[pl.DataFrame]):
 
     def analyze(self, **kwargs) -> dict:
         # [ACTION puntual: conversio a pandas para calculadoras]
-        self._data_frame = self._data_frame.to_pandas() if hasattr(self._data_frame, 'to_pandas') else self._data_frame
         column: str = kwargs.get("column")
         significance_level: float = kwargs.get("significance_level", 0.05)
 
@@ -553,9 +545,15 @@ class AnalyseNormalityTestsPolars(AbstractAnalyseNormalityTests[pl.DataFrame]):
         if column not in self._data_frame.columns:
             raise KeyError(f"Column '{column}' does not exist in the DataFrame.")
 
-        data: np.ndarray = self._data_frame[column].dropna().to_numpy()
-        return NormalityTestSuite().run(data, significance_level=significance_level)
-
+        frame = ensure_frame(self._data_frame)
+        return run_statistics(
+            "descriptive",
+            "normality_test_suite",
+            frame,
+            column=column,
+            method="run",
+            significance_level=significance_level,
+        )
 
 class AnalyseValueCountsPolars(AbstractAnalyseValueCounts[pl.DataFrame]):
     """Analyse value frequencies for any column (numeric or categorical).
@@ -571,7 +569,6 @@ class AnalyseValueCountsPolars(AbstractAnalyseValueCounts[pl.DataFrame]):
 
     def analyze(self, **kwargs) -> dict:
         # [ACTION puntual: conversio a pandas para calculadoras]
-        self._data_frame = self._data_frame.to_pandas() if hasattr(self._data_frame, 'to_pandas') else self._data_frame
         column: str = kwargs.get("column")
         top_n: int | None = kwargs.get("top_n")
         include_missing: bool = kwargs.get("include_missing", True)
@@ -581,12 +578,16 @@ class AnalyseValueCountsPolars(AbstractAnalyseValueCounts[pl.DataFrame]):
         if column not in self._data_frame.columns:
             raise KeyError(f"Column '{column}' does not exist in the DataFrame.")
 
-        return ValueCountsCalculator().calculate(
-            self._data_frame[column],
+        frame = ensure_frame(self._data_frame)
+        return run_statistics(
+            "descriptive",
+            "value_counts_calculator",
+            frame,
+            column=column,
+            method="calculate",
             top_n=top_n,
             include_missing=include_missing,
         )
-
 
 class AnalysePercentilesPolars(AbstractAnalysePercentiles[pl.DataFrame]):
     """Analyse percentile distribution of a numerical column.
@@ -602,7 +603,6 @@ class AnalysePercentilesPolars(AbstractAnalysePercentiles[pl.DataFrame]):
 
     def analyze(self, **kwargs) -> dict:
         # [ACTION puntual: conversio a pandas para calculadoras]
-        self._data_frame = self._data_frame.to_pandas() if hasattr(self._data_frame, 'to_pandas') else self._data_frame
         column: str = kwargs.get("column")
         percentiles: list[int] | None = kwargs.get("percentiles")
         outlier_bounds: tuple[int, int] | None = kwargs.get("outlier_bounds", (1, 99))
@@ -612,11 +612,16 @@ class AnalysePercentilesPolars(AbstractAnalysePercentiles[pl.DataFrame]):
         if column not in self._data_frame.columns:
             raise KeyError(f"Column '{column}' does not exist in the DataFrame.")
 
-        data: np.ndarray = self._data_frame[column].dropna().to_numpy()
-        return PercentilesCalculator().calculate(
-            data, percentiles=percentiles, outlier_bounds=outlier_bounds
+        frame = ensure_frame(self._data_frame)
+        return run_statistics(
+            "descriptive",
+            "percentiles_calculator",
+            frame,
+            column=column,
+            method="calculate",
+            percentiles=percentiles,
+            outlier_bounds=outlier_bounds,
         )
-
 
 class AnalyseFrequencyDistributionPolars(AbstractAnalyseFrequencyDistribution[pl.DataFrame]):
     """Analyse frequency distribution (histogram as table) of a numerical column.
@@ -632,7 +637,6 @@ class AnalyseFrequencyDistributionPolars(AbstractAnalyseFrequencyDistribution[pl
 
     def analyze(self, **kwargs) -> dict:
         # [ACTION puntual: conversio a pandas para calculadoras]
-        self._data_frame = self._data_frame.to_pandas() if hasattr(self._data_frame, 'to_pandas') else self._data_frame
         column: str = kwargs.get("column")
         n_bins: int | None = kwargs.get("n_bins")
         bin_method: str = kwargs.get("bin_method", "auto")
@@ -642,11 +646,16 @@ class AnalyseFrequencyDistributionPolars(AbstractAnalyseFrequencyDistribution[pl
         if column not in self._data_frame.columns:
             raise KeyError(f"Column '{column}' does not exist in the DataFrame.")
 
-        data: np.ndarray = self._data_frame[column].dropna().to_numpy()
-        return FrequencyDistributionBuilder().build(
-            data, n_bins=n_bins, bin_method=bin_method
+        frame = ensure_frame(self._data_frame)
+        return run_statistics(
+            "descriptive",
+            "frequency_distribution_builder",
+            frame,
+            column=column,
+            method="build",
+            n_bins=n_bins,
+            bin_method=bin_method,
         )
-
 
 class AnalyseCentralTendencyPolars(AbstractAnalyseCentralTendency[pl.DataFrame]):
     """Analyse central tendency measures across numerical columns.
@@ -661,7 +670,6 @@ class AnalyseCentralTendencyPolars(AbstractAnalyseCentralTendency[pl.DataFrame])
 
     def analyze(self, **kwargs) -> dict:
         # [ACTION puntual: conversio a pandas para calculadoras]
-        self._data_frame = self._data_frame.to_pandas() if hasattr(self._data_frame, 'to_pandas') else self._data_frame
         columns: list[str] | None = kwargs.get("columns")
         trim_proportion: float = kwargs.get("trim_proportion", 0.1)
 
@@ -688,7 +696,6 @@ class AnalyseCentralTendencyPolars(AbstractAnalyseCentralTendency[pl.DataFrame])
 
         return {"columns": column_results, "trim_proportion": trim_proportion}
 
-
 class AnalyseDispersionPolars(AbstractAnalyseDispersion[pl.DataFrame]):
     """Analyse dispersion measures across numerical columns.
 
@@ -702,7 +709,6 @@ class AnalyseDispersionPolars(AbstractAnalyseDispersion[pl.DataFrame]):
 
     def analyze(self, **kwargs) -> dict:
         # [ACTION puntual: conversio a pandas para calculadoras]
-        self._data_frame = self._data_frame.to_pandas() if hasattr(self._data_frame, 'to_pandas') else self._data_frame
         columns: list[str] | None = kwargs.get("columns")
         ddof: int = kwargs.get("ddof", 1)
 
@@ -726,7 +732,6 @@ class AnalyseDispersionPolars(AbstractAnalyseDispersion[pl.DataFrame]):
 
         return {"columns": column_results, "ddof": ddof}
 
-
 class AnalyseHypothesisTestPolars(AbstractAnalyseHypothesisTest[pl.DataFrame]):
     """Run a parametric or non-parametric hypothesis test on two DataFrame columns.
 
@@ -743,7 +748,6 @@ class AnalyseHypothesisTestPolars(AbstractAnalyseHypothesisTest[pl.DataFrame]):
 
     def analyze(self, **kwargs) -> dict:
         # [ACTION puntual: conversio a pandas para calculadoras]
-        self._data_frame = self._data_frame.to_pandas() if hasattr(self._data_frame, 'to_pandas') else self._data_frame
         column_a: str = kwargs.get("column_a")
         column_b: str | None = kwargs.get("column_b")
 
@@ -769,7 +773,6 @@ class AnalyseHypothesisTestPolars(AbstractAnalyseHypothesisTest[pl.DataFrame]):
             alternative=kwargs.get("alternative", "two-sided"),
         )
 
-
 class AnalyseAnovaPolars(AbstractAnalyseAnova[pl.DataFrame]):
     """Run one-way ANOVA across multiple DataFrame columns as groups.
 
@@ -784,7 +787,6 @@ class AnalyseAnovaPolars(AbstractAnalyseAnova[pl.DataFrame]):
 
     def analyze(self, **kwargs) -> dict:
         # [ACTION puntual: conversio a pandas para calculadoras]
-        self._data_frame = self._data_frame.to_pandas() if hasattr(self._data_frame, 'to_pandas') else self._data_frame
         group_column_map: dict[str, str] = kwargs.get("groups")
 
         if group_column_map is None:
@@ -810,7 +812,6 @@ class AnalyseAnovaPolars(AbstractAnalyseAnova[pl.DataFrame]):
             run_post_hoc=kwargs.get("run_post_hoc", True),
         )
 
-
 class AnalyseChiSquarePolars(AbstractAnalyseChiSquare[pl.DataFrame]):
     """Chi-square independence test between two categorical columns.
 
@@ -825,7 +826,6 @@ class AnalyseChiSquarePolars(AbstractAnalyseChiSquare[pl.DataFrame]):
 
     def analyze(self, **kwargs) -> dict:
         # [ACTION puntual: conversio a pandas para calculadoras]
-        self._data_frame = self._data_frame.to_pandas() if hasattr(self._data_frame, 'to_pandas') else self._data_frame
         column_a: str = kwargs.get("column_a")
         column_b: str = kwargs.get("column_b")
 
@@ -840,7 +840,6 @@ class AnalyseChiSquarePolars(AbstractAnalyseChiSquare[pl.DataFrame]):
             series_b=self._data_frame[column_b].dropna(),
             significance_level=kwargs.get("significance_level", 0.05),
         )
-
 
 class AnalyseCorrelationSignificancePolars(AbstractAnalyseCorrelationSignificance[pl.DataFrame]):
     """Correlation with significance test and confidence interval.
@@ -858,7 +857,6 @@ class AnalyseCorrelationSignificancePolars(AbstractAnalyseCorrelationSignificanc
 
     def analyze(self, **kwargs) -> dict:
         # [ACTION puntual: conversio a pandas para calculadoras]
-        self._data_frame = self._data_frame.to_pandas() if hasattr(self._data_frame, 'to_pandas') else self._data_frame
         column_x: str = kwargs.get("column_x")
         column_y: str = kwargs.get("column_y")
 
@@ -877,7 +875,6 @@ class AnalyseCorrelationSignificancePolars(AbstractAnalyseCorrelationSignificanc
             significance_level=kwargs.get("significance_level", 0.05),
             confidence_level=kwargs.get("confidence_level", 0.95),
         )
-
 
 class AnalyseConfidenceIntervalsPolars(AbstractAnalyseConfidenceIntervals[pl.DataFrame]):
     """Compute confidence intervals for mean, proportion, or mean difference.
@@ -910,7 +907,6 @@ class AnalyseConfidenceIntervalsPolars(AbstractAnalyseConfidenceIntervals[pl.Dat
 
     def analyze(self, **kwargs) -> dict:
         # [ACTION puntual: conversio a pandas para calculadoras]
-        self._data_frame = self._data_frame.to_pandas() if hasattr(self._data_frame, 'to_pandas') else self._data_frame
         ci_type: str = kwargs.get("ci_type", "mean")
         confidence_level: float = kwargs.get("confidence_level", 0.95)
         calculator = ConfidenceIntervalCalculator()
@@ -960,7 +956,6 @@ class AnalyseConfidenceIntervalsPolars(AbstractAnalyseConfidenceIntervals[pl.Dat
             f"Available: 'mean', 'proportion', 'mean_difference'."
         )
 
-
 class AnalyseEffectSizePolars(AbstractAnalyseEffectSize[pl.DataFrame]):
     """Calculate effect size (Cohen's d or Eta-squared) from DataFrame columns.
 
@@ -983,7 +978,6 @@ class AnalyseEffectSizePolars(AbstractAnalyseEffectSize[pl.DataFrame]):
 
     def analyze(self, **kwargs) -> dict:
         # [ACTION puntual: conversio a pandas para calculadoras]
-        self._data_frame = self._data_frame.to_pandas() if hasattr(self._data_frame, 'to_pandas') else self._data_frame
         effect_type: str = kwargs.get("effect_type", "cohens_d")
 
         if effect_type == "cohens_d":
@@ -1018,7 +1012,6 @@ class AnalyseEffectSizePolars(AbstractAnalyseEffectSize[pl.DataFrame]):
             f"Available: 'cohens_d', 'eta_squared'."
         )
 
-
 class AnalysePowerAnalysisPolars(AbstractAnalysePowerAnalysis[pl.DataFrame]):
     """Statistical power analysis from DataFrame context.
 
@@ -1042,7 +1035,6 @@ class AnalysePowerAnalysisPolars(AbstractAnalysePowerAnalysis[pl.DataFrame]):
 
     def analyze(self, **kwargs) -> dict:
         # [ACTION puntual: conversio a pandas para calculadoras]
-        self._data_frame = self._data_frame.to_pandas() if hasattr(self._data_frame, 'to_pandas') else self._data_frame
         analysis_type: str = kwargs.get("analysis_type", "minimum_n")
         alpha: float = kwargs.get("alpha", 0.05)
 
@@ -1083,7 +1075,6 @@ class AnalysePowerAnalysisPolars(AbstractAnalysePowerAnalysis[pl.DataFrame]):
             f"Available: 'minimum_n', 'observed_power'."
         )
 
-
 class AnalyseBootstrapPolars(AbstractAnalyseBootstrap[pl.DataFrame]):
     """Non-parametric bootstrap CI for any statistic on a column.
 
@@ -1100,7 +1091,6 @@ class AnalyseBootstrapPolars(AbstractAnalyseBootstrap[pl.DataFrame]):
 
     def analyze(self, **kwargs) -> dict:
         # [ACTION puntual: conversio a pandas para calculadoras]
-        self._data_frame = self._data_frame.to_pandas() if hasattr(self._data_frame, 'to_pandas') else self._data_frame
         column: str = kwargs.get("column")
         statistic = kwargs.get("statistic", np.mean)
 
@@ -1119,7 +1109,6 @@ class AnalyseBootstrapPolars(AbstractAnalyseBootstrap[pl.DataFrame]):
             random_seed=kwargs.get("random_seed", 42),
         )
 
-
 class AnalyseCorrelationMatrixPolars(AbstractAnalyseCorrelationMatrix[pl.DataFrame]):
     """Full correlation matrix with ranked pairs and multicollinearity flags.
 
@@ -1136,7 +1125,6 @@ class AnalyseCorrelationMatrixPolars(AbstractAnalyseCorrelationMatrix[pl.DataFra
 
     def analyze(self, **kwargs) -> dict:
         # [ACTION puntual: conversio a pandas para calculadoras]
-        self._data_frame = self._data_frame.to_pandas() if hasattr(self._data_frame, 'to_pandas') else self._data_frame
         columns: list[str] | None = kwargs.get("columns")
         numeric_df = self._data_frame.select_dtypes(include=[np.number])
 
@@ -1157,7 +1145,6 @@ class AnalyseCorrelationMatrixPolars(AbstractAnalyseCorrelationMatrix[pl.DataFra
             high_correlation_flag=kwargs.get("high_correlation_flag", 0.85),
         )
 
-
 class AnalyseMulticollinearityPolars(AbstractAnalyseMulticollinearity[pl.DataFrame]):
     """VIF-based multicollinearity detection for linear model preparation.
 
@@ -1171,7 +1158,6 @@ class AnalyseMulticollinearityPolars(AbstractAnalyseMulticollinearity[pl.DataFra
 
     def analyze(self, **kwargs) -> dict:
         # [ACTION puntual: conversio a pandas para calculadoras]
-        self._data_frame = self._data_frame.to_pandas() if hasattr(self._data_frame, 'to_pandas') else self._data_frame
         columns: list[str] | None = kwargs.get("columns")
         numeric_df = self._data_frame.select_dtypes(include=[np.number])
 
@@ -1189,7 +1175,6 @@ class AnalyseMulticollinearityPolars(AbstractAnalyseMulticollinearity[pl.DataFra
             high_vif_threshold=kwargs.get("high_vif_threshold", 10.0),
         )
 
-
 class AnalyseMutualInformationPolars(AbstractAnalyseMutualInformation[pl.DataFrame]):
     """MI-based feature relevance scoring against a target variable.
 
@@ -1206,7 +1191,6 @@ class AnalyseMutualInformationPolars(AbstractAnalyseMutualInformation[pl.DataFra
 
     def analyze(self, **kwargs) -> dict:
         # [ACTION puntual: conversio a pandas para calculadoras]
-        self._data_frame = self._data_frame.to_pandas() if hasattr(self._data_frame, 'to_pandas') else self._data_frame
         target_column: str = kwargs.get("target_column")
         feature_columns: list[str] | None = kwargs.get("feature_columns")
 
@@ -1231,7 +1215,6 @@ class AnalyseMutualInformationPolars(AbstractAnalyseMutualInformation[pl.DataFra
             random_seed=kwargs.get("random_seed", 42),
         )
 
-
 class AnalysePartialCorrelationPolars(AbstractAnalysePartialCorrelation[pl.DataFrame]):
     """Partial correlation between two columns controlling for confounders.
 
@@ -1247,7 +1230,6 @@ class AnalysePartialCorrelationPolars(AbstractAnalysePartialCorrelation[pl.DataF
 
     def analyze(self, **kwargs) -> dict:
         # [ACTION puntual: conversio a pandas para calculadoras]
-        self._data_frame = self._data_frame.to_pandas() if hasattr(self._data_frame, 'to_pandas') else self._data_frame
         column_x: str = kwargs.get("column_x")
         column_y: str = kwargs.get("column_y")
         control_columns: list[str] = kwargs.get("control_columns", [])
@@ -1267,7 +1249,6 @@ class AnalysePartialCorrelationPolars(AbstractAnalysePartialCorrelation[pl.DataF
             significance_level=kwargs.get("significance_level", 0.05),
         )
 
-
 class AnalyseCrossCorrelationPolars(AbstractAnalyseCrossCorrelation[pl.DataFrame]):
     """Cross-correlation between two time series across a range of lags.
 
@@ -1282,7 +1263,6 @@ class AnalyseCrossCorrelationPolars(AbstractAnalyseCrossCorrelation[pl.DataFrame
 
     def analyze(self, **kwargs) -> dict:
         # [ACTION puntual: conversio a pandas para calculadoras]
-        self._data_frame = self._data_frame.to_pandas() if hasattr(self._data_frame, 'to_pandas') else self._data_frame
         column_x: str = kwargs.get("column_x")
         column_y: str = kwargs.get("column_y")
 
@@ -1295,7 +1275,6 @@ class AnalyseCrossCorrelationPolars(AbstractAnalyseCrossCorrelation[pl.DataFrame
             column_y=column_y,
             max_lag=kwargs.get("max_lag", 10),
         )
-
 
 class AnalyseGrangerCausalityPolars(AbstractAnalyseGrangerCausality[pl.DataFrame]):
     """Granger causality test: does x improve forecasts of y?
@@ -1312,7 +1291,6 @@ class AnalyseGrangerCausalityPolars(AbstractAnalyseGrangerCausality[pl.DataFrame
 
     def analyze(self, **kwargs) -> dict:
         # [ACTION puntual: conversio a pandas para calculadoras]
-        self._data_frame = self._data_frame.to_pandas() if hasattr(self._data_frame, 'to_pandas') else self._data_frame
         column_y: str = kwargs.get("column_y")
         column_x: str = kwargs.get("column_x")
 
@@ -1326,7 +1304,6 @@ class AnalyseGrangerCausalityPolars(AbstractAnalyseGrangerCausality[pl.DataFrame
             max_lag=kwargs.get("max_lag", 4),
             significance_level=kwargs.get("significance_level", 0.05),
         )
-
 
 class AnalyseContingencyPolars(AbstractAnalyseContingency[pl.DataFrame]):
     """Full 2×2 contingency analysis: chi-square, OR, RR, Cramér's V.
@@ -1343,7 +1320,6 @@ class AnalyseContingencyPolars(AbstractAnalyseContingency[pl.DataFrame]):
 
     def analyze(self, **kwargs) -> dict:
         # [ACTION puntual: conversio a pandas para calculadoras]
-        self._data_frame = self._data_frame.to_pandas() if hasattr(self._data_frame, 'to_pandas') else self._data_frame
         column_exposure: str = kwargs.get("column_exposure")
         column_outcome: str = kwargs.get("column_outcome")
 
@@ -1357,7 +1333,6 @@ class AnalyseContingencyPolars(AbstractAnalyseContingency[pl.DataFrame]):
             significance_level=kwargs.get("significance_level", 0.05),
             confidence_level=kwargs.get("confidence_level", 0.95),
         )
-
 
 class AnalyseInteractionEffectsPolars(AbstractAnalyseInteractionEffects[pl.DataFrame]):
     """Detect feature pairs whose interaction improves target R².
@@ -1374,7 +1349,6 @@ class AnalyseInteractionEffectsPolars(AbstractAnalyseInteractionEffects[pl.DataF
 
     def analyze(self, **kwargs) -> dict:
         # [ACTION puntual: conversio a pandas para calculadoras]
-        self._data_frame = self._data_frame.to_pandas() if hasattr(self._data_frame, 'to_pandas') else self._data_frame
         target_column: str = kwargs.get("target_column")
         if target_column is None:
             raise ValueError("'target_column' is required.")
@@ -1387,7 +1361,6 @@ class AnalyseInteractionEffectsPolars(AbstractAnalyseInteractionEffects[pl.DataF
             top_n=kwargs.get("top_n"),
         )
 
-
 # ── DOMAIN 5 IMPORTS ──────────────────────────────────────────────────────────
 from statistics.ml_support.feature_variance import FeatureVarianceCalculator
 from statistics.ml_support.feature_selection import FeatureSelectionCalculator
@@ -1397,7 +1370,6 @@ from statistics.ml_support.class_imbalance import ClassImbalanceCalculator
 from statistics.ml_support.model_residuals import ModelResidualsCalculator
 from statistics.ml_support.learning_curve import LearningCurveCalculator
 from statistics.ml_support.cross_validation import CrossValidationCalculator
-
 
 class AnalyseFeatureVariancePolars(AbstractAnalyseFeatureVariance[pl.DataFrame]):
     """Near-zero variance detection across all numeric columns.
@@ -1413,14 +1385,12 @@ class AnalyseFeatureVariancePolars(AbstractAnalyseFeatureVariance[pl.DataFrame])
 
     def analyze(self, **kwargs) -> dict:
         # [ACTION puntual: conversio a pandas para calculadoras]
-        self._data_frame = self._data_frame.to_pandas() if hasattr(self._data_frame, 'to_pandas') else self._data_frame
         return FeatureVarianceCalculator().calculate(
             data_frame=self._data_frame,
             variance_threshold=kwargs.get("variance_threshold", 1e-4),
             unique_ratio_threshold=kwargs.get("unique_ratio_threshold", 0.01),
             frequency_ratio_threshold=kwargs.get("frequency_ratio_threshold", 0.95),
         )
-
 
 class AnalyseFeatureSelectionPolars(AbstractAnalyseFeatureSelection[pl.DataFrame]):
     """Univariate feature scoring: chi2, ANOVA F, mutual information.
@@ -1438,7 +1408,6 @@ class AnalyseFeatureSelectionPolars(AbstractAnalyseFeatureSelection[pl.DataFrame
 
     def analyze(self, **kwargs) -> dict:
         # [ACTION puntual: conversio a pandas para calculadoras]
-        self._data_frame = self._data_frame.to_pandas() if hasattr(self._data_frame, 'to_pandas') else self._data_frame
         target_column: str = kwargs.get("target_column")
         if target_column is None:
             raise ValueError("'target_column' is required.")
@@ -1454,7 +1423,6 @@ class AnalyseFeatureSelectionPolars(AbstractAnalyseFeatureSelection[pl.DataFrame
             top_n=kwargs.get("top_n"),
             random_seed=kwargs.get("random_seed", 42),
         )
-
 
 class AnalyseFeatureImportancePolars(AbstractAnalyseFeatureImportance[pl.DataFrame]):
     """Random Forest Gini and permutation importance.
@@ -1473,7 +1441,6 @@ class AnalyseFeatureImportancePolars(AbstractAnalyseFeatureImportance[pl.DataFra
 
     def analyze(self, **kwargs) -> dict:
         # [ACTION puntual: conversio a pandas para calculadoras]
-        self._data_frame = self._data_frame.to_pandas() if hasattr(self._data_frame, 'to_pandas') else self._data_frame
         target_column: str = kwargs.get("target_column")
         if target_column is None:
             raise ValueError("'target_column' is required.")
@@ -1492,7 +1459,6 @@ class AnalyseFeatureImportancePolars(AbstractAnalyseFeatureImportance[pl.DataFra
             random_seed=kwargs.get("random_seed", 42),
         )
 
-
 class AnalyseDimensionalityReductionPolars(AbstractAnalyseDimensionalityReduction[pl.DataFrame]):
     """PCA with variance explained, loadings, and optimal component selection.
 
@@ -1507,7 +1473,6 @@ class AnalyseDimensionalityReductionPolars(AbstractAnalyseDimensionalityReductio
 
     def analyze(self, **kwargs) -> dict:
         # [ACTION puntual: conversio a pandas para calculadoras]
-        self._data_frame = self._data_frame.to_pandas() if hasattr(self._data_frame, 'to_pandas') else self._data_frame
         columns: list[str] | None = kwargs.get("columns")
         numeric_df = self._data_frame.select_dtypes(include=[np.number])
 
@@ -1526,7 +1491,6 @@ class AnalyseDimensionalityReductionPolars(AbstractAnalyseDimensionalityReductio
             target_variance_explained=kwargs.get("target_variance_explained", 0.95),
         )
 
-
 class AnalyseClassImbalancePolars(AbstractAnalyseClassImbalance[pl.DataFrame]):
     """Class distribution analysis with resampling strategy recommendation.
 
@@ -1540,7 +1504,6 @@ class AnalyseClassImbalancePolars(AbstractAnalyseClassImbalance[pl.DataFrame]):
 
     def analyze(self, **kwargs) -> dict:
         # [ACTION puntual: conversio a pandas para calculadoras]
-        self._data_frame = self._data_frame.to_pandas() if hasattr(self._data_frame, 'to_pandas') else self._data_frame
         target_column: str = kwargs.get("target_column")
         if target_column is None:
             raise ValueError("'target_column' is required.")
@@ -1551,7 +1514,6 @@ class AnalyseClassImbalancePolars(AbstractAnalyseClassImbalance[pl.DataFrame]):
             series=self._data_frame[target_column],
             minority_threshold=kwargs.get("minority_threshold", 0.3),
         )
-
 
 class AnalyseModelResidualsPolars(AbstractAnalyseModelResiduals[pl.DataFrame]):
     """Residual diagnostics: normality, homoscedasticity, autocorrelation.
@@ -1567,7 +1529,6 @@ class AnalyseModelResidualsPolars(AbstractAnalyseModelResiduals[pl.DataFrame]):
 
     def analyze(self, **kwargs) -> dict:
         # [ACTION puntual: conversio a pandas para calculadoras]
-        self._data_frame = self._data_frame.to_pandas() if hasattr(self._data_frame, 'to_pandas') else self._data_frame
         actual_column: str = kwargs.get("actual_column")
         predicted_column: str = kwargs.get("predicted_column")
 
@@ -1583,7 +1544,6 @@ class AnalyseModelResidualsPolars(AbstractAnalyseModelResiduals[pl.DataFrame]):
             y_pred=paired[predicted_column].to_numpy(dtype=float),
             significance_level=kwargs.get("significance_level", 0.05),
         )
-
 
 class AnalyseLearningCurvePolars(AbstractAnalyseLearningCurve[pl.DataFrame]):
     """Learning curve for bias-variance diagnosis across training sizes.
@@ -1607,7 +1567,6 @@ class AnalyseLearningCurvePolars(AbstractAnalyseLearningCurve[pl.DataFrame]):
 
     def analyze(self, **kwargs) -> dict:
         # [ACTION puntual: conversio a pandas para calculadoras]
-        self._data_frame = self._data_frame.to_pandas() if hasattr(self._data_frame, 'to_pandas') else self._data_frame
         target_column: str = kwargs.get("target_column")
         estimator = kwargs.get("estimator")
 
@@ -1631,7 +1590,6 @@ class AnalyseLearningCurvePolars(AbstractAnalyseLearningCurve[pl.DataFrame]):
             random_seed=kwargs.get("random_seed", 42),
         )
 
-
 class AnalyseCrossValidationPolars(AbstractAnalyseCrossValidation[pl.DataFrame]):
     """K-Fold / Stratified / Repeated cross-validation with CI.
 
@@ -1653,7 +1611,6 @@ class AnalyseCrossValidationPolars(AbstractAnalyseCrossValidation[pl.DataFrame])
 
     def analyze(self, **kwargs) -> dict:
         # [ACTION puntual: conversio a pandas para calculadoras]
-        self._data_frame = self._data_frame.to_pandas() if hasattr(self._data_frame, 'to_pandas') else self._data_frame
         target_column: str = kwargs.get("target_column")
         estimator = kwargs.get("estimator")
 
@@ -1678,7 +1635,6 @@ class AnalyseCrossValidationPolars(AbstractAnalyseCrossValidation[pl.DataFrame])
             n_jobs=kwargs.get("n_jobs", -1),
         )
 
-
 # ── DOMAIN 4 IMPORTS ──────────────────────────────────────────────────────────
 from statistics.time_series.volatility import VolatilityCalculator
 from statistics.time_series.momentum import MomentumCalculator
@@ -1690,13 +1646,11 @@ from statistics.time_series.forecast_accuracy import ForecastAccuracyCalculator
 from statistics.time_series.cyclical_patterns import CyclicalPatternsCalculator
 from statistics.time_series.rolling_statistics import RollingStatisticsCalculator
 
-
 class AnalyseVolatilityPolars(AbstractAnalyseVolatility[pl.DataFrame]):
     """Rolling std, EWMA volatility, CV and regime detection."""
 
     def analyze(self, **kwargs) -> dict:
         # [ACTION puntual: conversio a pandas para calculadoras]
-        self._data_frame = self._data_frame.to_pandas() if hasattr(self._data_frame, 'to_pandas') else self._data_frame
         column: str = kwargs.get("column")
         if column is None:
             raise ValueError("'column' is required.")
@@ -1709,13 +1663,11 @@ class AnalyseVolatilityPolars(AbstractAnalyseVolatility[pl.DataFrame]):
             decay_factor=kwargs.get("decay_factor", 0.94),
         )
 
-
 class AnalyseMomentumPolars(AbstractAnalyseMomentum[pl.DataFrame]):
     """Rate of change, acceleration, and momentum signal classification."""
 
     def analyze(self, **kwargs) -> dict:
         # [ACTION puntual: conversio a pandas para calculadoras]
-        self._data_frame = self._data_frame.to_pandas() if hasattr(self._data_frame, 'to_pandas') else self._data_frame
         column: str = kwargs.get("column")
         if column is None:
             raise ValueError("'column' is required.")
@@ -1727,13 +1679,11 @@ class AnalyseMomentumPolars(AbstractAnalyseMomentum[pl.DataFrame]):
             period=kwargs.get("period", 14),
         )
 
-
 class AnalyseMovingAveragesPolars(AbstractAnalyseMovingAverages[pl.DataFrame]):
     """SMA, EMA, WMA computation with optional crossover detection."""
 
     def analyze(self, **kwargs) -> dict:
         # [ACTION puntual: conversio a pandas para calculadoras]
-        self._data_frame = self._data_frame.to_pandas() if hasattr(self._data_frame, 'to_pandas') else self._data_frame
         column: str = kwargs.get("column")
         if column is None:
             raise ValueError("'column' is required.")
@@ -1750,13 +1700,11 @@ class AnalyseMovingAveragesPolars(AbstractAnalyseMovingAverages[pl.DataFrame]):
             crossover_ma_type=kwargs.get("crossover_ma_type", "ema"),
         )
 
-
 class AnalyseStationarityPolars(AbstractAnalyseStationarity[pl.DataFrame]):
     """ADF + KPSS combined stationarity test with recommendation."""
 
     def analyze(self, **kwargs) -> dict:
         # [ACTION puntual: conversio a pandas para calculadoras]
-        self._data_frame = self._data_frame.to_pandas() if hasattr(self._data_frame, 'to_pandas') else self._data_frame
         column: str = kwargs.get("column")
         if column is None:
             raise ValueError("'column' is required.")
@@ -1769,13 +1717,11 @@ class AnalyseStationarityPolars(AbstractAnalyseStationarity[pl.DataFrame]):
             significance_level=kwargs.get("significance_level", 0.05),
         )
 
-
 class AnalyseLagFeaturesPolars(AbstractAnalyseLagFeatures[pl.DataFrame]):
     """ACF, PACF analysis and lag feature generation."""
 
     def analyze(self, **kwargs) -> dict:
         # [ACTION puntual: conversio a pandas para calculadoras]
-        self._data_frame = self._data_frame.to_pandas() if hasattr(self._data_frame, 'to_pandas') else self._data_frame
         column: str = kwargs.get("column")
         if column is None:
             raise ValueError("'column' is required.")
@@ -1788,13 +1734,11 @@ class AnalyseLagFeaturesPolars(AbstractAnalyseLagFeatures[pl.DataFrame]):
             significance_level=kwargs.get("significance_level", 0.05),
         )
 
-
 class AnalyseChangePointsPolars(AbstractAnalyseChangePoints[pl.DataFrame]):
     """CUSUM mean-shift and variance change point detection."""
 
     def analyze(self, **kwargs) -> dict:
         # [ACTION puntual: conversio a pandas para calculadoras]
-        self._data_frame = self._data_frame.to_pandas() if hasattr(self._data_frame, 'to_pandas') else self._data_frame
         column: str = kwargs.get("column")
         if column is None:
             raise ValueError("'column' is required.")
@@ -1808,13 +1752,11 @@ class AnalyseChangePointsPolars(AbstractAnalyseChangePoints[pl.DataFrame]):
             variance_ratio_threshold=kwargs.get("variance_ratio_threshold", 2.0),
         )
 
-
 class AnalyseForecastAccuracyPolars(AbstractAnalyseForecastAccuracy[pl.DataFrame]):
     """MAE, RMSE, MAPE, MASE forecast accuracy metrics."""
 
     def analyze(self, **kwargs) -> dict:
         # [ACTION puntual: conversio a pandas para calculadoras]
-        self._data_frame = self._data_frame.to_pandas() if hasattr(self._data_frame, 'to_pandas') else self._data_frame
         actual_column: str = kwargs.get("actual_column")
         predicted_column: str = kwargs.get("predicted_column")
         if actual_column is None or predicted_column is None:
@@ -1829,13 +1771,11 @@ class AnalyseForecastAccuracyPolars(AbstractAnalyseForecastAccuracy[pl.DataFrame
             metrics=kwargs.get("metrics"),
         )
 
-
 class AnalyseCyclicalPatternsPolars(AbstractAnalyseCyclicalPatterns[pl.DataFrame]):
     """FFT-based dominant cycle detection."""
 
     def analyze(self, **kwargs) -> dict:
         # [ACTION puntual: conversio a pandas para calculadoras]
-        self._data_frame = self._data_frame.to_pandas() if hasattr(self._data_frame, 'to_pandas') else self._data_frame
         column: str = kwargs.get("column")
         if column is None:
             raise ValueError("'column' is required.")
@@ -1849,13 +1789,11 @@ class AnalyseCyclicalPatternsPolars(AbstractAnalyseCyclicalPatterns[pl.DataFrame
             apply_window=kwargs.get("apply_window", True),
         )
 
-
 class AnalyseRollingStatisticsPolars(AbstractAnalyseRollingStatistics[pl.DataFrame]):
     """Configurable rolling statistics: mean, std, min, max, median, skewness."""
 
     def analyze(self, **kwargs) -> dict:
         # [ACTION puntual: conversio a pandas para calculadoras]
-        self._data_frame = self._data_frame.to_pandas() if hasattr(self._data_frame, 'to_pandas') else self._data_frame
         column: str = kwargs.get("column")
         if column is None:
             raise ValueError("'column' is required.")
@@ -1867,7 +1805,6 @@ class AnalyseRollingStatisticsPolars(AbstractAnalyseRollingStatistics[pl.DataFra
             window=kwargs.get("window", 20),
             statistics=kwargs.get("statistics"),
         )
-
 
 class AnalyseTextBasicStatsPolars(AbstractAnalyseTextBasicStats[pl.DataFrame]):
     """Per-document and corpus-level text statistics.
@@ -1882,7 +1819,6 @@ class AnalyseTextBasicStatsPolars(AbstractAnalyseTextBasicStats[pl.DataFrame]):
 
     def analyze(self, **kwargs) -> dict:
         # [ACTION puntual: conversio a pandas para calculadoras]
-        self._data_frame = self._data_frame.to_pandas() if hasattr(self._data_frame, 'to_pandas') else self._data_frame
         column: str = kwargs.get("column")
         if column is None:
             raise ValueError("'column' is required.")
@@ -1893,7 +1829,6 @@ class AnalyseTextBasicStatsPolars(AbstractAnalyseTextBasicStats[pl.DataFrame]):
             series=self._data_frame[column],
             sample_n=kwargs.get("sample_n"),
         )
-
 
 class AnalyseWordFrequencyPolars(AbstractAnalyseWordFrequency[pl.DataFrame]):
     """TF and TF-IDF term frequency ranking across a text corpus.
@@ -1910,7 +1845,6 @@ class AnalyseWordFrequencyPolars(AbstractAnalyseWordFrequency[pl.DataFrame]):
 
     def analyze(self, **kwargs) -> dict:
         # [ACTION puntual: conversio a pandas para calculadoras]
-        self._data_frame = self._data_frame.to_pandas() if hasattr(self._data_frame, 'to_pandas') else self._data_frame
         column: str = kwargs.get("column")
         if column is None:
             raise ValueError("'column' is required.")
@@ -1923,7 +1857,6 @@ class AnalyseWordFrequencyPolars(AbstractAnalyseWordFrequency[pl.DataFrame]):
             remove_stopwords=kwargs.get("remove_stopwords", True),
             custom_stopwords=kwargs.get("custom_stopwords"),
         )
-
 
 class AnalyseSentimentPolars(AbstractAnalyseSentiment[pl.DataFrame]):
     """Lexicon-based polarity and subjectivity analysis.
@@ -1938,7 +1871,6 @@ class AnalyseSentimentPolars(AbstractAnalyseSentiment[pl.DataFrame]):
 
     def analyze(self, **kwargs) -> dict:
         # [ACTION puntual: conversio a pandas para calculadoras]
-        self._data_frame = self._data_frame.to_pandas() if hasattr(self._data_frame, 'to_pandas') else self._data_frame
         column: str = kwargs.get("column")
         if column is None:
             raise ValueError("'column' is required.")
@@ -1949,7 +1881,6 @@ class AnalyseSentimentPolars(AbstractAnalyseSentiment[pl.DataFrame]):
             series=self._data_frame[column],
             sample_n=kwargs.get("sample_n"),
         )
-
 
 class AnalyseTopicDetectionPolars(AbstractAnalyseTopicDetection[pl.DataFrame]):
     """NMF-based latent topic discovery in a text corpus.
@@ -1968,7 +1899,6 @@ class AnalyseTopicDetectionPolars(AbstractAnalyseTopicDetection[pl.DataFrame]):
 
     def analyze(self, **kwargs) -> dict:
         # [ACTION puntual: conversio a pandas para calculadoras]
-        self._data_frame = self._data_frame.to_pandas() if hasattr(self._data_frame, 'to_pandas') else self._data_frame
         column: str = kwargs.get("column")
         if column is None:
             raise ValueError("'column' is required.")
@@ -1984,7 +1914,6 @@ class AnalyseTopicDetectionPolars(AbstractAnalyseTopicDetection[pl.DataFrame]):
             random_seed=kwargs.get("random_seed", 42),
         )
 
-
 class AnalyseLanguageDetectionPolars(AbstractAnalyseLanguageDetection[pl.DataFrame]):
     """Character trigram-based language detection per document.
 
@@ -1998,7 +1927,6 @@ class AnalyseLanguageDetectionPolars(AbstractAnalyseLanguageDetection[pl.DataFra
 
     def analyze(self, **kwargs) -> dict:
         # [ACTION puntual: conversio a pandas para calculadoras]
-        self._data_frame = self._data_frame.to_pandas() if hasattr(self._data_frame, 'to_pandas') else self._data_frame
         column: str = kwargs.get("column")
         if column is None:
             raise ValueError("'column' is required.")
@@ -2009,7 +1937,6 @@ class AnalyseLanguageDetectionPolars(AbstractAnalyseLanguageDetection[pl.DataFra
             series=self._data_frame[column],
             top_n_candidates=kwargs.get("top_n_candidates", 3),
         )
-
 
 class AnalyseTextSimilarityPolars(AbstractAnalyseTextSimilarity[pl.DataFrame]):
     """Pairwise TF-IDF cosine similarity between two text columns.
@@ -2024,7 +1951,6 @@ class AnalyseTextSimilarityPolars(AbstractAnalyseTextSimilarity[pl.DataFrame]):
 
     def analyze(self, **kwargs) -> dict:
         # [ACTION puntual: conversio a pandas para calculadoras]
-        self._data_frame = self._data_frame.to_pandas() if hasattr(self._data_frame, 'to_pandas') else self._data_frame
         column_a: str = kwargs.get("column_a")
         column_b: str = kwargs.get("column_b")
 
@@ -2040,7 +1966,6 @@ class AnalyseTextSimilarityPolars(AbstractAnalyseTextSimilarity[pl.DataFrame]):
             column_b=column_b,
         )
 
-
 class AnalyseNamedEntityDensityPolars(AbstractAnalyseNamedEntityDensity[pl.DataFrame]):
     """Rule-based named entity detection and density analysis.
 
@@ -2055,7 +1980,6 @@ class AnalyseNamedEntityDensityPolars(AbstractAnalyseNamedEntityDensity[pl.DataF
 
     def analyze(self, **kwargs) -> dict:
         # [ACTION puntual: conversio a pandas para calculadoras]
-        self._data_frame = self._data_frame.to_pandas() if hasattr(self._data_frame, 'to_pandas') else self._data_frame
         column: str = kwargs.get("column")
         if column is None:
             raise ValueError("'column' is required.")
@@ -2068,11 +1992,7 @@ class AnalyseNamedEntityDensityPolars(AbstractAnalyseNamedEntityDensity[pl.DataF
             sample_n=kwargs.get("sample_n"),
         )
 
-
-
-
 # ── DOMAIN 7 — SEGMENTATION ───────────────────────────────────────────────────
-
 
 class AnalyseKMeansClustersPolars(AbstractAnalyseKMeansClusters[pl.DataFrame]):
     """K-Means clustering with auto K selection via silhouette score.
@@ -2089,7 +2009,6 @@ class AnalyseKMeansClustersPolars(AbstractAnalyseKMeansClusters[pl.DataFrame]):
 
     def analyze(self, **kwargs) -> dict:
         # [ACTION puntual: conversio a pandas para calculadoras]
-        self._data_frame = self._data_frame.to_pandas() if hasattr(self._data_frame, 'to_pandas') else self._data_frame
         feature_columns: list[str] | None = kwargs.get("feature_columns")
         if feature_columns is not None:
             missing = [c for c in feature_columns if c not in self._data_frame.columns]
@@ -2102,7 +2021,6 @@ class AnalyseKMeansClustersPolars(AbstractAnalyseKMeansClusters[pl.DataFrame]):
             k_range=kwargs.get("k_range", (2, 8)),
             random_seed=kwargs.get("random_seed", 42),
         )
-
 
 class AnalyseRFMSegmentationPolars(AbstractAnalyseRFMSegmentation[pl.DataFrame]):
     """RFM segmentation from transactional data.
@@ -2119,7 +2037,6 @@ class AnalyseRFMSegmentationPolars(AbstractAnalyseRFMSegmentation[pl.DataFrame])
 
     def analyze(self, **kwargs) -> dict:
         # [ACTION puntual: conversio a pandas para calculadoras]
-        self._data_frame = self._data_frame.to_pandas() if hasattr(self._data_frame, 'to_pandas') else self._data_frame
         required = ["customer_column", "date_column", "amount_column"]
         missing_params = [p for p in required if kwargs.get(p) is None]
         if missing_params:
@@ -2139,7 +2056,6 @@ class AnalyseRFMSegmentationPolars(AbstractAnalyseRFMSegmentation[pl.DataFrame])
             reference_date=kwargs.get("reference_date"),
         )
 
-
 class AnalyseCohortAnalysisPolars(AbstractAnalyseCohortAnalysis[pl.DataFrame]):
     """Cohort retention matrix by acquisition period.
 
@@ -2154,7 +2070,6 @@ class AnalyseCohortAnalysisPolars(AbstractAnalyseCohortAnalysis[pl.DataFrame]):
 
     def analyze(self, **kwargs) -> dict:
         # [ACTION puntual: conversio a pandas para calculadoras]
-        self._data_frame = self._data_frame.to_pandas() if hasattr(self._data_frame, 'to_pandas') else self._data_frame
         user_column: str = kwargs.get("user_column")
         date_column: str = kwargs.get("date_column")
         if user_column is None or date_column is None:
@@ -2168,7 +2083,6 @@ class AnalyseCohortAnalysisPolars(AbstractAnalyseCohortAnalysis[pl.DataFrame]):
             date_column=date_column,
             period=kwargs.get("period", "M"),
         )
-
 
 class AnalysePopulationSplitsPolars(AbstractAnalysePopulationSplits[pl.DataFrame]):
     """Statistical feature comparison between two population groups.
@@ -2186,7 +2100,6 @@ class AnalysePopulationSplitsPolars(AbstractAnalysePopulationSplits[pl.DataFrame
 
     def analyze(self, **kwargs) -> dict:
         # [ACTION puntual: conversio a pandas para calculadoras]
-        self._data_frame = self._data_frame.to_pandas() if hasattr(self._data_frame, 'to_pandas') else self._data_frame
         split_column: str = kwargs.get("split_column")
         group_a_value = kwargs.get("group_a_value")
         group_b_value = kwargs.get("group_b_value")
@@ -2205,7 +2118,6 @@ class AnalysePopulationSplitsPolars(AbstractAnalysePopulationSplits[pl.DataFrame
             significance_level=kwargs.get("significance_level", 0.05),
         )
 
-
 class AnalyseDBSCANClustersPolars(AbstractAnalyseDBSCANClusters[pl.DataFrame]):
     """DBSCAN density-based clustering with auto epsilon estimation.
 
@@ -2220,7 +2132,6 @@ class AnalyseDBSCANClustersPolars(AbstractAnalyseDBSCANClusters[pl.DataFrame]):
 
     def analyze(self, **kwargs) -> dict:
         # [ACTION puntual: conversio a pandas para calculadoras]
-        self._data_frame = self._data_frame.to_pandas() if hasattr(self._data_frame, 'to_pandas') else self._data_frame
         feature_columns: list[str] | None = kwargs.get("feature_columns")
         if feature_columns is not None:
             missing = [c for c in feature_columns if c not in self._data_frame.columns]
@@ -2233,7 +2144,6 @@ class AnalyseDBSCANClustersPolars(AbstractAnalyseDBSCANClusters[pl.DataFrame]):
             min_samples=kwargs.get("min_samples", 5),
             random_seed=kwargs.get("random_seed", 42),
         )
-
 
 class AnalyseHierarchicalClustersPolars(AbstractAnalyseHierarchicalClusters[pl.DataFrame]):
     """Hierarchical agglomerative clustering with cophenetic correlation.
@@ -2251,7 +2161,6 @@ class AnalyseHierarchicalClustersPolars(AbstractAnalyseHierarchicalClusters[pl.D
 
     def analyze(self, **kwargs) -> dict:
         # [ACTION puntual: conversio a pandas para calculadoras]
-        self._data_frame = self._data_frame.to_pandas() if hasattr(self._data_frame, 'to_pandas') else self._data_frame
         feature_columns: list[str] | None = kwargs.get("feature_columns")
         if feature_columns is not None:
             missing = [c for c in feature_columns if c not in self._data_frame.columns]
@@ -2265,7 +2174,6 @@ class AnalyseHierarchicalClustersPolars(AbstractAnalyseHierarchicalClusters[pl.D
             linkage_method=kwargs.get("linkage_method", "ward"),
             extract_dendrogram=kwargs.get("extract_dendrogram", False),
         )
-
 
 class AnalyseGrowthRatesPolars(AbstractAnalyseGrowthRates[pl.DataFrame]):
     """MoM/YoY period-over-period growth, CAGR, and rolling growth.
@@ -2282,7 +2190,6 @@ class AnalyseGrowthRatesPolars(AbstractAnalyseGrowthRates[pl.DataFrame]):
 
     def analyze(self, **kwargs) -> dict:
         # [ACTION puntual: conversio a pandas para calculadoras]
-        self._data_frame = self._data_frame.to_pandas() if hasattr(self._data_frame, 'to_pandas') else self._data_frame
         value_column: str = kwargs.get("value_column")
         if value_column is None:
             raise ValueError("'value_column' is required.")
@@ -2297,7 +2204,6 @@ class AnalyseGrowthRatesPolars(AbstractAnalyseGrowthRates[pl.DataFrame]):
             n_years=kwargs.get("n_years"),
             periods_per_year=kwargs.get("periods_per_year", 12),
         )
-
 
 class AnalyseRiskMetricsPolars(AbstractAnalyseRiskMetrics[pl.DataFrame]):
     """VaR, CVaR, Sharpe, Sortino, Max Drawdown, and Calmar ratio.
@@ -2315,7 +2221,6 @@ class AnalyseRiskMetricsPolars(AbstractAnalyseRiskMetrics[pl.DataFrame]):
 
     def analyze(self, **kwargs) -> dict:
         # [ACTION puntual: conversio a pandas para calculadoras]
-        self._data_frame = self._data_frame.to_pandas() if hasattr(self._data_frame, 'to_pandas') else self._data_frame
         value_column: str = kwargs.get("value_column")
         if value_column is None:
             raise ValueError("'value_column' is required.")
@@ -2331,7 +2236,6 @@ class AnalyseRiskMetricsPolars(AbstractAnalyseRiskMetrics[pl.DataFrame]):
             risk_free_rate=kwargs.get("risk_free_rate", 0.02),
             periods_per_year=kwargs.get("periods_per_year", 252),
         )
-
 
 class AnalyseFinancialRatiosPolars(AbstractAnalyseFinancialRatios[pl.DataFrame]):
     """Profitability, liquidity, leverage, and efficiency ratios.
@@ -2350,12 +2254,10 @@ class AnalyseFinancialRatiosPolars(AbstractAnalyseFinancialRatios[pl.DataFrame])
 
     def analyze(self, **kwargs) -> dict:
         # [ACTION puntual: conversio a pandas para calculadoras]
-        self._data_frame = self._data_frame.to_pandas() if hasattr(self._data_frame, 'to_pandas') else self._data_frame
         return FinancialRatiosCalculator().calculate(
             data_frame=self._data_frame,
             ratios=kwargs.get("ratios"),
         )
-
 
 class AnalyseConversionFunnelPolars(AbstractAnalyseConversionFunnel[pl.DataFrame]):
     """Funnel analysis with stage conversion rates and bottleneck detection.
@@ -2378,7 +2280,6 @@ class AnalyseConversionFunnelPolars(AbstractAnalyseConversionFunnel[pl.DataFrame
 
     def analyze(self, **kwargs) -> dict:
         # [ACTION puntual: conversio a pandas para calculadoras]
-        self._data_frame = self._data_frame.to_pandas() if hasattr(self._data_frame, 'to_pandas') else self._data_frame
         stage_counts: dict | None = kwargs.get("stage_counts")
         user_column: str | None = kwargs.get("user_column")
         event_column: str | None = kwargs.get("event_column")
@@ -2400,7 +2301,6 @@ class AnalyseConversionFunnelPolars(AbstractAnalyseConversionFunnel[pl.DataFrame
             stage_order=stage_order,
             bottleneck_threshold=kwargs.get("bottleneck_threshold", 0.5),
         )
-
 
 class AnalyseChurnRatePolars(AbstractAnalyseChurnRate[pl.DataFrame]):
     """Period-level churn rate from aggregated data or event logs.
@@ -2425,7 +2325,6 @@ class AnalyseChurnRatePolars(AbstractAnalyseChurnRate[pl.DataFrame]):
 
     def analyze(self, **kwargs) -> dict:
         # [ACTION puntual: conversio a pandas para calculadoras]
-        self._data_frame = self._data_frame.to_pandas() if hasattr(self._data_frame, 'to_pandas') else self._data_frame
         period_column: str = kwargs.get("period_column")
         if period_column is None:
             raise ValueError("'period_column' is required.")
@@ -2441,7 +2340,6 @@ class AnalyseChurnRatePolars(AbstractAnalyseChurnRate[pl.DataFrame]):
             new_customers_column=kwargs.get("new_customers_column"),
             user_column=kwargs.get("user_column"),
         )
-
 
 class AnalyseCustomerLifetimeValuePolars(AbstractAnalyseCustomerLifetimeValue[pl.DataFrame]):
     """Discounted and simple CLV per customer from transactional data.
@@ -2460,7 +2358,6 @@ class AnalyseCustomerLifetimeValuePolars(AbstractAnalyseCustomerLifetimeValue[pl
 
     def analyze(self, **kwargs) -> dict:
         # [ACTION puntual: conversio a pandas para calculadoras]
-        self._data_frame = self._data_frame.to_pandas() if hasattr(self._data_frame, 'to_pandas') else self._data_frame
         required = ["customer_column", "order_value_column", "date_column"]
         missing_params = [p for p in required if kwargs.get(p) is None]
         if missing_params:
@@ -2481,7 +2378,6 @@ class AnalyseCustomerLifetimeValuePolars(AbstractAnalyseCustomerLifetimeValue[pl
             periods_per_year=kwargs.get("periods_per_year", 12),
         )
 
-
 class AnalyseParetoAnalysisPolars(AbstractAnalyseParetoAnalysis[pl.DataFrame]):
     """Pareto (80/20) analysis with Gini concentration coefficient.
 
@@ -2496,7 +2392,6 @@ class AnalyseParetoAnalysisPolars(AbstractAnalyseParetoAnalysis[pl.DataFrame]):
 
     def analyze(self, **kwargs) -> dict:
         # [ACTION puntual: conversio a pandas para calculadoras]
-        self._data_frame = self._data_frame.to_pandas() if hasattr(self._data_frame, 'to_pandas') else self._data_frame
         entity_column: str = kwargs.get("entity_column")
         value_column: str = kwargs.get("value_column")
 
@@ -2512,7 +2407,6 @@ class AnalyseParetoAnalysisPolars(AbstractAnalyseParetoAnalysis[pl.DataFrame]):
             value_column=value_column,
             target_share=kwargs.get("target_share", 0.8),
         )
-
 
 class AnalyseRunRatePolars(AbstractAnalyseRunRate[pl.DataFrame]):
     """Run rate projection: simple, trailing average, and weighted recent.
@@ -2537,7 +2431,6 @@ class AnalyseRunRatePolars(AbstractAnalyseRunRate[pl.DataFrame]):
 
     def analyze(self, **kwargs) -> dict:
         # [ACTION puntual: conversio a pandas para calculadoras]
-        self._data_frame = self._data_frame.to_pandas() if hasattr(self._data_frame, 'to_pandas') else self._data_frame
         value_column: str | None = kwargs.get("value_column")
         observed_value: float | None = kwargs.get("observed_value")
 
@@ -2555,7 +2448,6 @@ class AnalyseRunRatePolars(AbstractAnalyseRunRate[pl.DataFrame]):
             methods=kwargs.get("methods"),
         )
 
-
 class AnalyseGeoDistributionPolars(AbstractAnalyseGeoDistribution[pl.DataFrame]):
     """Geographic frequency distribution with HHI concentration metric.
 
@@ -2570,7 +2462,6 @@ class AnalyseGeoDistributionPolars(AbstractAnalyseGeoDistribution[pl.DataFrame])
 
     def analyze(self, **kwargs) -> dict:
         # [ACTION puntual: conversio a pandas para calculadoras]
-        self._data_frame = self._data_frame.to_pandas() if hasattr(self._data_frame, 'to_pandas') else self._data_frame
         geo_column: str = kwargs.get("geo_column")
         if geo_column is None:
             raise ValueError("'geo_column' is required.")
@@ -2583,7 +2474,6 @@ class AnalyseGeoDistributionPolars(AbstractAnalyseGeoDistribution[pl.DataFrame])
             top_n=kwargs.get("top_n", 20),
             secondary_column=kwargs.get("secondary_column"),
         )
-
 
 class AnalyseGeoClusteringPolars(AbstractAnalyseGeoClustering[pl.DataFrame]):
     """Haversine-DBSCAN geographic point clustering.
@@ -2600,7 +2490,6 @@ class AnalyseGeoClusteringPolars(AbstractAnalyseGeoClustering[pl.DataFrame]):
 
     def analyze(self, **kwargs) -> dict:
         # [ACTION puntual: conversio a pandas para calculadoras]
-        self._data_frame = self._data_frame.to_pandas() if hasattr(self._data_frame, 'to_pandas') else self._data_frame
         lat_column: str = kwargs.get("lat_column")
         lon_column: str = kwargs.get("lon_column")
 
@@ -2618,7 +2507,6 @@ class AnalyseGeoClusteringPolars(AbstractAnalyseGeoClustering[pl.DataFrame]):
             min_samples=kwargs.get("min_samples", 5),
         )
 
-
 class AnalyseGeoBoundingBoxPolars(AbstractAnalyseGeoBoundingBox[pl.DataFrame]):
     """Bounding box, centroid, diagonal, and dispersion label.
 
@@ -2632,7 +2520,6 @@ class AnalyseGeoBoundingBoxPolars(AbstractAnalyseGeoBoundingBox[pl.DataFrame]):
 
     def analyze(self, **kwargs) -> dict:
         # [ACTION puntual: conversio a pandas para calculadoras]
-        self._data_frame = self._data_frame.to_pandas() if hasattr(self._data_frame, 'to_pandas') else self._data_frame
         lat_column: str = kwargs.get("lat_column")
         lon_column: str = kwargs.get("lon_column")
 
@@ -2647,7 +2534,6 @@ class AnalyseGeoBoundingBoxPolars(AbstractAnalyseGeoBoundingBox[pl.DataFrame]):
             lat_column=lat_column,
             lon_column=lon_column,
         )
-
 
 class AnalyseGeoHeatmapPolars(AbstractAnalyseGeoHeatmap[pl.DataFrame]):
     """Grid-based geographic density heatmap (points per km²).
@@ -2665,7 +2551,6 @@ class AnalyseGeoHeatmapPolars(AbstractAnalyseGeoHeatmap[pl.DataFrame]):
 
     def analyze(self, **kwargs) -> dict:
         # [ACTION puntual: conversio a pandas para calculadoras]
-        self._data_frame = self._data_frame.to_pandas() if hasattr(self._data_frame, 'to_pandas') else self._data_frame
         lat_column: str = kwargs.get("lat_column")
         lon_column: str = kwargs.get("lon_column")
 
@@ -2684,7 +2569,6 @@ class AnalyseGeoHeatmapPolars(AbstractAnalyseGeoHeatmap[pl.DataFrame]):
             include_empty_cells=kwargs.get("include_empty_cells", False),
         )
 
-
 class AnalyseProximityPolars(AbstractAnalyseProximity[pl.DataFrame]):
     """Nearest neighbor distances and ANN spatial pattern analysis.
 
@@ -2700,7 +2584,6 @@ class AnalyseProximityPolars(AbstractAnalyseProximity[pl.DataFrame]):
 
     def analyze(self, **kwargs) -> dict:
         # [ACTION puntual: conversio a pandas para calculadoras]
-        self._data_frame = self._data_frame.to_pandas() if hasattr(self._data_frame, 'to_pandas') else self._data_frame
         lat_column: str = kwargs.get("lat_column")
         lon_column: str = kwargs.get("lon_column")
 
@@ -2717,7 +2600,6 @@ class AnalyseProximityPolars(AbstractAnalyseProximity[pl.DataFrame]):
             include_all_nn=kwargs.get("include_all_nn", False),
             max_points=kwargs.get("max_points", 2_000),
         )
-
 
 # ─────────────────────────────────────────────────────────────────────────────
 # DOMAIN 10 — GRAPH ANALYZERS
@@ -2738,7 +2620,6 @@ class AnalyseNetworkDensityPolars(AbstractAnalyseNetworkDensity[pl.DataFrame]):
 
     def analyze(self, **kwargs) -> dict:
         # [ACTION puntual: conversio a pandas para calculadoras]
-        self._data_frame = self._data_frame.to_pandas() if hasattr(self._data_frame, 'to_pandas') else self._data_frame
         source_column: str = kwargs.get("source_column")
         target_column: str = kwargs.get("target_column")
 
@@ -2755,7 +2636,6 @@ class AnalyseNetworkDensityPolars(AbstractAnalyseNetworkDensity[pl.DataFrame]):
             graph_type=kwargs.get("graph_type", "undirected"),
             weight_column=kwargs.get("weight_column"),
         )
-
 
 class AnalyseCentralityPolars(AbstractAnalyseCentrality[pl.DataFrame]):
     """Degree, betweenness, closeness, and PageRank centrality.
@@ -2774,7 +2654,6 @@ class AnalyseCentralityPolars(AbstractAnalyseCentrality[pl.DataFrame]):
 
     def analyze(self, **kwargs) -> dict:
         # [ACTION puntual: conversio a pandas para calculadoras]
-        self._data_frame = self._data_frame.to_pandas() if hasattr(self._data_frame, 'to_pandas') else self._data_frame
         source_column: str = kwargs.get("source_column")
         target_column: str = kwargs.get("target_column")
 
@@ -2794,7 +2673,6 @@ class AnalyseCentralityPolars(AbstractAnalyseCentrality[pl.DataFrame]):
             weight_column=kwargs.get("weight_column"),
         )
 
-
 class AnalyseCommunityDetectionPolars(AbstractAnalyseCommunityDetection[pl.DataFrame]):
     """Louvain-style community detection with modularity Q scoring.
 
@@ -2810,7 +2688,6 @@ class AnalyseCommunityDetectionPolars(AbstractAnalyseCommunityDetection[pl.DataF
 
     def analyze(self, **kwargs) -> dict:
         # [ACTION puntual: conversio a pandas para calculadoras]
-        self._data_frame = self._data_frame.to_pandas() if hasattr(self._data_frame, 'to_pandas') else self._data_frame
         source_column: str = kwargs.get("source_column")
         target_column: str = kwargs.get("target_column")
 
@@ -2828,7 +2705,6 @@ class AnalyseCommunityDetectionPolars(AbstractAnalyseCommunityDetection[pl.DataF
             weight_column=kwargs.get("weight_column"),
         )
 
-
 class AnalysePathAnalysisPolars(AbstractAnalysePathAnalysis[pl.DataFrame]):
     """Average path length, diameter, clustering coefficient, small-world σ.
 
@@ -2844,7 +2720,6 @@ class AnalysePathAnalysisPolars(AbstractAnalysePathAnalysis[pl.DataFrame]):
 
     def analyze(self, **kwargs) -> dict:
         # [ACTION puntual: conversio a pandas para calculadoras]
-        self._data_frame = self._data_frame.to_pandas() if hasattr(self._data_frame, 'to_pandas') else self._data_frame
         source_column: str = kwargs.get("source_column")
         target_column: str = kwargs.get("target_column")
 
@@ -2861,7 +2736,6 @@ class AnalysePathAnalysisPolars(AbstractAnalysePathAnalysis[pl.DataFrame]):
             graph_type=kwargs.get("graph_type", "undirected"),
             weight_column=kwargs.get("weight_column"),
         )
-
 
 # ─────────────────────────────────────────────────────────────────────────────
 # DOMAIN 11 — SURVIVAL ANALYZERS
@@ -2882,7 +2756,6 @@ class AnalyseKaplanMeierPolars(AbstractAnalyseKaplanMeier[pl.DataFrame]):
 
     def analyze(self, **kwargs) -> dict:
         # [ACTION puntual: conversio a pandas para calculadoras]
-        self._data_frame = self._data_frame.to_pandas() if hasattr(self._data_frame, 'to_pandas') else self._data_frame
         time_column: str = kwargs.get("time_column")
         event_column: str = kwargs.get("event_column")
 
@@ -2904,7 +2777,6 @@ class AnalyseKaplanMeierPolars(AbstractAnalyseKaplanMeier[pl.DataFrame]):
             group_column=group_column,
         )
 
-
 class AnalyseHazardRatePolars(AbstractAnalyseHazardRate[pl.DataFrame]):
     """Nelson-Aalen cumulative hazard with Gaussian-smoothed instantaneous hazard.
 
@@ -2919,7 +2791,6 @@ class AnalyseHazardRatePolars(AbstractAnalyseHazardRate[pl.DataFrame]):
 
     def analyze(self, **kwargs) -> dict:
         # [ACTION puntual: conversio a pandas para calculadoras]
-        self._data_frame = self._data_frame.to_pandas() if hasattr(self._data_frame, 'to_pandas') else self._data_frame
         time_column: str = kwargs.get("time_column")
         event_column: str = kwargs.get("event_column")
 
@@ -2936,7 +2807,6 @@ class AnalyseHazardRatePolars(AbstractAnalyseHazardRate[pl.DataFrame]):
             n_smooth_points=kwargs.get("n_smooth_points", 100),
         )
 
-
 class AnalyseEventDensityPolars(AbstractAnalyseEventDensity[pl.DataFrame]):
     """Event frequency, inter-event intervals, burstiness B, and rolling rate.
 
@@ -2952,7 +2822,6 @@ class AnalyseEventDensityPolars(AbstractAnalyseEventDensity[pl.DataFrame]):
 
     def analyze(self, **kwargs) -> dict:
         # [ACTION puntual: conversio a pandas para calculadoras]
-        self._data_frame = self._data_frame.to_pandas() if hasattr(self._data_frame, 'to_pandas') else self._data_frame
         event_time_column: str = kwargs.get("event_time_column")
 
         if event_time_column is None:
@@ -2972,7 +2841,6 @@ class AnalyseEventDensityPolars(AbstractAnalyseEventDensity[pl.DataFrame]):
             n_rate_windows=kwargs.get("n_rate_windows", 20),
         )
 
-
 class AnalyseTimeToEventPolars(AbstractAnalyseTimeToEvent[pl.DataFrame]):
     """Time-to-event descriptive statistics, threshold analysis, exponential fit.
 
@@ -2988,7 +2856,6 @@ class AnalyseTimeToEventPolars(AbstractAnalyseTimeToEvent[pl.DataFrame]):
 
     def analyze(self, **kwargs) -> dict:
         # [ACTION puntual: conversio a pandas para calculadoras]
-        self._data_frame = self._data_frame.to_pandas() if hasattr(self._data_frame, 'to_pandas') else self._data_frame
         time_column: str = kwargs.get("time_column")
         event_column: str = kwargs.get("event_column")
 

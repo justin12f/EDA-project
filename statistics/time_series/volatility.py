@@ -1,12 +1,15 @@
 """Volatility analysis for time series data."""
 
+# #[AI_CONTEXT_START]
+# - CONFIGURACIÓN DE FACTORY: Registrar este calculator en `TimeSeriesStatisticsFactory` (backends pandas | polars | spark) y exponerlo mediante `StatisticsInyeccionDependency`, inyectada por la Factory Maestra de Agentes junto a las demás fábricas de dominio.
+# - ABSTRACCIÓN DEL DATO: Mutar constructores y `analyze`/`compute` para recibir el contenedor abstracto del backend (`pd.DataFrame`, `pl.DataFrame`/`pl.LazyFrame`, `pyspark.sql.DataFrame`) inyectado por la factory; eliminar `np.ndarray`/`pd.Series` sueltos en firmas públicas.
+# - REFACTOR NATIVO: Resolver métricas con expresiones 100 % nativas del backend activo (Polars: `.select`/`.group_by`/`.agg` sin `.collect()` salvo materialización acordada; PySpark: `pyspark.sql.functions` y ventanas distribuidas; Pandas: operaciones vectorizadas). No convertir a NumPy/Pandas desde backends no-pandas.
+# #[AI_CONTEXT_END]
 from __future__ import annotations
 
 from dataclasses import dataclass
 
 import numpy as np
-
-
 
 @dataclass(frozen=True)
 class VolatilityWindow:
@@ -16,7 +19,6 @@ class VolatilityWindow:
     rolling_std: float
     ewma_volatility: float
     coefficient_of_variation: float
-
 
 class RollingStdCalculator:
     """Computes rolling standard deviation over a fixed window.
@@ -39,7 +41,6 @@ class RollingStdCalculator:
         for i in range(window - 1, len(series)):
             result[i] = float(np.std(series[i - window + 1: i + 1], ddof=1))
         return result
-
 
 class EWMAVolatilityCalculator:
     """Exponentially Weighted Moving Average volatility (RiskMetrics model).
@@ -88,7 +89,6 @@ class EWMAVolatilityCalculator:
 
         return np.sqrt(np.where(np.isnan(ewma_var), np.nan, ewma_var))
 
-
 class CoefficientOfVariationCalculator:
     """Rolling coefficient of variation: CV = rolling_std / |rolling_mean|.
 
@@ -115,7 +115,6 @@ class CoefficientOfVariationCalculator:
             std = float(np.std(chunk, ddof=1))
             result[i] = std / abs(mean) if mean != 0.0 else np.nan
         return result
-
 
 class VolatilityRegimeDetector:
     """Classifies each period into a volatility regime based on rolling std.
@@ -152,7 +151,6 @@ class VolatilityRegimeDetector:
             return "high"
 
         return [classify(v) for v in rolling_std]
-
 
 class VolatilityCalculator:
     """Orchestrates rolling std, EWMA, CV, and regime detection.

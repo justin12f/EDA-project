@@ -1,11 +1,15 @@
 """Cyclical pattern detection via FFT and dominant frequency extraction."""
 
+# #[AI_CONTEXT_START]
+# - CONFIGURACIÓN DE FACTORY: Registrar este calculator en `TimeSeriesStatisticsFactory` (backends pandas | polars | spark) y exponerlo mediante `StatisticsInyeccionDependency`, inyectada por la Factory Maestra de Agentes junto a las demás fábricas de dominio.
+# - ABSTRACCIÓN DEL DATO: Mutar constructores y `analyze`/`compute` para recibir el contenedor abstracto del backend (`pd.DataFrame`, `pl.DataFrame`/`pl.LazyFrame`, `pyspark.sql.DataFrame`) inyectado por la factory; eliminar `np.ndarray`/`pd.Series` sueltos en firmas públicas.
+# - REFACTOR NATIVO: Resolver métricas con expresiones 100 % nativas del backend activo (Polars: `.select`/`.group_by`/`.agg` sin `.collect()` salvo materialización acordada; PySpark: `pyspark.sql.functions` y ventanas distribuidas; Pandas: operaciones vectorizadas). No convertir a NumPy/Pandas desde backends no-pandas.
+# #[AI_CONTEXT_END]
 from __future__ import annotations
 
 from dataclasses import dataclass
 
 import numpy as np
-
 
 @dataclass(frozen=True)
 class DominantCycle:
@@ -18,7 +22,6 @@ class DominantCycle:
     power: float
     power_fraction: float
 
-
 class TrendRemover:
     """Removes linear trend from a series before FFT to avoid spectral leakage."""
 
@@ -28,13 +31,11 @@ class TrendRemover:
         coefficients, *_ = np.linalg.lstsq(x, series, rcond=None)
         return series - x @ coefficients
 
-
 class HanningWindowApplier:
     """Applies a Hanning window to reduce spectral leakage at series boundaries."""
 
     def apply(self, series: np.ndarray) -> np.ndarray:
         return series * np.hanning(len(series))
-
 
 class FFTPowerSpectrumCalculator:
     """Computes the one-sided power spectrum via FFT."""
@@ -46,7 +47,6 @@ class FFTPowerSpectrumCalculator:
         power[1:-1] *= 2
         frequencies = np.fft.rfftfreq(n)
         return frequencies, power
-
 
 class DominantCycleExtractor:
     """Extracts the top N dominant cycles from a power spectrum."""
@@ -71,7 +71,6 @@ class DominantCycleExtractor:
             )
             for rank, idx in enumerate(top_indices)
         ]
-
 
 class CyclicalPatternsCalculator:
     """Detects dominant cycles in a time series using FFT spectral analysis."""

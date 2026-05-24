@@ -12,10 +12,16 @@ Usage:
     result = encoder.transform()
 """
 
+# #[AI_CONTEXT_START]
+# - CONFIGURACIÓN DE FACTORY: `EncoderFactory` + `EncoderInyeccionDependency` (polars | spark | pandas) desde Factory Maestra de Agentes.
+# - ABSTRACCIÓN DEL DATO: `fit`/`transform` reciben el frame del backend registrado en `(encoder_type, backend)`.
+# - REFACTOR NATIVO: Verificar todas las implementaciones registradas; corregir factory si `create()` falla en algún backend.
+# #[AI_CONTEXT_END]
 from __future__ import annotations
 
-from typing import Any, Literal
+from typing import Any
 
+from core.backend import Backend, DEFAULT_BACKEND
 from preproccesing.encoders.implementations.base import AbstractEncoder
 
 # ── Polars encoders ───────────────────────────────────────────────────────────
@@ -30,8 +36,10 @@ from preproccesing.encoders.spark_impl import (
     SparkOrdinalEncoder,
 )
 
-Backend = Literal["polars", "spark"]
-
+from preproccesing.encoders.pandas_impl import (
+    PandasOneHotEncoder,
+    PandasOrdinalEncoder,
+)
 
 class EncoderFactory:
     """Factory for creating encoders with multi-backend support.
@@ -81,7 +89,6 @@ class EncoderFactory:
             )
         return encoder_cls()
 
-
 # ═══════════════════════════════════════════════════════════════════════════════
 # Register all built-in encoders
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -94,6 +101,9 @@ EncoderFactory.register("ordinal", "polars", PolarsOrdinalEncoder)
 EncoderFactory.register("one_hot", "spark", SparkOneHotEncoder)
 EncoderFactory.register("ordinal", "spark", SparkOrdinalEncoder)
 
+# ── Pandas ────────────────────────────────────────────────────────────────────
+EncoderFactory.register("one_hot", "pandas", PandasOneHotEncoder)
+EncoderFactory.register("ordinal", "pandas", PandasOrdinalEncoder)
 
 class Encoder:
     """Dependency injection wrapper for encoders.
@@ -105,7 +115,7 @@ class Encoder:
         backend: Backend engine — ``"polars"`` or ``"spark"``.
     """
 
-    def __init__(self, encoder: str, backend: Backend = "polars") -> None:
+    def __init__(self, encoder: str, backend: Backend = DEFAULT_BACKEND) -> None:
         self.encoder = EncoderFactory.create(encoder, backend)
 
     def fit(self, data: Any, **kwargs: Any) -> None:

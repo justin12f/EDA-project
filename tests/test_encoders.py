@@ -6,7 +6,7 @@ import unittest
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
-from pre_proccesing.encoders.encoder_factory import EncoderFactory
+from preproccesing.encoders.encoder_factory import EncoderFactory
 from tests.fixtures import DataFrameFactory
 
 
@@ -18,7 +18,7 @@ class TestEncoders(unittest.TestCase):
         df = DataFrameFactory.create_categorical_data()
 
         # We inject the data and encoder type using the existing architectural Factory
-        encoder = EncoderFactory.create("one_hot")
+        encoder = EncoderFactory.create("one_hot", backend="pandas")
         encoder.fit(df)
         encoded_df = encoder.transform()
 

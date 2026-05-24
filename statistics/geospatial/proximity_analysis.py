@@ -1,12 +1,16 @@
 """Proximity analysis: nearest neighbor distances and spatial statistics."""
 
+# #[AI_CONTEXT_START]
+# - CONFIGURACIÓN DE FACTORY: Registrar este calculator en `GeospatialStatisticsFactory` (backends pandas | polars | spark) y exponerlo mediante `StatisticsInyeccionDependency`, inyectada por la Factory Maestra de Agentes junto a las demás fábricas de dominio.
+# - ABSTRACCIÓN DEL DATO: Mutar constructores y `analyze`/`compute` para recibir el contenedor abstracto del backend (`pd.DataFrame`, `pl.DataFrame`/`pl.LazyFrame`, `pyspark.sql.DataFrame`) inyectado por la factory; eliminar `np.ndarray`/`pd.Series` sueltos en firmas públicas.
+# - REFACTOR NATIVO: Resolver métricas con expresiones 100 % nativas del backend activo (Polars: `.select`/`.group_by`/`.agg` sin `.collect()` salvo materialización acordada; PySpark: `pyspark.sql.functions` y ventanas distribuidas; Pandas: operaciones vectorizadas). No convertir a NumPy/Pandas desde backends no-pandas.
+# #[AI_CONTEXT_END]
 from __future__ import annotations
 
 from dataclasses import dataclass
 
 import numpy as np
 import pandas as pd
-
 
 @dataclass(frozen=True)
 class NearestNeighborResult:
@@ -15,7 +19,6 @@ class NearestNeighborResult:
     point_index: int
     nearest_neighbor_index: int
     distance_km: float
-
 
 class HaversineVectorizedCalculator:
     """Vectorized Haversine distance from one reference point to all others.
@@ -58,7 +61,6 @@ class HaversineVectorizedCalculator:
         )
         return 2 * self._EARTH_RADIUS_KM * np.arcsin(np.sqrt(np.clip(a, 0, 1)))
 
-
 class NearestNeighborFinder:
     """Finds the nearest neighbor for each point in a coordinate set.
 
@@ -100,7 +102,6 @@ class NearestNeighborFinder:
             )
 
         return results
-
 
 class AverageNearestNeighborIndexCalculator:
     """Computes the Average Nearest Neighbor (ANN) index.
@@ -167,7 +168,6 @@ class AverageNearestNeighborIndexCalculator:
             "spatial_pattern": pattern,
             "area_km2": round(area_km2, 2),
         }
-
 
 class ProximityAnalysisCalculator:
     """Nearest neighbor distances, mean proximity, and spatial pattern analysis.

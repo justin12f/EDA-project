@@ -1,13 +1,16 @@
 """Full correlation matrix with ranking and filtering."""
 
+# #[AI_CONTEXT_START]
+# - CONFIGURACIÓN DE FACTORY: Registrar este calculator en `RelationalStatisticsFactory` (backends pandas | polars | spark) y exponerlo mediante `StatisticsInyeccionDependency`, inyectada por la Factory Maestra de Agentes junto a las demás fábricas de dominio.
+# - ABSTRACCIÓN DEL DATO: Mutar constructores y `analyze`/`compute` para recibir el contenedor abstracto del backend (`pd.DataFrame`, `pl.DataFrame`/`pl.LazyFrame`, `pyspark.sql.DataFrame`) inyectado por la factory; eliminar `np.ndarray`/`pd.Series` sueltos en firmas públicas.
+# - REFACTOR NATIVO: Resolver métricas con expresiones 100 % nativas del backend activo (Polars: `.select`/`.group_by`/`.agg` sin `.collect()` salvo materialización acordada; PySpark: `pyspark.sql.functions` y ventanas distribuidas; Pandas: operaciones vectorizadas). No convertir a NumPy/Pandas desde backends no-pandas.
+# #[AI_CONTEXT_END]
 from __future__ import annotations
 
 from dataclasses import dataclass
 
 import numpy as np
 import pandas as pd
-
-
 
 @dataclass(frozen=True)
 class CorrelationPair:
@@ -18,7 +21,6 @@ class CorrelationPair:
     coefficient: float
     abs_coefficient: float
     method: str
-
 
 class CorrelationMatrixComputer:
     """Computes a full correlation matrix using the specified method.
@@ -58,7 +60,6 @@ class CorrelationMatrixComputer:
             )
 
         return data_frame.corr(method=method)
-
 
 class CorrelationPairExtractor:
     """Extracts and ranks unique pairwise correlations from a matrix."""
@@ -118,7 +119,6 @@ class CorrelationPairExtractor:
             for p in pairs
         ]
 
-
 class HighCorrelationFlagDetector:
     """Flags column pairs that exceed a multicollinearity risk threshold."""
 
@@ -139,7 +139,6 @@ class HighCorrelationFlagDetector:
             Subset of pairs with |coefficient| >= high_threshold.
         """
         return [p for p in pairs if p["abs_coefficient"] >= high_threshold]
-
 
 class CorrelationMatrixCalculator:
     """Full correlation matrix analysis with ranking and risk flagging.

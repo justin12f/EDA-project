@@ -1,9 +1,13 @@
 """Frequency distribution builder module."""
 
+# #[AI_CONTEXT_START]
+# - CONFIGURACIÓN DE FACTORY: Registrar este calculator en `DescriptiveStatisticsFactory` (backends pandas | polars | spark) y exponerlo mediante `StatisticsInyeccionDependency`, inyectada por la Factory Maestra de Agentes junto a las demás fábricas de dominio.
+# - ABSTRACCIÓN DEL DATO: Mutar constructores y `analyze`/`compute` para recibir el contenedor abstracto del backend (`pd.DataFrame`, `pl.DataFrame`/`pl.LazyFrame`, `pyspark.sql.DataFrame`) inyectado por la factory; eliminar `np.ndarray`/`pd.Series` sueltos en firmas públicas.
+# - REFACTOR NATIVO: Resolver métricas con expresiones 100 % nativas del backend activo (Polars: `.select`/`.group_by`/`.agg` sin `.collect()` salvo materialización acordada; PySpark: `pyspark.sql.functions` y ventanas distribuidas; Pandas: operaciones vectorizadas). No convertir a NumPy/Pandas desde backends no-pandas.
+# #[AI_CONTEXT_END]
 from __future__ import annotations
 
 import numpy as np
-
 
 class BinCountSelector:
     """Selects an optimal bin count using classical rules.
@@ -40,7 +44,6 @@ class BinCountSelector:
         h = 2 * iqr / (n ** (1 / 3))
         return max(1, int(np.ceil(data_range / h))) if h > 0 else 10
 
-
 class FrequencyTableBuilder:
     """Builds a frequency distribution table from histogram data."""
 
@@ -71,7 +74,6 @@ class FrequencyTableBuilder:
             }
             for i in range(len(counts))
         ]
-
 
 class FrequencyDistributionBuilder:
     """Orchestrates full frequency distribution construction.

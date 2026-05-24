@@ -3,13 +3,17 @@ analyze_data/analyzers/backends/abstract_analyzers.py
 Pure abstract contracts for all data analysis classes.
 """
 from abc import ABC, abstractmethod
-from typing import Any, Generic, TypeVar
+from typing import Any, Generic, TypeVar , Optional
 
 T = TypeVar("T")
 
 class AbstractBaseDataAnalysis(ABC, Generic[T]):
-    def __init__(self, data_frame: T) -> None:
-        self._data_frame: T = data_frame
+    def __init__(self, data_frame: Optional[T] = None):   
+        self._data_frame = data_frame
+
+    def set_data_frame(self, data_frame: T) -> None:
+        """Permite inyectar el DataFrame después de la creación."""
+        self._data_frame = data_frame
 
     @abstractmethod
     def analyze(self, **kwargs) -> Any:

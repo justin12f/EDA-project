@@ -1,5 +1,10 @@
 """Run rate projection: annualization from partial period data."""
 
+# #[AI_CONTEXT_START]
+# - CONFIGURACIÓN DE FACTORY: Registrar este calculator en `BusinessStatisticsFactory` (backends pandas | polars | spark) y exponerlo mediante `StatisticsInyeccionDependency`, inyectada por la Factory Maestra de Agentes junto a las demás fábricas de dominio.
+# - ABSTRACCIÓN DEL DATO: Mutar constructores y `analyze`/`compute` para recibir el contenedor abstracto del backend (`pd.DataFrame`, `pl.DataFrame`/`pl.LazyFrame`, `pyspark.sql.DataFrame`) inyectado por la factory; eliminar `np.ndarray`/`pd.Series` sueltos en firmas públicas.
+# - REFACTOR NATIVO: Resolver métricas con expresiones 100 % nativas del backend activo (Polars: `.select`/`.group_by`/`.agg` sin `.collect()` salvo materialización acordada; PySpark: `pyspark.sql.functions` y ventanas distribuidas; Pandas: operaciones vectorizadas). No convertir a NumPy/Pandas desde backends no-pandas.
+# #[AI_CONTEXT_END]
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -8,14 +13,12 @@ from enum import Enum
 import numpy as np
 import pandas as pd
 
-
 class ProjectionMethod(str, Enum):
     """Run rate projection methodology."""
 
     SIMPLE = "simple"           # Linear extrapolation from elapsed fraction
     TRAILING_AVERAGE = "trailing_average"   # Average of last N periods × full periods
     WEIGHTED_RECENT = "weighted_recent"     # Exponentially weighted recent periods
-
 
 @dataclass(frozen=True)
 class RunRateResult:
@@ -27,7 +30,6 @@ class RunRateResult:
     elapsed_fraction: float
     remaining_fraction: float
     confidence_note: str
-
 
 class SimpleRunRateProjector:
     """Simple linear run rate: observed / elapsed_fraction.
@@ -51,7 +53,6 @@ class SimpleRunRateProjector:
         if elapsed_fraction <= 0:
             return observed
         return observed / elapsed_fraction
-
 
 class TrailingAverageProjector:
     """Run rate based on the average of the last N complete periods.
@@ -79,7 +80,6 @@ class TrailingAverageProjector:
         n = min(n_periods_trailing, len(historical_values))
         trailing_avg = float(np.mean(historical_values[-n:]))
         return trailing_avg * full_periods
-
 
 class WeightedRecentProjector:
     """Run rate using exponentially weighted recent periods.
@@ -109,7 +109,6 @@ class WeightedRecentProjector:
         weights /= weights.sum()
         weighted_avg = float(np.dot(weights, historical_values))
         return weighted_avg * full_periods
-
 
 class RunRateCalculator:
     """Run rate projections from partial-period or historical data.

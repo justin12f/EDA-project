@@ -1,10 +1,14 @@
 """Statistical power analysis module."""
 
+# #[AI_CONTEXT_START]
+# - CONFIGURACIÓN DE FACTORY: Registrar este calculator en `InferentialStatisticsFactory` (backends pandas | polars | spark) y exponerlo mediante `StatisticsInyeccionDependency`, inyectada por la Factory Maestra de Agentes junto a las demás fábricas de dominio.
+# - ABSTRACCIÓN DEL DATO: Mutar constructores y `analyze`/`compute` para recibir el contenedor abstracto del backend (`pd.DataFrame`, `pl.DataFrame`/`pl.LazyFrame`, `pyspark.sql.DataFrame`) inyectado por la factory; eliminar `np.ndarray`/`pd.Series` sueltos en firmas públicas.
+# - REFACTOR NATIVO: Resolver métricas con expresiones 100 % nativas del backend activo (Polars: `.select`/`.group_by`/`.agg` sin `.collect()` salvo materialización acordada; PySpark: `pyspark.sql.functions` y ventanas distribuidas; Pandas: operaciones vectorizadas). No convertir a NumPy/Pandas desde backends no-pandas.
+# #[AI_CONTEXT_END]
 from __future__ import annotations
 
 import numpy as np
 from scipy import stats, optimize
-
 
 class MinimumSampleSizeCalculator:
     """Calculates minimum n per group to achieve target power.
@@ -47,7 +51,6 @@ class MinimumSampleSizeCalculator:
 
         return int(np.ceil(n))
 
-
 class ObservedPowerCalculator:
     """Calculates observed power for a completed two-sample T-test.
 
@@ -85,7 +88,6 @@ class ObservedPowerCalculator:
         ncp = abs(effect_size) * float(np.sqrt(n_per_group / 2))
         power = float(1 - stats.norm.cdf(z_alpha - ncp) + stats.norm.cdf(-z_alpha - ncp))
         return min(max(power, 0.0), 1.0)
-
 
 class PowerAnalysisCalculator:
     """Unified power analysis dispatcher.

@@ -1,0 +1,5 @@
+# #[AI_CONTEXT_START]
+# - CONFIGURACIÓN DE FACTORY: `EncoderFactory` + `EncoderInyeccionDependency` (polars | spark | pandas) desde Factory Maestra de Agentes.
+# - ABSTRACCIÓN DEL DATO: `fit`/`transform` reciben el frame del backend registrado en `(encoder_type, backend)`.
+# - REFACTOR NATIVO: Verificar todas las implementaciones registradas; corregir factory si `create()` falla en algún backend.
+# #[AI_CONTEXT_END]

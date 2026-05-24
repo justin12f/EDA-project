@@ -1,12 +1,16 @@
 """Geographic bounding box, centroid, and spatial dispersion metrics."""
 
+# #[AI_CONTEXT_START]
+# - CONFIGURACIÓN DE FACTORY: Registrar este calculator en `GeospatialStatisticsFactory` (backends pandas | polars | spark) y exponerlo mediante `StatisticsInyeccionDependency`, inyectada por la Factory Maestra de Agentes junto a las demás fábricas de dominio.
+# - ABSTRACCIÓN DEL DATO: Mutar constructores y `analyze`/`compute` para recibir el contenedor abstracto del backend (`pd.DataFrame`, `pl.DataFrame`/`pl.LazyFrame`, `pyspark.sql.DataFrame`) inyectado por la factory; eliminar `np.ndarray`/`pd.Series` sueltos en firmas públicas.
+# - REFACTOR NATIVO: Resolver métricas con expresiones 100 % nativas del backend activo (Polars: `.select`/`.group_by`/`.agg` sin `.collect()` salvo materialización acordada; PySpark: `pyspark.sql.functions` y ventanas distribuidas; Pandas: operaciones vectorizadas). No convertir a NumPy/Pandas desde backends no-pandas.
+# #[AI_CONTEXT_END]
 from __future__ import annotations
 
 from dataclasses import dataclass
 
 import numpy as np
 import pandas as pd
-
 
 @dataclass(frozen=True)
 class BoundingBoxResult:
@@ -23,7 +27,6 @@ class BoundingBoxResult:
     diagonal_km: float
     mean_radius_km: float
     dispersion_label: str
-
 
 class CentroidCalculator:
     """Computes the geographic centroid of a point set.
@@ -48,7 +51,6 @@ class CentroidCalculator:
         """
         return float(lat.mean()), float(lon.mean())
 
-
 class BoundingBoxCalculator:
     """Computes bounding box extents for a coordinate set."""
 
@@ -68,7 +70,6 @@ class BoundingBoxCalculator:
             float(lat.min()), float(lat.max()),
             float(lon.min()), float(lon.max()),
         )
-
 
 class DiagonalDistanceCalculator:
     """Computes the Haversine diagonal of a bounding box.
@@ -105,7 +106,6 @@ class DiagonalDistanceCalculator:
             + np.cos(lat1) * np.cos(lat2) * np.sin(dlon / 2) ** 2
         )
         return float(2 * self._EARTH_RADIUS_KM * np.arcsin(np.sqrt(np.clip(a, 0, 1))))
-
 
 class MeanRadiusCalculator:
     """Computes mean Haversine distance from the centroid to all points.
@@ -146,7 +146,6 @@ class MeanRadiusCalculator:
         distances = 2 * self._EARTH_RADIUS_KM * np.arcsin(np.sqrt(np.clip(a, 0, 1)))
         return float(distances.mean())
 
-
 class DispersionLabelAssigner:
     """Assigns a human-readable dispersion label based on mean radius.
 
@@ -179,7 +178,6 @@ class DispersionLabelAssigner:
             if mean_radius_km >= threshold:
                 return label
         return "hyper_local"
-
 
 class GeoBoundingBoxCalculator:
     """Bounding box, centroid, diagonal, and dispersion for a coordinate set.

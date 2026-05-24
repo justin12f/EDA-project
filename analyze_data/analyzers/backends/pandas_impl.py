@@ -2,6 +2,12 @@
 analyze_data/analyzers/backends/pandas_impl.py
 Pandas implementations for analyzers.
 """
+
+# #[AI_CONTEXT_START]
+# - CONFIGURACIÓN DE FACTORY: `DataAnalyzerFactory` / `AnalyzeContextFactory` backend pandas; inyectar vía `AnalyzeDataInyeccionDependency` desde la Factory Maestra de Agentes.
+# - ABSTRACCIÓN DEL DATO: Analyzers reciben `pd.DataFrame` inyectado; renombrar clases con sufijo `Pandas` para claridad en registro de factory.
+# - REFACTOR NATIVO: Mantener interoperabilidad sklearn/scipy solo en ruta pandas; tests dedicados; deprecar si existe duplicado legacy fuera de `backends/`.
+# #[AI_CONTEXT_END]
 from __future__ import annotations
 import pandas as pd
 import numpy as np
@@ -102,7 +108,6 @@ from statistics.time_series.seasonal import SeasonalDecomposition
 
 import pandas as pd
 
-
 from models.linear_regression import LinearRegression
 
 import numpy as np
@@ -180,7 +185,6 @@ from statistics.business.customer_lifetime_value import CustomerLifetimeValueCal
 from statistics.business.pareto_analysis import ParetoAnalysisCalculator
 from statistics.business.run_rate import RunRateCalculator
 
-
 # ── DOMAIN 10 IMPORTS ─────────────────────────────────────────────────────────
 from statistics.graphs.network_density import NetworkDensityCalculator
 from statistics.graphs.centrality_analysis import CentralityAnalysisCalculator
@@ -195,20 +199,17 @@ from statistics.survival.time_to_event import TimeToEventCalculator
 
 # ── BASIC DATAFRAME INSPECTORS ────────────────────────────────────────────────
 
-
 class AnalyseDataTypes(AbstractAnalyseDataTypes[pd.DataFrame]):
     """Return a dict of column → dtype string for the DataFrame."""
 
     def analyze(self, **kwargs) -> dict:
         return {"dtypes": self._data_frame.dtypes.astype(str).to_dict()}
 
-
 class AnalyseDataShape(AbstractAnalyseDataShape[pd.DataFrame]):
     """Return the (rows, columns) shape of the DataFrame."""
 
     def analyze(self, **kwargs) -> dict:
         return {"rows": self._data_frame.shape[0], "columns": self._data_frame.shape[1]}
-
 
 class AnalyseDataInfo(AbstractAnalyseDataInfo[pd.DataFrame]):
     """Return column names, dtypes, and non-null counts."""
@@ -224,7 +225,6 @@ class AnalyseDataInfo(AbstractAnalyseDataInfo[pd.DataFrame]):
         }
         return {"info": info, "n_rows": len(self._data_frame)}
 
-
 class AnalyseDataDescribe(AbstractAnalyseDataDescribe[pd.DataFrame]):
     """Return pandas describe() as a nested dict."""
 
@@ -232,13 +232,11 @@ class AnalyseDataDescribe(AbstractAnalyseDataDescribe[pd.DataFrame]):
         include = kwargs.get("include", "all")
         return self._data_frame.describe(include=include).to_dict()
 
-
 class AnalyseDataColumns(AbstractAnalyseDataColumns[pd.DataFrame]):
     """Return the list of column names."""
 
     def analyze(self, **kwargs) -> dict:
         return {"columns": self._data_frame.columns.tolist()}
-
 
 class AnalyseDataIndex(AbstractAnalyseDataIndex[pd.DataFrame]):
     """Return index information."""
@@ -253,7 +251,6 @@ class AnalyseDataIndex(AbstractAnalyseDataIndex[pd.DataFrame]):
             "n": len(idx),
         }
 
-
 class AnalyseDataHead(AbstractAnalyseDataHead[pd.DataFrame]):
     """Return the first N rows as a dict."""
 
@@ -261,14 +258,12 @@ class AnalyseDataHead(AbstractAnalyseDataHead[pd.DataFrame]):
         n: int = kwargs.get("n", 5)
         return self._data_frame.head(n).to_dict(orient="records")
 
-
 class AnalyseDataTail(AbstractAnalyseDataTail[pd.DataFrame]):
     """Return the last N rows as a dict."""
 
     def analyze(self, **kwargs) -> dict:
         n: int = kwargs.get("n", 5)
         return self._data_frame.tail(n).to_dict(orient="records")
-
 
 class AnalyseDataSample(AbstractAnalyseDataSample[pd.DataFrame]):
     """Return a random sample of N rows as a dict."""
@@ -281,13 +276,10 @@ class AnalyseDataSample(AbstractAnalyseDataSample[pd.DataFrame]):
             orient="records"
         )
 
-
 # ==================== ANALYZERS DE FEATURES ENGINEERING ====================
-
 
 # TENDENCIAS Y PATRONES
 # ("trend_analysis", AnalyseTrendPatterns)      # Tendencia temporal
-
 
 class AnalyseSeasonality(AbstractAnalyseSeasonality[pd.DataFrame]):
     """Analyse the seasonality of the data frame"""
@@ -328,7 +320,6 @@ class AnalyseSeasonality(AbstractAnalyseSeasonality[pd.DataFrame]):
                 "resid": seasonal_decomposition["resid"],
             },
         }
-
 
 # ("volatility", AnalyseVolatility)             # Volatilidad en series
 
@@ -371,7 +362,6 @@ class AnalyseSeasonality(AbstractAnalyseSeasonality[pd.DataFrame]):
 # ("feature_variance", AnalyseFeatureVariance)  # Qué variables varían más
 # ("feature_selection", AnalyseFeatureSelection) # Mutual info, chi2
 # ("information_content", AnalyseInformationContent) # Entropy, MI
-
 
 class AnalyseTrendPatterns(AbstractAnalyseTrendPatterns[pd.DataFrame]):
     """Analyse the trend patterns of the dataframe"
@@ -441,9 +431,7 @@ class AnalyseTrendPatterns(AbstractAnalyseTrendPatterns[pd.DataFrame]):
 
         return return_dictionary
 
-
 # ── DOMAIN 1 — DESCRIPTIVE STATISTICS ─────────────────────────────────────────
-
 
 class AnalyseDistributionType(AbstractAnalyseDistributionType[pd.DataFrame]):
     """Classify the statistical distribution of a numerical column.
@@ -465,7 +453,6 @@ class AnalyseDistributionType(AbstractAnalyseDistributionType[pd.DataFrame]):
 
         data: np.ndarray = self._data_frame[column].dropna().to_numpy()
         return DistributionClassifier().classify(data)
-
 
 class AnalyseSkewnessKurtosis(AbstractAnalyseSkewnessKurtosis[pd.DataFrame]):
     """Analyse skewness and kurtosis across numerical columns.
@@ -502,7 +489,6 @@ class AnalyseSkewnessKurtosis(AbstractAnalyseSkewnessKurtosis[pd.DataFrame]):
 
         return {"columns": column_results, "bias": bias}
 
-
 class AnalyseNormalityTests(AbstractAnalyseNormalityTests[pd.DataFrame]):
     """Run a full normality test suite on a numerical column.
 
@@ -525,7 +511,6 @@ class AnalyseNormalityTests(AbstractAnalyseNormalityTests[pd.DataFrame]):
 
         data: np.ndarray = self._data_frame[column].dropna().to_numpy()
         return NormalityTestSuite().run(data, significance_level=significance_level)
-
 
 class AnalyseValueCounts(AbstractAnalyseValueCounts[pd.DataFrame]):
     """Analyse value frequencies for any column (numeric or categorical).
@@ -555,7 +540,6 @@ class AnalyseValueCounts(AbstractAnalyseValueCounts[pd.DataFrame]):
             include_missing=include_missing,
         )
 
-
 class AnalysePercentiles(AbstractAnalysePercentiles[pd.DataFrame]):
     """Analyse percentile distribution of a numerical column.
 
@@ -583,7 +567,6 @@ class AnalysePercentiles(AbstractAnalysePercentiles[pd.DataFrame]):
             data, percentiles=percentiles, outlier_bounds=outlier_bounds
         )
 
-
 class AnalyseFrequencyDistribution(AbstractAnalyseFrequencyDistribution[pd.DataFrame]):
     """Analyse frequency distribution (histogram as table) of a numerical column.
 
@@ -610,7 +593,6 @@ class AnalyseFrequencyDistribution(AbstractAnalyseFrequencyDistribution[pd.DataF
         return FrequencyDistributionBuilder().build(
             data, n_bins=n_bins, bin_method=bin_method
         )
-
 
 class AnalyseCentralTendency(AbstractAnalyseCentralTendency[pd.DataFrame]):
     """Analyse central tendency measures across numerical columns.
@@ -650,7 +632,6 @@ class AnalyseCentralTendency(AbstractAnalyseCentralTendency[pd.DataFrame]):
 
         return {"columns": column_results, "trim_proportion": trim_proportion}
 
-
 class AnalyseDispersion(AbstractAnalyseDispersion[pd.DataFrame]):
     """Analyse dispersion measures across numerical columns.
 
@@ -685,7 +666,6 @@ class AnalyseDispersion(AbstractAnalyseDispersion[pd.DataFrame]):
         }
 
         return {"columns": column_results, "ddof": ddof}
-
 
 class AnalyseHypothesisTest(AbstractAnalyseHypothesisTest[pd.DataFrame]):
     """Run a parametric or non-parametric hypothesis test on two DataFrame columns.
@@ -727,7 +707,6 @@ class AnalyseHypothesisTest(AbstractAnalyseHypothesisTest[pd.DataFrame]):
             alternative=kwargs.get("alternative", "two-sided"),
         )
 
-
 class AnalyseAnova(AbstractAnalyseAnova[pd.DataFrame]):
     """Run one-way ANOVA across multiple DataFrame columns as groups.
 
@@ -766,7 +745,6 @@ class AnalyseAnova(AbstractAnalyseAnova[pd.DataFrame]):
             run_post_hoc=kwargs.get("run_post_hoc", True),
         )
 
-
 class AnalyseChiSquare(AbstractAnalyseChiSquare[pd.DataFrame]):
     """Chi-square independence test between two categorical columns.
 
@@ -794,7 +772,6 @@ class AnalyseChiSquare(AbstractAnalyseChiSquare[pd.DataFrame]):
             series_b=self._data_frame[column_b].dropna(),
             significance_level=kwargs.get("significance_level", 0.05),
         )
-
 
 class AnalyseCorrelationSignificance(AbstractAnalyseCorrelationSignificance[pd.DataFrame]):
     """Correlation with significance test and confidence interval.
@@ -829,7 +806,6 @@ class AnalyseCorrelationSignificance(AbstractAnalyseCorrelationSignificance[pd.D
             significance_level=kwargs.get("significance_level", 0.05),
             confidence_level=kwargs.get("confidence_level", 0.95),
         )
-
 
 class AnalyseConfidenceIntervals(AbstractAnalyseConfidenceIntervals[pd.DataFrame]):
     """Compute confidence intervals for mean, proportion, or mean difference.
@@ -910,7 +886,6 @@ class AnalyseConfidenceIntervals(AbstractAnalyseConfidenceIntervals[pd.DataFrame
             f"Available: 'mean', 'proportion', 'mean_difference'."
         )
 
-
 class AnalyseEffectSize(AbstractAnalyseEffectSize[pd.DataFrame]):
     """Calculate effect size (Cohen's d or Eta-squared) from DataFrame columns.
 
@@ -965,7 +940,6 @@ class AnalyseEffectSize(AbstractAnalyseEffectSize[pd.DataFrame]):
             f"effect_type '{effect_type}' not recognized. "
             f"Available: 'cohens_d', 'eta_squared'."
         )
-
 
 class AnalysePowerAnalysis(AbstractAnalysePowerAnalysis[pd.DataFrame]):
     """Statistical power analysis from DataFrame context.
@@ -1029,7 +1003,6 @@ class AnalysePowerAnalysis(AbstractAnalysePowerAnalysis[pd.DataFrame]):
             f"Available: 'minimum_n', 'observed_power'."
         )
 
-
 class AnalyseBootstrap(AbstractAnalyseBootstrap[pd.DataFrame]):
     """Non-parametric bootstrap CI for any statistic on a column.
 
@@ -1062,7 +1035,6 @@ class AnalyseBootstrap(AbstractAnalyseBootstrap[pd.DataFrame]):
             confidence_level=kwargs.get("confidence_level", 0.95),
             random_seed=kwargs.get("random_seed", 42),
         )
-
 
 class AnalyseCorrelationMatrix(AbstractAnalyseCorrelationMatrix[pd.DataFrame]):
     """Full correlation matrix with ranked pairs and multicollinearity flags.
@@ -1099,7 +1071,6 @@ class AnalyseCorrelationMatrix(AbstractAnalyseCorrelationMatrix[pd.DataFrame]):
             high_correlation_flag=kwargs.get("high_correlation_flag", 0.85),
         )
 
-
 class AnalyseMulticollinearity(AbstractAnalyseMulticollinearity[pd.DataFrame]):
     """VIF-based multicollinearity detection for linear model preparation.
 
@@ -1128,7 +1099,6 @@ class AnalyseMulticollinearity(AbstractAnalyseMulticollinearity[pd.DataFrame]):
             data_frame=numeric_df,
             high_vif_threshold=kwargs.get("high_vif_threshold", 10.0),
         )
-
 
 class AnalyseMutualInformation(AbstractAnalyseMutualInformation[pd.DataFrame]):
     """MI-based feature relevance scoring against a target variable.
@@ -1169,7 +1139,6 @@ class AnalyseMutualInformation(AbstractAnalyseMutualInformation[pd.DataFrame]):
             random_seed=kwargs.get("random_seed", 42),
         )
 
-
 class AnalysePartialCorrelation(AbstractAnalysePartialCorrelation[pd.DataFrame]):
     """Partial correlation between two columns controlling for confounders.
 
@@ -1203,7 +1172,6 @@ class AnalysePartialCorrelation(AbstractAnalysePartialCorrelation[pd.DataFrame])
             significance_level=kwargs.get("significance_level", 0.05),
         )
 
-
 class AnalyseCrossCorrelation(AbstractAnalyseCrossCorrelation[pd.DataFrame]):
     """Cross-correlation between two time series across a range of lags.
 
@@ -1229,7 +1197,6 @@ class AnalyseCrossCorrelation(AbstractAnalyseCrossCorrelation[pd.DataFrame]):
             column_y=column_y,
             max_lag=kwargs.get("max_lag", 10),
         )
-
 
 class AnalyseGrangerCausality(AbstractAnalyseGrangerCausality[pd.DataFrame]):
     """Granger causality test: does x improve forecasts of y?
@@ -1259,7 +1226,6 @@ class AnalyseGrangerCausality(AbstractAnalyseGrangerCausality[pd.DataFrame]):
             significance_level=kwargs.get("significance_level", 0.05),
         )
 
-
 class AnalyseContingency(AbstractAnalyseContingency[pd.DataFrame]):
     """Full 2×2 contingency analysis: chi-square, OR, RR, Cramér's V.
 
@@ -1288,7 +1254,6 @@ class AnalyseContingency(AbstractAnalyseContingency[pd.DataFrame]):
             confidence_level=kwargs.get("confidence_level", 0.95),
         )
 
-
 class AnalyseInteractionEffects(AbstractAnalyseInteractionEffects[pd.DataFrame]):
     """Detect feature pairs whose interaction improves target R².
 
@@ -1315,7 +1280,6 @@ class AnalyseInteractionEffects(AbstractAnalyseInteractionEffects[pd.DataFrame])
             top_n=kwargs.get("top_n"),
         )
 
-
 # ── DOMAIN 5 IMPORTS ──────────────────────────────────────────────────────────
 from statistics.ml_support.feature_variance import FeatureVarianceCalculator
 from statistics.ml_support.feature_selection import FeatureSelectionCalculator
@@ -1325,7 +1289,6 @@ from statistics.ml_support.class_imbalance import ClassImbalanceCalculator
 from statistics.ml_support.model_residuals import ModelResidualsCalculator
 from statistics.ml_support.learning_curve import LearningCurveCalculator
 from statistics.ml_support.cross_validation import CrossValidationCalculator
-
 
 class AnalyseFeatureVariance(AbstractAnalyseFeatureVariance[pd.DataFrame]):
     """Near-zero variance detection across all numeric columns.
@@ -1346,7 +1309,6 @@ class AnalyseFeatureVariance(AbstractAnalyseFeatureVariance[pd.DataFrame]):
             unique_ratio_threshold=kwargs.get("unique_ratio_threshold", 0.01),
             frequency_ratio_threshold=kwargs.get("frequency_ratio_threshold", 0.95),
         )
-
 
 class AnalyseFeatureSelection(AbstractAnalyseFeatureSelection[pd.DataFrame]):
     """Univariate feature scoring: chi2, ANOVA F, mutual information.
@@ -1378,7 +1340,6 @@ class AnalyseFeatureSelection(AbstractAnalyseFeatureSelection[pd.DataFrame]):
             top_n=kwargs.get("top_n"),
             random_seed=kwargs.get("random_seed", 42),
         )
-
 
 class AnalyseFeatureImportance(AbstractAnalyseFeatureImportance[pd.DataFrame]):
     """Random Forest Gini and permutation importance.
@@ -1414,7 +1375,6 @@ class AnalyseFeatureImportance(AbstractAnalyseFeatureImportance[pd.DataFrame]):
             random_seed=kwargs.get("random_seed", 42),
         )
 
-
 class AnalyseDimensionalityReduction(AbstractAnalyseDimensionalityReduction[pd.DataFrame]):
     """PCA with variance explained, loadings, and optimal component selection.
 
@@ -1446,7 +1406,6 @@ class AnalyseDimensionalityReduction(AbstractAnalyseDimensionalityReduction[pd.D
             target_variance_explained=kwargs.get("target_variance_explained", 0.95),
         )
 
-
 class AnalyseClassImbalance(AbstractAnalyseClassImbalance[pd.DataFrame]):
     """Class distribution analysis with resampling strategy recommendation.
 
@@ -1469,7 +1428,6 @@ class AnalyseClassImbalance(AbstractAnalyseClassImbalance[pd.DataFrame]):
             series=self._data_frame[target_column],
             minority_threshold=kwargs.get("minority_threshold", 0.3),
         )
-
 
 class AnalyseModelResiduals(AbstractAnalyseModelResiduals[pd.DataFrame]):
     """Residual diagnostics: normality, homoscedasticity, autocorrelation.
@@ -1499,7 +1457,6 @@ class AnalyseModelResiduals(AbstractAnalyseModelResiduals[pd.DataFrame]):
             y_pred=paired[predicted_column].to_numpy(dtype=float),
             significance_level=kwargs.get("significance_level", 0.05),
         )
-
 
 class AnalyseLearningCurve(AbstractAnalyseLearningCurve[pd.DataFrame]):
     """Learning curve for bias-variance diagnosis across training sizes.
@@ -1545,7 +1502,6 @@ class AnalyseLearningCurve(AbstractAnalyseLearningCurve[pd.DataFrame]):
             random_seed=kwargs.get("random_seed", 42),
         )
 
-
 class AnalyseCrossValidation(AbstractAnalyseCrossValidation[pd.DataFrame]):
     """K-Fold / Stratified / Repeated cross-validation with CI.
 
@@ -1590,7 +1546,6 @@ class AnalyseCrossValidation(AbstractAnalyseCrossValidation[pd.DataFrame]):
             n_jobs=kwargs.get("n_jobs", -1),
         )
 
-
 # ── DOMAIN 4 IMPORTS ──────────────────────────────────────────────────────────
 from statistics.time_series.volatility import VolatilityCalculator
 from statistics.time_series.momentum import MomentumCalculator
@@ -1601,7 +1556,6 @@ from statistics.time_series.change_points import ChangePointDetector
 from statistics.time_series.forecast_accuracy import ForecastAccuracyCalculator
 from statistics.time_series.cyclical_patterns import CyclicalPatternsCalculator
 from statistics.time_series.rolling_statistics import RollingStatisticsCalculator
-
 
 class AnalyseVolatility(AbstractAnalyseVolatility[pd.DataFrame]):
     """Rolling std, EWMA volatility, CV and regime detection."""
@@ -1619,7 +1573,6 @@ class AnalyseVolatility(AbstractAnalyseVolatility[pd.DataFrame]):
             decay_factor=kwargs.get("decay_factor", 0.94),
         )
 
-
 class AnalyseMomentum(AbstractAnalyseMomentum[pd.DataFrame]):
     """Rate of change, acceleration, and momentum signal classification."""
 
@@ -1634,7 +1587,6 @@ class AnalyseMomentum(AbstractAnalyseMomentum[pd.DataFrame]):
             series=series,
             period=kwargs.get("period", 14),
         )
-
 
 class AnalyseMovingAverages(AbstractAnalyseMovingAverages[pd.DataFrame]):
     """SMA, EMA, WMA computation with optional crossover detection."""
@@ -1656,7 +1608,6 @@ class AnalyseMovingAverages(AbstractAnalyseMovingAverages[pd.DataFrame]):
             crossover_ma_type=kwargs.get("crossover_ma_type", "ema"),
         )
 
-
 class AnalyseStationarity(AbstractAnalyseStationarity[pd.DataFrame]):
     """ADF + KPSS combined stationarity test with recommendation."""
 
@@ -1672,7 +1623,6 @@ class AnalyseStationarity(AbstractAnalyseStationarity[pd.DataFrame]):
             max_lags=kwargs.get("max_lags", 4),
             significance_level=kwargs.get("significance_level", 0.05),
         )
-
 
 class AnalyseLagFeatures(AbstractAnalyseLagFeatures[pd.DataFrame]):
     """ACF, PACF analysis and lag feature generation."""
@@ -1690,7 +1640,6 @@ class AnalyseLagFeatures(AbstractAnalyseLagFeatures[pd.DataFrame]):
             significance_level=kwargs.get("significance_level", 0.05),
         )
 
-
 class AnalyseChangePoints(AbstractAnalyseChangePoints[pd.DataFrame]):
     """CUSUM mean-shift and variance change point detection."""
 
@@ -1707,7 +1656,6 @@ class AnalyseChangePoints(AbstractAnalyseChangePoints[pd.DataFrame]):
             h_multiplier=kwargs.get("h_multiplier", 4.0),
             variance_ratio_threshold=kwargs.get("variance_ratio_threshold", 2.0),
         )
-
 
 class AnalyseForecastAccuracy(AbstractAnalyseForecastAccuracy[pd.DataFrame]):
     """MAE, RMSE, MAPE, MASE forecast accuracy metrics."""
@@ -1727,7 +1675,6 @@ class AnalyseForecastAccuracy(AbstractAnalyseForecastAccuracy[pd.DataFrame]):
             metrics=kwargs.get("metrics"),
         )
 
-
 class AnalyseCyclicalPatterns(AbstractAnalyseCyclicalPatterns[pd.DataFrame]):
     """FFT-based dominant cycle detection."""
 
@@ -1745,7 +1692,6 @@ class AnalyseCyclicalPatterns(AbstractAnalyseCyclicalPatterns[pd.DataFrame]):
             apply_window=kwargs.get("apply_window", True),
         )
 
-
 class AnalyseRollingStatistics(AbstractAnalyseRollingStatistics[pd.DataFrame]):
     """Configurable rolling statistics: mean, std, min, max, median, skewness."""
 
@@ -1761,7 +1707,6 @@ class AnalyseRollingStatistics(AbstractAnalyseRollingStatistics[pd.DataFrame]):
             window=kwargs.get("window", 20),
             statistics=kwargs.get("statistics"),
         )
-
 
 class AnalyseTextBasicStats(AbstractAnalyseTextBasicStats[pd.DataFrame]):
     """Per-document and corpus-level text statistics.
@@ -1785,7 +1730,6 @@ class AnalyseTextBasicStats(AbstractAnalyseTextBasicStats[pd.DataFrame]):
             series=self._data_frame[column],
             sample_n=kwargs.get("sample_n"),
         )
-
 
 class AnalyseWordFrequency(AbstractAnalyseWordFrequency[pd.DataFrame]):
     """TF and TF-IDF term frequency ranking across a text corpus.
@@ -1814,7 +1758,6 @@ class AnalyseWordFrequency(AbstractAnalyseWordFrequency[pd.DataFrame]):
             custom_stopwords=kwargs.get("custom_stopwords"),
         )
 
-
 class AnalyseSentiment(AbstractAnalyseSentiment[pd.DataFrame]):
     """Lexicon-based polarity and subjectivity analysis.
 
@@ -1837,7 +1780,6 @@ class AnalyseSentiment(AbstractAnalyseSentiment[pd.DataFrame]):
             series=self._data_frame[column],
             sample_n=kwargs.get("sample_n"),
         )
-
 
 class AnalyseTopicDetection(AbstractAnalyseTopicDetection[pd.DataFrame]):
     """NMF-based latent topic discovery in a text corpus.
@@ -1870,7 +1812,6 @@ class AnalyseTopicDetection(AbstractAnalyseTopicDetection[pd.DataFrame]):
             random_seed=kwargs.get("random_seed", 42),
         )
 
-
 class AnalyseLanguageDetection(AbstractAnalyseLanguageDetection[pd.DataFrame]):
     """Character trigram-based language detection per document.
 
@@ -1893,7 +1834,6 @@ class AnalyseLanguageDetection(AbstractAnalyseLanguageDetection[pd.DataFrame]):
             series=self._data_frame[column],
             top_n_candidates=kwargs.get("top_n_candidates", 3),
         )
-
 
 class AnalyseTextSimilarity(AbstractAnalyseTextSimilarity[pd.DataFrame]):
     """Pairwise TF-IDF cosine similarity between two text columns.
@@ -1922,7 +1862,6 @@ class AnalyseTextSimilarity(AbstractAnalyseTextSimilarity[pd.DataFrame]):
             column_b=column_b,
         )
 
-
 class AnalyseNamedEntityDensity(AbstractAnalyseNamedEntityDensity[pd.DataFrame]):
     """Rule-based named entity detection and density analysis.
 
@@ -1948,11 +1887,7 @@ class AnalyseNamedEntityDensity(AbstractAnalyseNamedEntityDensity[pd.DataFrame])
             sample_n=kwargs.get("sample_n"),
         )
 
-
-
-
 # ── DOMAIN 7 — SEGMENTATION ───────────────────────────────────────────────────
-
 
 class AnalyseKMeansClusters(AbstractAnalyseKMeansClusters[pd.DataFrame]):
     """K-Means clustering with auto K selection via silhouette score.
@@ -1980,7 +1915,6 @@ class AnalyseKMeansClusters(AbstractAnalyseKMeansClusters[pd.DataFrame]):
             k_range=kwargs.get("k_range", (2, 8)),
             random_seed=kwargs.get("random_seed", 42),
         )
-
 
 class AnalyseRFMSegmentation(AbstractAnalyseRFMSegmentation[pd.DataFrame]):
     """RFM segmentation from transactional data.
@@ -2015,7 +1949,6 @@ class AnalyseRFMSegmentation(AbstractAnalyseRFMSegmentation[pd.DataFrame]):
             reference_date=kwargs.get("reference_date"),
         )
 
-
 class AnalyseCohortAnalysis(AbstractAnalyseCohortAnalysis[pd.DataFrame]):
     """Cohort retention matrix by acquisition period.
 
@@ -2042,7 +1975,6 @@ class AnalyseCohortAnalysis(AbstractAnalyseCohortAnalysis[pd.DataFrame]):
             date_column=date_column,
             period=kwargs.get("period", "M"),
         )
-
 
 class AnalysePopulationSplits(AbstractAnalysePopulationSplits[pd.DataFrame]):
     """Statistical feature comparison between two population groups.
@@ -2077,7 +2009,6 @@ class AnalysePopulationSplits(AbstractAnalysePopulationSplits[pd.DataFrame]):
             significance_level=kwargs.get("significance_level", 0.05),
         )
 
-
 class AnalyseDBSCANClusters(AbstractAnalyseDBSCANClusters[pd.DataFrame]):
     """DBSCAN density-based clustering with auto epsilon estimation.
 
@@ -2103,7 +2034,6 @@ class AnalyseDBSCANClusters(AbstractAnalyseDBSCANClusters[pd.DataFrame]):
             min_samples=kwargs.get("min_samples", 5),
             random_seed=kwargs.get("random_seed", 42),
         )
-
 
 class AnalyseHierarchicalClusters(AbstractAnalyseHierarchicalClusters[pd.DataFrame]):
     """Hierarchical agglomerative clustering with cophenetic correlation.
@@ -2134,7 +2064,6 @@ class AnalyseHierarchicalClusters(AbstractAnalyseHierarchicalClusters[pd.DataFra
             extract_dendrogram=kwargs.get("extract_dendrogram", False),
         )
 
-
 class AnalyseGrowthRates(AbstractAnalyseGrowthRates[pd.DataFrame]):
     """MoM/YoY period-over-period growth, CAGR, and rolling growth.
 
@@ -2163,7 +2092,6 @@ class AnalyseGrowthRates(AbstractAnalyseGrowthRates[pd.DataFrame]):
             n_years=kwargs.get("n_years"),
             periods_per_year=kwargs.get("periods_per_year", 12),
         )
-
 
 class AnalyseRiskMetrics(AbstractAnalyseRiskMetrics[pd.DataFrame]):
     """VaR, CVaR, Sharpe, Sortino, Max Drawdown, and Calmar ratio.
@@ -2196,7 +2124,6 @@ class AnalyseRiskMetrics(AbstractAnalyseRiskMetrics[pd.DataFrame]):
             periods_per_year=kwargs.get("periods_per_year", 252),
         )
 
-
 class AnalyseFinancialRatios(AbstractAnalyseFinancialRatios[pd.DataFrame]):
     """Profitability, liquidity, leverage, and efficiency ratios.
 
@@ -2217,7 +2144,6 @@ class AnalyseFinancialRatios(AbstractAnalyseFinancialRatios[pd.DataFrame]):
             data_frame=self._data_frame,
             ratios=kwargs.get("ratios"),
         )
-
 
 class AnalyseConversionFunnel(AbstractAnalyseConversionFunnel[pd.DataFrame]):
     """Funnel analysis with stage conversion rates and bottleneck detection.
@@ -2261,7 +2187,6 @@ class AnalyseConversionFunnel(AbstractAnalyseConversionFunnel[pd.DataFrame]):
             bottleneck_threshold=kwargs.get("bottleneck_threshold", 0.5),
         )
 
-
 class AnalyseChurnRate(AbstractAnalyseChurnRate[pd.DataFrame]):
     """Period-level churn rate from aggregated data or event logs.
 
@@ -2300,7 +2225,6 @@ class AnalyseChurnRate(AbstractAnalyseChurnRate[pd.DataFrame]):
             user_column=kwargs.get("user_column"),
         )
 
-
 class AnalyseCustomerLifetimeValue(AbstractAnalyseCustomerLifetimeValue[pd.DataFrame]):
     """Discounted and simple CLV per customer from transactional data.
 
@@ -2337,7 +2261,6 @@ class AnalyseCustomerLifetimeValue(AbstractAnalyseCustomerLifetimeValue[pd.DataF
             periods_per_year=kwargs.get("periods_per_year", 12),
         )
 
-
 class AnalyseParetoAnalysis(AbstractAnalyseParetoAnalysis[pd.DataFrame]):
     """Pareto (80/20) analysis with Gini concentration coefficient.
 
@@ -2366,7 +2289,6 @@ class AnalyseParetoAnalysis(AbstractAnalyseParetoAnalysis[pd.DataFrame]):
             value_column=value_column,
             target_share=kwargs.get("target_share", 0.8),
         )
-
 
 class AnalyseRunRate(AbstractAnalyseRunRate[pd.DataFrame]):
     """Run rate projection: simple, trailing average, and weighted recent.
@@ -2407,7 +2329,6 @@ class AnalyseRunRate(AbstractAnalyseRunRate[pd.DataFrame]):
             methods=kwargs.get("methods"),
         )
 
-
 class AnalyseGeoDistribution(AbstractAnalyseGeoDistribution[pd.DataFrame]):
     """Geographic frequency distribution with HHI concentration metric.
 
@@ -2433,7 +2354,6 @@ class AnalyseGeoDistribution(AbstractAnalyseGeoDistribution[pd.DataFrame]):
             top_n=kwargs.get("top_n", 20),
             secondary_column=kwargs.get("secondary_column"),
         )
-
 
 class AnalyseGeoClustering(AbstractAnalyseGeoClustering[pd.DataFrame]):
     """Haversine-DBSCAN geographic point clustering.
@@ -2466,7 +2386,6 @@ class AnalyseGeoClustering(AbstractAnalyseGeoClustering[pd.DataFrame]):
             min_samples=kwargs.get("min_samples", 5),
         )
 
-
 class AnalyseGeoBoundingBox(AbstractAnalyseGeoBoundingBox[pd.DataFrame]):
     """Bounding box, centroid, diagonal, and dispersion label.
 
@@ -2493,7 +2412,6 @@ class AnalyseGeoBoundingBox(AbstractAnalyseGeoBoundingBox[pd.DataFrame]):
             lat_column=lat_column,
             lon_column=lon_column,
         )
-
 
 class AnalyseGeoHeatmap(AbstractAnalyseGeoHeatmap[pd.DataFrame]):
     """Grid-based geographic density heatmap (points per km²).
@@ -2528,7 +2446,6 @@ class AnalyseGeoHeatmap(AbstractAnalyseGeoHeatmap[pd.DataFrame]):
             include_empty_cells=kwargs.get("include_empty_cells", False),
         )
 
-
 class AnalyseProximity(AbstractAnalyseProximity[pd.DataFrame]):
     """Nearest neighbor distances and ANN spatial pattern analysis.
 
@@ -2559,7 +2476,6 @@ class AnalyseProximity(AbstractAnalyseProximity[pd.DataFrame]):
             include_all_nn=kwargs.get("include_all_nn", False),
             max_points=kwargs.get("max_points", 2_000),
         )
-
 
 # ─────────────────────────────────────────────────────────────────────────────
 # DOMAIN 10 — GRAPH ANALYZERS
@@ -2596,7 +2512,6 @@ class AnalyseNetworkDensity(AbstractAnalyseNetworkDensity[pd.DataFrame]):
             weight_column=kwargs.get("weight_column"),
         )
 
-
 class AnalyseCentrality(AbstractAnalyseCentrality[pd.DataFrame]):
     """Degree, betweenness, closeness, and PageRank centrality.
 
@@ -2632,7 +2547,6 @@ class AnalyseCentrality(AbstractAnalyseCentrality[pd.DataFrame]):
             weight_column=kwargs.get("weight_column"),
         )
 
-
 class AnalyseCommunityDetection(AbstractAnalyseCommunityDetection[pd.DataFrame]):
     """Louvain-style community detection with modularity Q scoring.
 
@@ -2664,7 +2578,6 @@ class AnalyseCommunityDetection(AbstractAnalyseCommunityDetection[pd.DataFrame])
             weight_column=kwargs.get("weight_column"),
         )
 
-
 class AnalysePathAnalysis(AbstractAnalysePathAnalysis[pd.DataFrame]):
     """Average path length, diameter, clustering coefficient, small-world σ.
 
@@ -2695,7 +2608,6 @@ class AnalysePathAnalysis(AbstractAnalysePathAnalysis[pd.DataFrame]):
             graph_type=kwargs.get("graph_type", "undirected"),
             weight_column=kwargs.get("weight_column"),
         )
-
 
 # ─────────────────────────────────────────────────────────────────────────────
 # DOMAIN 11 — SURVIVAL ANALYZERS
@@ -2736,7 +2648,6 @@ class AnalyseKaplanMeier(AbstractAnalyseKaplanMeier[pd.DataFrame]):
             group_column=group_column,
         )
 
-
 class AnalyseHazardRate(AbstractAnalyseHazardRate[pd.DataFrame]):
     """Nelson-Aalen cumulative hazard with Gaussian-smoothed instantaneous hazard.
 
@@ -2765,7 +2676,6 @@ class AnalyseHazardRate(AbstractAnalyseHazardRate[pd.DataFrame]):
             event_column=event_column,
             n_smooth_points=kwargs.get("n_smooth_points", 100),
         )
-
 
 class AnalyseEventDensity(AbstractAnalyseEventDensity[pd.DataFrame]):
     """Event frequency, inter-event intervals, burstiness B, and rolling rate.
@@ -2799,7 +2709,6 @@ class AnalyseEventDensity(AbstractAnalyseEventDensity[pd.DataFrame]):
             window_size=kwargs.get("window_size"),
             n_rate_windows=kwargs.get("n_rate_windows", 20),
         )
-
 
 class AnalyseTimeToEvent(AbstractAnalyseTimeToEvent[pd.DataFrame]):
     """Time-to-event descriptive statistics, threshold analysis, exponential fit.

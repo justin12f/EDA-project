@@ -1,0 +1,5 @@
+# #[AI_CONTEXT_START]
+# - CONFIGURACIÓN DE FACTORY: `EvaluationScoreFactory` (pandas | polars | spark) en `EvaluationInyeccionDependency`, inyectada por Factory Maestra.
+# - ABSTRACCIÓN DEL DATO: Métricas sobre columnas o vectores materializados del backend, no solo `np.ndarray` en API pública.
+# - REFACTOR NATIVO: MSE/MAE/R² con expresiones nativas del backend activo.
+# #[AI_CONTEXT_END]

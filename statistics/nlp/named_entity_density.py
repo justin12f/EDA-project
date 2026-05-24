@@ -1,5 +1,10 @@
 """Named entity density estimation via rule-based pattern matching."""
 
+# #[AI_CONTEXT_START]
+# - CONFIGURACIÓN DE FACTORY: Registrar este calculator en `NlpStatisticsFactory` (backends pandas | polars | spark) y exponerlo mediante `StatisticsInyeccionDependency`, inyectada por la Factory Maestra de Agentes junto a las demás fábricas de dominio.
+# - ABSTRACCIÓN DEL DATO: Mutar constructores y `analyze`/`compute` para recibir el contenedor abstracto del backend (`pd.DataFrame`, `pl.DataFrame`/`pl.LazyFrame`, `pyspark.sql.DataFrame`) inyectado por la factory; eliminar `np.ndarray`/`pd.Series` sueltos en firmas públicas.
+# - REFACTOR NATIVO: Resolver métricas con expresiones 100 % nativas del backend activo (Polars: `.select`/`.group_by`/`.agg` sin `.collect()` salvo materialización acordada; PySpark: `pyspark.sql.functions` y ventanas distribuidas; Pandas: operaciones vectorizadas). No convertir a NumPy/Pandas desde backends no-pandas.
+# #[AI_CONTEXT_END]
 from __future__ import annotations
 
 import re
@@ -7,7 +12,6 @@ from dataclasses import dataclass
 from enum import Enum
 
 import pandas as pd
-
 
 class EntityType(str, Enum):
     """Enumeration of detectable named entity types."""
@@ -21,7 +25,6 @@ class EntityType(str, Enum):
     EMAIL = "EMAIL"
     URL = "URL"
 
-
 @dataclass(frozen=True)
 class EntityMatch:
     """Immutable record of a single named entity match."""
@@ -30,7 +33,6 @@ class EntityMatch:
     matched_text: str
     start: int
     end: int
-
 
 class EntityPatternLibrary:
     """Compiled regex patterns for rule-based named entity recognition.
@@ -85,7 +87,6 @@ class EntityPatternLibrary:
         ),
     }
 
-
 class DocumentEntityExtractor:
     """Extracts all named entity matches from a single document."""
 
@@ -114,7 +115,6 @@ class DocumentEntityExtractor:
                 )
         return matches
 
-
 class EntityDensityComputer:
     """Computes entity density as entities per 100 words."""
 
@@ -131,7 +131,6 @@ class EntityDensityComputer:
         if word_count == 0:
             return 0.0
         return round(entity_count / word_count * 100, 4)
-
 
 class NamedEntityDensityCalculator:
     """Rule-based named entity density analysis for a text column.

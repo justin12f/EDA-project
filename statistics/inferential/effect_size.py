@@ -1,12 +1,16 @@
 """Effect size calculators for hypothesis tests."""
 
+# #[AI_CONTEXT_START]
+# - CONFIGURACIÓN DE FACTORY: Registrar este calculator en `InferentialStatisticsFactory` (backends pandas | polars | spark) y exponerlo mediante `StatisticsInyeccionDependency`, inyectada por la Factory Maestra de Agentes junto a las demás fábricas de dominio.
+# - ABSTRACCIÓN DEL DATO: Mutar constructores y `analyze`/`compute` para recibir el contenedor abstracto del backend (`pd.DataFrame`, `pl.DataFrame`/`pl.LazyFrame`, `pyspark.sql.DataFrame`) inyectado por la factory; eliminar `np.ndarray`/`pd.Series` sueltos en firmas públicas.
+# - REFACTOR NATIVO: Resolver métricas con expresiones 100 % nativas del backend activo (Polars: `.select`/`.group_by`/`.agg` sin `.collect()` salvo materialización acordada; PySpark: `pyspark.sql.functions` y ventanas distribuidas; Pandas: operaciones vectorizadas). No convertir a NumPy/Pandas desde backends no-pandas.
+# #[AI_CONTEXT_END]
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
 
 import numpy as np
 from scipy import stats
-
 
 class EffectSizeInterpreter:
     """Interprets magnitude of an effect size by convention (Cohen, 1988)."""
@@ -50,7 +54,6 @@ class EffectSizeInterpreter:
                 return label
         return "negligible"
 
-
 class CohensDCalculator:
     """Cohen's d for the standardized mean difference between two groups.
 
@@ -86,7 +89,6 @@ class CohensDCalculator:
 
         return float((group_a.mean() - group_b.mean()) / pooled_std)
 
-
 class EtaSquaredCalculator:
     """Eta-squared (η²) for one-way ANOVA — proportion of variance explained."""
 
@@ -117,7 +119,6 @@ class EtaSquaredCalculator:
         ss_total = float(np.sum((all_data - grand_mean) ** 2))
 
         return ss_between / ss_total if ss_total > 0 else 0.0
-
 
 class EffectSizeCalculator:
     """Unified effect size dispatcher.

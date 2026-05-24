@@ -1,12 +1,16 @@
 """Cross-correlation analysis with lag detection between two time series."""
 
+# #[AI_CONTEXT_START]
+# - CONFIGURACIÓN DE FACTORY: Registrar este calculator en `RelationalStatisticsFactory` (backends pandas | polars | spark) y exponerlo mediante `StatisticsInyeccionDependency`, inyectada por la Factory Maestra de Agentes junto a las demás fábricas de dominio.
+# - ABSTRACCIÓN DEL DATO: Mutar constructores y `analyze`/`compute` para recibir el contenedor abstracto del backend (`pd.DataFrame`, `pl.DataFrame`/`pl.LazyFrame`, `pyspark.sql.DataFrame`) inyectado por la factory; eliminar `np.ndarray`/`pd.Series` sueltos en firmas públicas.
+# - REFACTOR NATIVO: Resolver métricas con expresiones 100 % nativas del backend activo (Polars: `.select`/`.group_by`/`.agg` sin `.collect()` salvo materialización acordada; PySpark: `pyspark.sql.functions` y ventanas distribuidas; Pandas: operaciones vectorizadas). No convertir a NumPy/Pandas desde backends no-pandas.
+# #[AI_CONTEXT_END]
 from __future__ import annotations
 
 from dataclasses import dataclass
 
 import numpy as np
 import pandas as pd
-
 
 @dataclass(frozen=True)
 class LagResult:
@@ -15,7 +19,6 @@ class LagResult:
     lag: int
     correlation: float
     abs_correlation: float
-
 
 class SeriesStandardizer:
     """Zero-mean unit-variance standardization for cross-correlation validity.
@@ -43,7 +46,6 @@ class SeriesStandardizer:
                 "Cross-correlation is undefined for constant inputs."
             )
         return (series - series.mean()) / std
-
 
 class LaggedCorrelationComputer:
     """Computes Pearson correlation at each specified lag.
@@ -97,7 +99,6 @@ class LaggedCorrelationComputer:
 
         return results
 
-
 class PeakLagDetector:
     """Identifies the lag with the highest absolute correlation."""
 
@@ -113,7 +114,6 @@ class PeakLagDetector:
         if not lag_results:
             return None
         return max(lag_results, key=lambda r: r.abs_correlation)
-
 
 class CrossCorrelationCalculator:
     """Cross-correlation between two time series across a range of lags.

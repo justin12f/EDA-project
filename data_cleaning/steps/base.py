@@ -3,6 +3,11 @@
 Zero imports from Polars, PySpark, or Pandas.
 """
 
+# #[AI_CONTEXT_START]
+# - CONFIGURACIÓN DE FACTORY: `DataCleaningStepFactory` del backend correspondiente en `data_cleaning/steps/backends/`; inyección vía `DataCleaningInyeccionDependency` → Factory Maestra.
+# - ABSTRACCIÓN DEL DATO: Canonicalizar en `backends/`; deprecar duplicados en `steps/implementations.py` y `steps/polars_impl.py` raíz tras verificar referencias.
+# - REFACTOR NATIVO: Steps en inglés y 100 % API nativa del backend; sin NumPy salvo materialización local explícita.
+# #[AI_CONTEXT_END]
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
@@ -10,7 +15,6 @@ from typing import Any, Generic, TypeVar
 
 # T represents the DataFrame type of the chosen backend.
 T = TypeVar("T")
-
 
 class AbstractStep(ABC, Generic[T]):
     """Contract for a single data cleaning pipeline step.

@@ -11,6 +11,11 @@ Design rules strictly enforced here:
     - method process() is the single transformation entrypoint (Template Method).
 """
 
+# #[AI_CONTEXT_START]
+# - CONFIGURACIÓN DE FACTORY: `DataCleaningStepFactory` del backend correspondiente en `data_cleaning/steps/backends/`; inyección vía `DataCleaningInyeccionDependency` → Factory Maestra.
+# - ABSTRACCIÓN DEL DATO: Canonicalizar en `backends/`; deprecar duplicados en `steps/implementations.py` y `steps/polars_impl.py` raíz tras verificar referencias.
+# - REFACTOR NATIVO: Steps en inglés y 100 % API nativa del backend; sin NumPy salvo materialización local explícita.
+# #[AI_CONTEXT_END]
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
@@ -19,7 +24,6 @@ from typing import Any, Dict, FrozenSet, Generic, List, Optional, TypeVar
 # T: represents the backend-specific DataFrame type bound at implementation time.
 # e.g.  pd.DataFrame  |  pl.DataFrame  |  pyspark.sql.DataFrame
 T = TypeVar("T")
-
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Root Generic Contract
@@ -49,7 +53,6 @@ class AbstractBaseStep(ABC, Generic[T]):
             Cleaned DataFrame of the same type T.
         """
 
-
 # ─────────────────────────────────────────────────────────────────────────────
 # Abstract Steps — Schema & Structure
 # ─────────────────────────────────────────────────────────────────────────────
@@ -72,7 +75,6 @@ class AbstractColumnScopedStep(AbstractBaseStep[T], Generic[T]):
     @abstractmethod
     def process(self, data: T) -> T: ...
 
-
 class AbstractColumnsTitlesStep(AbstractBaseStep[T], Generic[T]):
     """Contract: Normalize column names.
 
@@ -83,7 +85,6 @@ class AbstractColumnsTitlesStep(AbstractBaseStep[T], Generic[T]):
 
     @abstractmethod
     def process(self, data: T) -> T: ...
-
 
 class AbstractEnforceSchemaStep(AbstractBaseStep[T], Generic[T]):
     """Contract: Validate minimum structural requirements.
@@ -103,7 +104,6 @@ class AbstractEnforceSchemaStep(AbstractBaseStep[T], Generic[T]):
     @abstractmethod
     def process(self, data: T) -> T: ...
 
-
 class AbstractDropHighMissingColumnsStep(AbstractBaseStep[T], Generic[T]):
     """Contract: Drop columns where null fraction > threshold.
 
@@ -122,13 +122,11 @@ class AbstractDropHighMissingColumnsStep(AbstractBaseStep[T], Generic[T]):
     @abstractmethod
     def process(self, data: T) -> T: ...
 
-
 class AbstractDropConstantColumnsStep(AbstractBaseStep[T], Generic[T]):
     """Contract: Drop columns carrying zero information (≤1 unique non-null value)."""
 
     @abstractmethod
     def process(self, data: T) -> T: ...
-
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Abstract Steps — Missing Values & Sentinels
@@ -151,7 +149,6 @@ class AbstractHandleSentinelValuesStep(AbstractBaseStep[T], Generic[T]):
     @abstractmethod
     def process(self, data: T) -> T: ...
 
-
 class AbstractImputeCategoricalStep(AbstractBaseStep[T], Generic[T]):
     """Contract: Impute missing values in categorical/object columns.
 
@@ -171,7 +168,6 @@ class AbstractImputeCategoricalStep(AbstractBaseStep[T], Generic[T]):
 
     @abstractmethod
     def process(self, data: T) -> T: ...
-
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Abstract Steps — Type Conversion & Parsing
@@ -195,7 +191,6 @@ class AbstractSafeConversionStep(AbstractBaseStep[T], Generic[T]):
     @abstractmethod
     def process(self, data: T) -> T: ...
 
-
 class AbstractFixDatesColumnsStep(AbstractBaseStep[T], Generic[T]):
     """Contract: Parse string columns to datetime and invalidate out-of-range dates.
 
@@ -213,7 +208,6 @@ class AbstractFixDatesColumnsStep(AbstractBaseStep[T], Generic[T]):
     @abstractmethod
     def process(self, data: T) -> T: ...
 
-
 class AbstractFixBoolsColumnsStep(AbstractBaseStep[T], Generic[T]):
     """Contract: Convert text boolean representations to native Boolean type.
 
@@ -230,7 +224,6 @@ class AbstractFixBoolsColumnsStep(AbstractBaseStep[T], Generic[T]):
     @abstractmethod
     def process(self, data: T) -> T: ...
 
-
 class AbstractFixColumnsTypesStep(AbstractBaseStep[T], Generic[T]):
     """Contract: Cast columns to their final target dtypes after all cleaning."""
 
@@ -245,7 +238,6 @@ class AbstractFixColumnsTypesStep(AbstractBaseStep[T], Generic[T]):
 
     @abstractmethod
     def process(self, data: T) -> T: ...
-
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Abstract Steps — Numeric Cleaning & Imputation
@@ -268,7 +260,6 @@ class AbstractFixNumericColumnsStep(AbstractBaseStep[T], Generic[T]):
     @abstractmethod
     def process(self, data: T) -> T: ...
 
-
 # ─────────────────────────────────────────────────────────────────────────────
 # Abstract Steps — Outlier Handling
 # ─────────────────────────────────────────────────────────────────────────────
@@ -289,7 +280,6 @@ class AbstractIQROutlierStep(AbstractBaseStep[T], Generic[T]):
     @abstractmethod
     def process(self, data: T) -> T: ...
 
-
 class AbstractZScoreOutlierStep(AbstractBaseStep[T], Generic[T]):
     """Contract: Nullify values whose absolute Z-score exceeds z_threshold.
 
@@ -307,7 +297,6 @@ class AbstractZScoreOutlierStep(AbstractBaseStep[T], Generic[T]):
     @abstractmethod
     def process(self, data: T) -> T: ...
 
-
 class AbstractCapOutliersStep(AbstractBaseStep[T], Generic[T]):
     """Contract: Winsorize outliers by capping at configurable percentile bounds."""
 
@@ -322,7 +311,6 @@ class AbstractCapOutliersStep(AbstractBaseStep[T], Generic[T]):
 
     @abstractmethod
     def process(self, data: T) -> T: ...
-
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Abstract Steps — Text Normalization
@@ -345,7 +333,6 @@ class AbstractFixNotNumericColumnsStep(AbstractBaseStep[T], Generic[T]):
     @abstractmethod
     def process(self, data: T) -> T: ...
 
-
 class AbstractNormalizeCategoriesStep(AbstractBaseStep[T], Generic[T]):
     """Contract: Unify known category variants using a per-column synonym map.
 
@@ -363,7 +350,6 @@ class AbstractNormalizeCategoriesStep(AbstractBaseStep[T], Generic[T]):
 
     @abstractmethod
     def process(self, data: T) -> T: ...
-
 
 class AbstractTextStandardizationStep(AbstractBaseStep[T], Generic[T]):
     """Contract: Advanced text normalization per cell.
@@ -383,7 +369,6 @@ class AbstractTextStandardizationStep(AbstractBaseStep[T], Generic[T]):
 
     @abstractmethod
     def process(self, data: T) -> T: ...
-
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Abstract Steps — Validation
@@ -406,7 +391,6 @@ class AbstractValidateDomainRulesStep(AbstractBaseStep[T], Generic[T]):
     @abstractmethod
     def process(self, data: T) -> T: ...
 
-
 class AbstractCrossColumnValidationStep(AbstractBaseStep[T], Generic[T]):
     """Contract: Validate consistency between pairs of related columns.
 
@@ -424,7 +408,6 @@ class AbstractCrossColumnValidationStep(AbstractBaseStep[T], Generic[T]):
     @abstractmethod
     def process(self, data: T) -> T: ...
 
-
 # ─────────────────────────────────────────────────────────────────────────────
 # Abstract Steps — Duplicate Handling, Quality & Audit
 # ─────────────────────────────────────────────────────────────────────────────
@@ -434,7 +417,6 @@ class AbstractRemoveDuplicatesRowsStep(AbstractBaseStep[T], Generic[T]):
 
     @abstractmethod
     def process(self, data: T) -> T: ...
-
 
 class AbstractFlagDataQualityStep(AbstractBaseStep[T], Generic[T]):
     """Contract: Append a '_quality_score' column.
@@ -446,7 +428,6 @@ class AbstractFlagDataQualityStep(AbstractBaseStep[T], Generic[T]):
     @abstractmethod
     def process(self, data: T) -> T: ...
 
-
 class AbstractAddAuditColumnsStep(AbstractBaseStep[T], Generic[T]):
     """Contract: Append lineage-tracking columns.
 
@@ -457,7 +438,6 @@ class AbstractAddAuditColumnsStep(AbstractBaseStep[T], Generic[T]):
 
     @abstractmethod
     def process(self, data: T) -> T: ...
-
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Abstract Steps — Feature Scaling

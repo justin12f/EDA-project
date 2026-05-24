@@ -1,0 +1,5 @@
+# #[AI_CONTEXT_START]
+# - CONFIGURACIÓN DE FACTORY: Config global consumida por Factory Maestra; sin acoplamiento a un solo backend.
+# - ABSTRACCIÓN DEL DATO: Reemplazar constantes NumPy por umbrales configurables por backend cuando aplique.
+# - REFACTOR NATIVO: Mantener config declarativa; backends leen límites vía inyección.
+# #[AI_CONTEXT_END]

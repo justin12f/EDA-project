@@ -1,5 +1,10 @@
 """Normality testing suite module."""
 
+# #[AI_CONTEXT_START]
+# - CONFIGURACIÓN DE FACTORY: Registrar este calculator en `DescriptiveStatisticsFactory` (backends pandas | polars | spark) y exponerlo mediante `StatisticsInyeccionDependency`, inyectada por la Factory Maestra de Agentes junto a las demás fábricas de dominio.
+# - ABSTRACCIÓN DEL DATO: Mutar constructores y `analyze`/`compute` para recibir el contenedor abstracto del backend (`pd.DataFrame`, `pl.DataFrame`/`pl.LazyFrame`, `pyspark.sql.DataFrame`) inyectado por la factory; eliminar `np.ndarray`/`pd.Series` sueltos en firmas públicas.
+# - REFACTOR NATIVO: Resolver métricas con expresiones 100 % nativas del backend activo (Polars: `.select`/`.group_by`/`.agg` sin `.collect()` salvo materialización acordada; PySpark: `pyspark.sql.functions` y ventanas distribuidas; Pandas: operaciones vectorizadas). No convertir a NumPy/Pandas desde backends no-pandas.
+# #[AI_CONTEXT_END]
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
@@ -8,7 +13,6 @@ from typing import Optional
 
 import numpy as np
 from scipy import stats
-
 
 @dataclass(frozen=True)
 class NormalityTestResult:
@@ -20,7 +24,6 @@ class NormalityTestResult:
     is_normal: bool
     significance_level: float
     note: Optional[str] = None
-
 
 class BaseNormalityTest(ABC):
     """Abstract base for all normality tests."""
@@ -36,7 +39,6 @@ class BaseNormalityTest(ABC):
         Returns:
             NormalityTestResult with test outcome.
         """
-
 
 class ShapiroWilkTest(BaseNormalityTest):
     """Shapiro-Wilk test. Most powerful for small samples (n < 5000).
@@ -67,7 +69,6 @@ class ShapiroWilkTest(BaseNormalityTest):
             significance_level=significance_level,
             note=note,
         )
-
 
 class AndersonDarlingTest(BaseNormalityTest):
     """Anderson-Darling test. More sensitive to distribution tails than KS.
@@ -102,7 +103,6 @@ class AndersonDarlingTest(BaseNormalityTest):
             note=f"Critical value at α={significance_level}: {critical_value:.4f}",
         )
 
-
 class KolmogorovSmirnovTest(BaseNormalityTest):
     """Kolmogorov-Smirnov test against a fitted normal distribution.
 
@@ -121,7 +121,6 @@ class KolmogorovSmirnovTest(BaseNormalityTest):
             is_normal=float(p_value) > significance_level,
             significance_level=significance_level,
         )
-
 
 class NormalityTestSuite:
     """Runs all normality tests and aggregates results via majority vote.

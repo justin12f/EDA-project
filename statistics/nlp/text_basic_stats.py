@@ -1,5 +1,10 @@
 """Basic text statistics: length, lexical density, vocabulary richness."""
 
+# #[AI_CONTEXT_START]
+# - CONFIGURACIÓN DE FACTORY: Registrar este calculator en `NlpStatisticsFactory` (backends pandas | polars | spark) y exponerlo mediante `StatisticsInyeccionDependency`, inyectada por la Factory Maestra de Agentes junto a las demás fábricas de dominio.
+# - ABSTRACCIÓN DEL DATO: Mutar constructores y `analyze`/`compute` para recibir el contenedor abstracto del backend (`pd.DataFrame`, `pl.DataFrame`/`pl.LazyFrame`, `pyspark.sql.DataFrame`) inyectado por la factory; eliminar `np.ndarray`/`pd.Series` sueltos en firmas públicas.
+# - REFACTOR NATIVO: Resolver métricas con expresiones 100 % nativas del backend activo (Polars: `.select`/`.group_by`/`.agg` sin `.collect()` salvo materialización acordada; PySpark: `pyspark.sql.functions` y ventanas distribuidas; Pandas: operaciones vectorizadas). No convertir a NumPy/Pandas desde backends no-pandas.
+# #[AI_CONTEXT_END]
 from __future__ import annotations
 
 import re
@@ -7,7 +12,6 @@ from dataclasses import dataclass
 
 import numpy as np
 import pandas as pd
-
 
 @dataclass(frozen=True)
 class DocumentStats:
@@ -22,7 +26,6 @@ class DocumentStats:
     avg_sentence_length: float
     lexical_density: float
     type_token_ratio: float
-
 
 class TextNormalizer:
     """Normalizes raw text for consistent tokenization.
@@ -44,7 +47,6 @@ class TextNormalizer:
             Normalized lowercase string.
         """
         return self._WHITESPACE_PATTERN.sub(" ", text.lower()).strip()
-
 
 class WordTokenizer:
     """Tokenizes normalized text into word tokens.
@@ -70,7 +72,6 @@ class WordTokenizer:
             if len(t) >= self._MINIMUM_TOKEN_LENGTH
         ]
 
-
 class SentenceTokenizer:
     """Splits text into sentences using punctuation boundaries."""
 
@@ -89,7 +90,6 @@ class SentenceTokenizer:
         """
         sentences = self._SENTENCE_PATTERN.split(text)
         return [s.strip() for s in sentences if s.strip()]
-
 
 class LexicalDensityCalculator:
     """Computes lexical density: content words / total words.
@@ -125,7 +125,6 @@ class LexicalDensityCalculator:
             return 0.0
         content_words = [t for t in tokens if t not in self._ENGLISH_STOPWORDS]
         return len(content_words) / len(tokens)
-
 
 class DocumentStatsComputer:
     """Computes all statistics for a single document string."""
@@ -172,7 +171,6 @@ class DocumentStatsComputer:
             lexical_density=round(lexical_density, 4),
             type_token_ratio=round(ttr, 4),
         )
-
 
 class TextBasicStatsCalculator:
     """Computes per-document and corpus-level text statistics.

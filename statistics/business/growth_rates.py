@@ -1,12 +1,16 @@
 """Growth rate analysis: MoM, YoY, CAGR, and rolling growth."""
 
+# #[AI_CONTEXT_START]
+# - CONFIGURACIÓN DE FACTORY: Registrar este calculator en `BusinessStatisticsFactory` (backends pandas | polars | spark) y exponerlo mediante `StatisticsInyeccionDependency`, inyectada por la Factory Maestra de Agentes junto a las demás fábricas de dominio.
+# - ABSTRACCIÓN DEL DATO: Mutar constructores y `analyze`/`compute` para recibir el contenedor abstracto del backend (`pd.DataFrame`, `pl.DataFrame`/`pl.LazyFrame`, `pyspark.sql.DataFrame`) inyectado por la factory; eliminar `np.ndarray`/`pd.Series` sueltos en firmas públicas.
+# - REFACTOR NATIVO: Resolver métricas con expresiones 100 % nativas del backend activo (Polars: `.select`/`.group_by`/`.agg` sin `.collect()` salvo materialización acordada; PySpark: `pyspark.sql.functions` y ventanas distribuidas; Pandas: operaciones vectorizadas). No convertir a NumPy/Pandas desde backends no-pandas.
+# #[AI_CONTEXT_END]
 from __future__ import annotations
 
 from dataclasses import dataclass
 
 import numpy as np
 import pandas as pd
-
 
 @dataclass(frozen=True)
 class PeriodGrowthResult:
@@ -18,7 +22,6 @@ class PeriodGrowthResult:
     value_to: float
     absolute_change: float
     growth_rate_pct: float
-
 
 class PeriodOverPeriodCalculator:
     """Computes growth rate between consecutive periods.
@@ -66,7 +69,6 @@ class PeriodOverPeriodCalculator:
 
         return results
 
-
 class CAGRCalculator:
     """Computes Compound Annual Growth Rate between two points in time.
 
@@ -108,7 +110,6 @@ class CAGRCalculator:
             )
         return float((value_end / value_start) ** (1.0 / n_years) - 1)
 
-
 class RollingGrowthCalculator:
     """Computes rolling n-period growth rate across a time series.
 
@@ -136,7 +137,6 @@ class RollingGrowthCalculator:
             if base != 0.0:
                 result[i] = (current - base) / abs(base) * 100.0
         return result
-
 
 class GrowthRatesCalculator:
     """Full growth rate analysis: MoM/YoY, CAGR, and rolling growth.

@@ -1,5 +1,10 @@
 """Correlation with statistical significance and confidence intervals."""
 
+# #[AI_CONTEXT_START]
+# - CONFIGURACIÓN DE FACTORY: Registrar este calculator en `InferentialStatisticsFactory` (backends pandas | polars | spark) y exponerlo mediante `StatisticsInyeccionDependency`, inyectada por la Factory Maestra de Agentes junto a las demás fábricas de dominio.
+# - ABSTRACCIÓN DEL DATO: Mutar constructores y `analyze`/`compute` para recibir el contenedor abstracto del backend (`pd.DataFrame`, `pl.DataFrame`/`pl.LazyFrame`, `pyspark.sql.DataFrame`) inyectado por la factory; eliminar `np.ndarray`/`pd.Series` sueltos en firmas públicas.
+# - REFACTOR NATIVO: Resolver métricas con expresiones 100 % nativas del backend activo (Polars: `.select`/`.group_by`/`.agg` sin `.collect()` salvo materialización acordada; PySpark: `pyspark.sql.functions` y ventanas distribuidas; Pandas: operaciones vectorizadas). No convertir a NumPy/Pandas desde backends no-pandas.
+# #[AI_CONTEXT_END]
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -7,7 +12,6 @@ from typing import Literal
 
 import numpy as np
 from scipy import stats
-
 
 @dataclass(frozen=True)
 class CorrelationResult:
@@ -21,7 +25,6 @@ class CorrelationResult:
     confidence_interval_upper: float
     confidence_level: float
     interpretation: str
-
 
 class CorrelationInterpreter:
     """Interprets the magnitude of a correlation coefficient."""
@@ -55,7 +58,6 @@ class CorrelationInterpreter:
 
         significance_label = "significant" if is_significant else "not significant"
         return f"{magnitude} {direction} correlation ({significance_label})"
-
 
 class FisherZTransformer:
     """Fisher Z-transformation for correlation confidence intervals.
@@ -97,7 +99,6 @@ class FisherZTransformer:
         lower = float(np.tanh(z_r - z_critical * se))
         upper = float(np.tanh(z_r + z_critical * se))
         return lower, upper
-
 
 class CorrelationSignificanceCalculator:
     """Computes Pearson or Spearman correlation with significance and CI.

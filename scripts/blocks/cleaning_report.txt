@@ -1,0 +1,5 @@
+# #[AI_CONTEXT_START]
+# - CONFIGURACIÓN DE FACTORY: `DataCleaningReportFactory` por backend, inyectada vía `DataCleaningInyeccionDependency` desde la Factory Maestra.
+# - ABSTRACCIÓN DEL DATO: Métricas before/after sobre el contenedor del backend, no `DataFrame` pandas fijo ni `np.ndarray` auxiliar.
+# - REFACTOR NATIVO: Comparación de métricas con agregaciones nativas del backend activo.
+# #[AI_CONTEXT_END]

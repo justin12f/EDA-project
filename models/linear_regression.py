@@ -1,5 +1,10 @@
 """Module for linear regression models"""
 
+# #[AI_CONTEXT_START]
+# - CONFIGURACIÓN DE FACTORY: `LinearRegressionFactory` por (tipo, complejidad, backend) vía `LinearRegressionInyeccionDependency` desde Factory Maestra.
+# - ABSTRACCIÓN DEL DATO: `fit`/`predict` aceptan contenedor del backend activo, no `np.ndarray`/`pd.DataFrame` genéricos mezclados.
+# - REFACTOR NATIVO: Implementaciones `*Pandas`, `*Polars`, `*Spark` delegando optimización y scoring al mismo backend.
+# #[AI_CONTEXT_END]
 from abc import ABC, abstractmethod
 
 import pandas as pd
@@ -9,7 +14,6 @@ from algorithms.optimizers.gradient_descent import GradientDescent
 from evaluation.score import Score
 from preproccesing.encoders.encoder_factory import Encoder
 from preproccesing.scalers.implementations.standard_scaler import StandardScaler
-
 
 class BaseLinearRegressionModel(ABC):
     """Abstract base class for linear regression models"""
@@ -33,7 +37,6 @@ class BaseLinearRegressionModel(ABC):
     ) -> dict[str, float]:
         """Calculate the score of the model"""
 
-
 class Slope:
     """Calculate the slope of the linear regression model"""
 
@@ -44,7 +47,6 @@ class Slope:
         beta1 = numerator / denominator
         return beta1
 
-
 class Interception:
     """Calculate the interception of the linear regression model"""
 
@@ -52,7 +54,6 @@ class Interception:
         """calculate the interception value"""
         beta0 = y.mean() - slope * x.mean()
         return beta0
-
 
 class AnalyticalLinearRegression(BaseLinearRegressionModel):
     """Linear regression model"""
@@ -90,7 +91,6 @@ class AnalyticalLinearRegression(BaseLinearRegressionModel):
         """calculate the score of the model"""
         return Score().get_score(y_true, self._y_pred)
 
-
 class BuildDesignMatrix:
     """Build the X matrix for the  multiple linear regression model"""
 
@@ -119,7 +119,6 @@ class BuildDesignMatrix:
             x_matrix = np.hstack((x_matrix, column.values.reshape(-1, 1)))
         return x_matrix
 
-
 class OrdinaryLeastSquares:
     """
     Calculate the coefficients of the linear regression model
@@ -130,7 +129,6 @@ class OrdinaryLeastSquares:
         """calculate the coefficients value"""
         beta = np.linalg.solve(x.T @ x, x.T @ y)
         return beta
-
 
 class AnalyticalMultipleLinearRegression(BaseLinearRegressionModel):
     """Multiple linear regression model"""
@@ -162,7 +160,6 @@ class AnalyticalMultipleLinearRegression(BaseLinearRegressionModel):
     ) -> dict[str, float]:
         """calculate the score of the model"""
         return Score().get_score(y_true, self._y_pred)
-
 
 class BaseGradientDescentLinearRegression(BaseLinearRegressionModel):
     """Base class for gradient descent linear regression models"""
@@ -218,7 +215,6 @@ class BaseGradientDescentLinearRegression(BaseLinearRegressionModel):
         """calculate the score of the model"""
         return Score().get_score(y_true, self._y_pred)
 
-
 class GradientDescentLinearRegression(BaseGradientDescentLinearRegression):
     """Gradient descent linear regression model"""
 
@@ -229,7 +225,6 @@ class GradientDescentLinearRegression(BaseGradientDescentLinearRegression):
         y_pred = x @ beta
         gradient = np.mean((y_pred - y_true) * x, axis=0)
         return gradient
-
 
 class GradientDescentMultipleLinearRegression(BaseGradientDescentLinearRegression):
     """Multiple Linear regresion using gradient descent"""
@@ -244,7 +239,6 @@ class GradientDescentMultipleLinearRegression(BaseGradientDescentLinearRegressio
         y_pred = x @ beta
         gradient = x.T @ (y_pred - y_true) / (len(y_true))
         return gradient
-
 
 class LinearRegressionFactory:
     """Factory for linear regression models"""
@@ -271,7 +265,6 @@ class LinearRegressionFactory:
         model = model_data
         return model()
 
-
 LinearRegressionFactory().register(
     "gradient_descent", "simple", GradientDescentLinearRegression
 )
@@ -284,7 +277,6 @@ LinearRegressionFactory().register(
 LinearRegressionFactory().register(
     "ordinary_least_squares", "multiple", AnalyticalMultipleLinearRegression
 )
-
 
 class EncodeNeededValidation:
     """Validate the encoded data"""
@@ -323,7 +315,6 @@ class EncodeNeededValidation:
 
         return self.encoder
 
-
 class AddToFitFromKwargs:
     """Add arguments to the fit method from kwargs"""
 
@@ -338,7 +329,6 @@ class AddToFitFromKwargs:
             if argument in kwargs:
                 fit_arguments.update({argument: kwargs[argument]})
         return fit_arguments
-
 
 class StandardSCalerLinearRegression:
     """Scaler for linear regression"""
@@ -376,11 +366,9 @@ class LinearRegression(BaseLinearRegressionModel):
             fit_arguments, list_of_arguments, kwargs
         )
 
-
         if fit_arguments.get("standard_scaler"):
             self.standard_scaler = StandardScaler()
             x = self.standard_scaler.fit_transform(x)
-
 
         if "type_of_encoder" in fit_arguments:
             self.encoder = EncodeNeededValidation(x).validate(

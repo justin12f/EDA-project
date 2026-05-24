@@ -1,5 +1,10 @@
 """Hypothesis testing module for one-sample and two-sample tests."""
 
+# #[AI_CONTEXT_START]
+# - CONFIGURACIÓN DE FACTORY: Registrar este calculator en `InferentialStatisticsFactory` (backends pandas | polars | spark) y exponerlo mediante `StatisticsInyeccionDependency`, inyectada por la Factory Maestra de Agentes junto a las demás fábricas de dominio.
+# - ABSTRACCIÓN DEL DATO: Mutar constructores y `analyze`/`compute` para recibir el contenedor abstracto del backend (`pd.DataFrame`, `pl.DataFrame`/`pl.LazyFrame`, `pyspark.sql.DataFrame`) inyectado por la factory; eliminar `np.ndarray`/`pd.Series` sueltos en firmas públicas.
+# - REFACTOR NATIVO: Resolver métricas con expresiones 100 % nativas del backend activo (Polars: `.select`/`.group_by`/`.agg` sin `.collect()` salvo materialización acordada; PySpark: `pyspark.sql.functions` y ventanas distribuidas; Pandas: operaciones vectorizadas). No convertir a NumPy/Pandas desde backends no-pandas.
+# #[AI_CONTEXT_END]
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
@@ -8,7 +13,6 @@ from typing import Literal
 
 import numpy as np
 from scipy import stats
-
 
 @dataclass(frozen=True)
 class HypothesisTestResult:
@@ -21,7 +25,6 @@ class HypothesisTestResult:
     significance_level: float
     alternative: str
     interpretation: str
-
 
 class HypothesisInterpreter:
     """Generates a human-readable interpretation of a hypothesis test result."""
@@ -48,11 +51,10 @@ class HypothesisInterpreter:
         return (
             f"{test_name}: H0 is {verdict} "
             f"(p={p_value:.6f}, α={significance_level}). "
-            f"{'Statistically significant difference detected.'
+            f"""{'Statistically significant difference detected.'
                if reject_null
-               else 'No statistically significant difference detected.'}"
+               else 'No statistically significant difference detected.'}"""
         )
-
 
 class BaseHypothesisTest(ABC):
     """Abstract base for all hypothesis tests."""
@@ -76,7 +78,6 @@ class BaseHypothesisTest(ABC):
         Returns:
             HypothesisTestResult with all test details.
         """
-
 
 class TTest(BaseHypothesisTest):
     """Student's T-test.
@@ -121,7 +122,6 @@ class TTest(BaseHypothesisTest):
             alternative=alternative,
             interpretation=interpretation,
         )
-
 
 class MannWhitneyTest(BaseHypothesisTest):
     """Mann-Whitney U test — non-parametric alternative to independent T-test.
@@ -168,7 +168,6 @@ class MannWhitneyTest(BaseHypothesisTest):
             interpretation=interpretation,
         )
 
-
 class WilcoxonTest(BaseHypothesisTest):
     """Wilcoxon signed-rank test — non-parametric test for paired samples.
 
@@ -211,13 +210,11 @@ class WilcoxonTest(BaseHypothesisTest):
             interpretation=interpretation,
         )
 
-
 _TEST_REGISTRY: dict[str, BaseHypothesisTest] = {
     "t_test": TTest(),
     "mann_whitney": MannWhitneyTest(),
     "wilcoxon": WilcoxonTest(),
 }
-
 
 class HypothesisTestSuite:
     """Orchestrates hypothesis testing across registered test strategies.

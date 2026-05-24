@@ -1,8 +1,12 @@
 """Estandar docstring idk i'm tired i just dont wanna see the linter"""
 
+# #[AI_CONTEXT_START]
+# - CONFIGURACIÓN DE FACTORY: Registrar este calculator en `TimeSeriesStatisticsFactory` (backends pandas | polars | spark) y exponerlo mediante `StatisticsInyeccionDependency`, inyectada por la Factory Maestra de Agentes junto a las demás fábricas de dominio.
+# - ABSTRACCIÓN DEL DATO: Mutar constructores y `analyze`/`compute` para recibir el contenedor abstracto del backend (`pd.DataFrame`, `pl.DataFrame`/`pl.LazyFrame`, `pyspark.sql.DataFrame`) inyectado por la factory; eliminar `np.ndarray`/`pd.Series` sueltos en firmas públicas.
+# - REFACTOR NATIVO: Resolver métricas con expresiones 100 % nativas del backend activo (Polars: `.select`/`.group_by`/`.agg` sin `.collect()` salvo materialización acordada; PySpark: `pyspark.sql.functions` y ventanas distribuidas; Pandas: operaciones vectorizadas). No convertir a NumPy/Pandas desde backends no-pandas.
+# #[AI_CONTEXT_END]
 import numpy as np
 import pandas as pd
-
 
 class CenteredMovingAverage:
     """Centered moving average"""
@@ -14,7 +18,6 @@ class CenteredMovingAverage:
         if window % 2 == 0:
             centered_moving_average = centered_moving_average.rolling(2).mean().shift(-1)
         return centered_moving_average
-
 
 class EstacionalComponent:
     """Class for logic for seasonal component"""
@@ -43,7 +46,6 @@ class EstacionalComponent:
         }
 
         return return_dictionary
-
 
 class SeasonalDecomposition:
     """Inyeccion dependency for seasonal component"""

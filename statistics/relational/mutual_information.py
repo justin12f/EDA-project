@@ -1,5 +1,10 @@
 """Mutual information feature relevance scoring."""
 
+# #[AI_CONTEXT_START]
+# - CONFIGURACIÓN DE FACTORY: Registrar este calculator en `RelationalStatisticsFactory` (backends pandas | polars | spark) y exponerlo mediante `StatisticsInyeccionDependency`, inyectada por la Factory Maestra de Agentes junto a las demás fábricas de dominio.
+# - ABSTRACCIÓN DEL DATO: Mutar constructores y `analyze`/`compute` para recibir el contenedor abstracto del backend (`pd.DataFrame`, `pl.DataFrame`/`pl.LazyFrame`, `pyspark.sql.DataFrame`) inyectado por la factory; eliminar `np.ndarray`/`pd.Series` sueltos en firmas públicas.
+# - REFACTOR NATIVO: Resolver métricas con expresiones 100 % nativas del backend activo (Polars: `.select`/`.group_by`/`.agg` sin `.collect()` salvo materialización acordada; PySpark: `pyspark.sql.functions` y ventanas distribuidas; Pandas: operaciones vectorizadas). No convertir a NumPy/Pandas desde backends no-pandas.
+# #[AI_CONTEXT_END]
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -11,7 +16,6 @@ from sklearn.feature_selection import (
     mutual_info_regression,
 )
 
-
 @dataclass(frozen=True)
 class MIScore:
     """Immutable mutual information score for a single feature."""
@@ -20,7 +24,6 @@ class MIScore:
     mi_score: float
     normalized_score: float
     rank: int
-
 
 class TargetTypeDetector:
     """Determines whether a target variable is continuous or categorical.
@@ -50,7 +53,6 @@ class TargetTypeDetector:
             else "continuous"
         )
 
-
 class MIScoreNormalizer:
     """Normalizes MI scores to [0, 1] by dividing by the maximum score.
 
@@ -71,7 +73,6 @@ class MIScoreNormalizer:
         if max_score == 0.0:
             return np.zeros_like(scores)
         return scores / max_score
-
 
 class MutualInformationCalculator:
     """Scores features by their mutual information with a target variable.

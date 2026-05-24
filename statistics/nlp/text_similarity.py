@@ -1,5 +1,10 @@
 """Document similarity: TF-IDF cosine similarity between text columns."""
 
+# #[AI_CONTEXT_START]
+# - CONFIGURACIÓN DE FACTORY: Registrar este calculator en `NlpStatisticsFactory` (backends pandas | polars | spark) y exponerlo mediante `StatisticsInyeccionDependency`, inyectada por la Factory Maestra de Agentes junto a las demás fábricas de dominio.
+# - ABSTRACCIÓN DEL DATO: Mutar constructores y `analyze`/`compute` para recibir el contenedor abstracto del backend (`pd.DataFrame`, `pl.DataFrame`/`pl.LazyFrame`, `pyspark.sql.DataFrame`) inyectado por la factory; eliminar `np.ndarray`/`pd.Series` sueltos en firmas públicas.
+# - REFACTOR NATIVO: Resolver métricas con expresiones 100 % nativas del backend activo (Polars: `.select`/`.group_by`/`.agg` sin `.collect()` salvo materialización acordada; PySpark: `pyspark.sql.functions` y ventanas distribuidas; Pandas: operaciones vectorizadas). No convertir a NumPy/Pandas desde backends no-pandas.
+# #[AI_CONTEXT_END]
 from __future__ import annotations
 
 import re
@@ -8,7 +13,6 @@ from dataclasses import dataclass
 import numpy as np
 import pandas as pd
 
-
 @dataclass(frozen=True)
 class SimilarityResult:
     """Immutable pairwise or column-to-column similarity result."""
@@ -16,7 +20,6 @@ class SimilarityResult:
     document_index: int
     similarity: float
     label: str
-
 
 class TFIDFVectorizer:
     """Minimal TF-IDF vectorizer for pair-level similarity.
@@ -104,7 +107,6 @@ class TFIDFVectorizer:
         norms = np.where(norms == 0, 1.0, norms)
         return matrix / norms
 
-
 class CosineSimilarityComputer:
     """Computes row-wise cosine similarity between two L2-normalized matrices.
 
@@ -127,7 +129,6 @@ class CosineSimilarityComputer:
         return np.clip(
             np.sum(matrix_a * matrix_b, axis=1), 0.0, 1.0
         )
-
 
 class SimilarityLabelAssigner:
     """Assigns a qualitative label to a cosine similarity score.
@@ -159,7 +160,6 @@ class SimilarityLabelAssigner:
             if similarity >= threshold:
                 return label
         return "dissimilar"
-
 
 class TextSimilarityCalculator:
     """Pairwise TF-IDF cosine similarity between two text columns.

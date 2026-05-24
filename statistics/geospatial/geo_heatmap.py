@@ -1,12 +1,16 @@
 """Geographic density heatmap via grid-cell aggregation."""
 
+# #[AI_CONTEXT_START]
+# - CONFIGURACIÓN DE FACTORY: Registrar este calculator en `GeospatialStatisticsFactory` (backends pandas | polars | spark) y exponerlo mediante `StatisticsInyeccionDependency`, inyectada por la Factory Maestra de Agentes junto a las demás fábricas de dominio.
+# - ABSTRACCIÓN DEL DATO: Mutar constructores y `analyze`/`compute` para recibir el contenedor abstracto del backend (`pd.DataFrame`, `pl.DataFrame`/`pl.LazyFrame`, `pyspark.sql.DataFrame`) inyectado por la factory; eliminar `np.ndarray`/`pd.Series` sueltos en firmas públicas.
+# - REFACTOR NATIVO: Resolver métricas con expresiones 100 % nativas del backend activo (Polars: `.select`/`.group_by`/`.agg` sin `.collect()` salvo materialización acordada; PySpark: `pyspark.sql.functions` y ventanas distribuidas; Pandas: operaciones vectorizadas). No convertir a NumPy/Pandas desde backends no-pandas.
+# #[AI_CONTEXT_END]
 from __future__ import annotations
 
 from dataclasses import dataclass
 
 import numpy as np
 import pandas as pd
-
 
 @dataclass(frozen=True)
 class HeatmapCell:
@@ -23,7 +27,6 @@ class HeatmapCell:
     count: int
     density: float
     normalized_density: float
-
 
 class GridBoundaryComputer:
     """Computes grid boundaries and cell dimensions from coordinate extents."""
@@ -67,7 +70,6 @@ class GridBoundaryComputer:
 
         return lat_edges, lon_edges
 
-
 class GridCountAccumulator:
     """Bins coordinate points into a 2D count grid using numpy histogram2d."""
 
@@ -91,7 +93,6 @@ class GridCountAccumulator:
         """
         counts, _, _ = np.histogram2d(lat, lon, bins=[lat_edges, lon_edges])
         return counts
-
 
 class CellDensityCalculator:
     """Converts raw counts to density (points per km²).
@@ -134,7 +135,6 @@ class CellDensityCalculator:
                 density[i, :] = counts[i, :] / cell_area_km2
 
         return density
-
 
 class GeoHeatmapCalculator:
     """Grid-based geographic density heatmap.

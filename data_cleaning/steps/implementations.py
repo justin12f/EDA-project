@@ -1,4 +1,6 @@
 """
+DEPRECATED: use data_cleaning/steps/backends/pandas_impl.py via DataCleaningStepFactory.
+
 data_cleaning/steps/implementations.py
 
 Production-ready step implementations for the data cleaning pipeline.
@@ -11,6 +13,11 @@ Design principles applied:
     - Value Objects      : DomainBounds and CrossColumnRule as frozen dataclasses.
 """
 
+# #[AI_CONTEXT_START]
+# - CONFIGURACIÓN DE FACTORY: `DataCleaningStepFactory` del backend correspondiente en `data_cleaning/steps/backends/`; inyección vía `DataCleaningInyeccionDependency` → Factory Maestra.
+# - ABSTRACCIÓN DEL DATO: Canonicalizar en `backends/`; deprecar duplicados en `steps/implementations.py` y `steps/polars_impl.py` raíz tras verificar referencias.
+# - REFACTOR NATIVO: Steps en inglés y 100 % API nativa del backend; sin NumPy salvo materialización local explícita.
+# #[AI_CONTEXT_END]
 from __future__ import annotations
 
 import re
@@ -26,7 +33,6 @@ import pandas as pd
 
 from data_cleaning.steps.base import BaseStep
 
-
 # ─────────────────────────────────────────────────────────────────────────────
 # Domain Types  (Value Objects + Strategy Enums)
 # ─────────────────────────────────────────────────────────────────────────────
@@ -37,12 +43,10 @@ class ImputationStrategy(str, Enum):
     MEDIAN = "median"
     MODE   = "mode"
 
-
 class CategoricalImputationStrategy(str, Enum):
     """Supported strategies for filling missing categorical values."""
     MODE  = "mode"
     FIXED = "fixed"
-
 
 @dataclass(frozen=True)
 class DomainBounds:
@@ -58,7 +62,6 @@ class DomainBounds:
     """
     lower: float | None = None
     upper: float | None = None
-
 
 @dataclass(frozen=True)
 class CrossColumnRule:
@@ -79,7 +82,6 @@ class CrossColumnRule:
     equals:   object
     then_col: str
     action:   str = "set_nan"
-
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Utility: Column Type Detection  (ISP — grouped by responsibility)
@@ -238,7 +240,6 @@ class ColumnInspector:
         except (ValueError, TypeError):
             return False
 
-
 # ─────────────────────────────────────────────────────────────────────────────
 # Utility: Value Conversion  (SRP — atomic value-level conversions only)
 # ─────────────────────────────────────────────────────────────────────────────
@@ -322,7 +323,6 @@ class ValueParser:
             pass
         return value
 
-
 # ─────────────────────────────────────────────────────────────────────────────
 # Decorator Step: Column Scope  (LSP fix — now a proper BaseStep)
 # ─────────────────────────────────────────────────────────────────────────────
@@ -395,7 +395,6 @@ class ColumnScopedStep(BaseStep):
         result = pd.concat([remainder_subset, cleaned_subset], axis=1)
         return result[data.columns]  # Restore original column order
 
-
 # ─────────────────────────────────────────────────────────────────────────────
 # Steps: Schema & Structure
 # ─────────────────────────────────────────────────────────────────────────────
@@ -424,7 +423,6 @@ class ColumnsTitlesStep(BaseStep):
             for col in df.columns
         ]
         return df
-
 
 class EnforceSchemaStep(BaseStep):
     """
@@ -469,7 +467,6 @@ class EnforceSchemaStep(BaseStep):
 
         return df
 
-
 class DropHighMissingColumnsStep(BaseStep):
     """
     Drop columns where the fraction of NaN values exceeds *threshold*.
@@ -496,7 +493,6 @@ class DropHighMissingColumnsStep(BaseStep):
         cols_to_drop = missing_fractions[missing_fractions > self.threshold].index
         return df.drop(columns=cols_to_drop)
 
-
 class DropConstantColumnsStep(BaseStep):
     """Drop columns that carry zero information (≤1 unique non-null value)."""
 
@@ -504,7 +500,6 @@ class DropConstantColumnsStep(BaseStep):
         df = data.copy()
         constant_cols = [c for c in df.columns if df[c].nunique(dropna=True) <= 1]
         return df.drop(columns=constant_cols)
-
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Steps: Missing Values & Sentinel Handling
@@ -545,7 +540,6 @@ class HandleSentinelValuesStep(BaseStep):
             mask = df[col].astype(str).str.lower().str.strip().isin(self._sentinels)
             df.loc[mask, col] = np.nan
         return df
-
 
 class ImputeCategoricalStep(BaseStep):
     """
@@ -592,7 +586,6 @@ class ImputeCategoricalStep(BaseStep):
                 df[col] = df[col].fillna(self.fill_value)
 
         return df
-
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Steps: Type Conversion & Parsing
@@ -663,7 +656,6 @@ class SafeConversionStep(BaseStep):
         value = ValueParser.detect_numeric(value)
         return ValueParser.smart_date_parse(value)
 
-
 class FixDatesColumnsStep(BaseStep):
     """
     Parse string/object columns to datetime64 and invalidate out-of-range
@@ -696,7 +688,6 @@ class FixDatesColumnsStep(BaseStep):
 
         return df
 
-
 class FixBoolsColumnsStep(BaseStep):
     """Convert text boolean representations to nullable pd.BooleanDtype."""
 
@@ -728,7 +719,6 @@ class FixBoolsColumnsStep(BaseStep):
             df[col] = mapped.astype("boolean")
 
         return df
-
 
 class FixColumnsTypesStep(BaseStep):
     """Cast columns to their final target dtypes after all cleaning is done."""
@@ -772,7 +762,6 @@ class FixColumnsTypesStep(BaseStep):
             df[col] = pd.to_datetime(df[col], errors="coerce")
 
         return df
-
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Steps: Numeric Cleaning & Imputation
@@ -862,7 +851,6 @@ class FixNumericColumnsStep(BaseStep):
                 return float(mode_vals.iloc[0]) if not mode_vals.empty else None
         return None  # Unreachable but satisfies type checkers
 
-
 # ─────────────────────────────────────────────────────────────────────────────
 # Steps: Outlier Handling  (SRP — one class per strategy, was previously mixed)
 # ─────────────────────────────────────────────────────────────────────────────
@@ -898,7 +886,6 @@ class IQROutlierStep(BaseStep):
             c for c in df.select_dtypes(include=[np.number]).columns
             if not c.endswith("_id") and c != "id"
         ]
-
 
 class ZScoreOutlierStep(BaseStep):
     """
@@ -958,7 +945,6 @@ class ZScoreOutlierStep(BaseStep):
 
         return df
 
-
 class CapOutliersStep(BaseStep):
     """
     Winsorize outliers by capping values at configurable percentile bounds.
@@ -1010,7 +996,6 @@ class CapOutliersStep(BaseStep):
 
         return df
 
-
 # ─────────────────────────────────────────────────────────────────────────────
 # Steps: Text Normalization
 # ─────────────────────────────────────────────────────────────────────────────
@@ -1054,7 +1039,6 @@ class FixNotNumericColumnsStep(BaseStep):
 
         return df
 
-
 class NormalizeCategoriesStep(BaseStep):
     """
     Unify known category variants using a per-column synonym map.
@@ -1085,7 +1069,6 @@ class NormalizeCategoriesStep(BaseStep):
                 df[col].astype(str).str.lower().str.strip().replace(mapping)
             )
         return df
-
 
 class TextStandardizationStep(BaseStep):
     """
@@ -1148,7 +1131,6 @@ class TextStandardizationStep(BaseStep):
         # Step 3: Collapse spaces and normalize case
         return self._WHITESPACE_PATTERN.sub(" ", text).strip().lower()
 
-
 # ─────────────────────────────────────────────────────────────────────────────
 # Steps: Validation
 # ─────────────────────────────────────────────────────────────────────────────
@@ -1191,7 +1173,6 @@ class ValidateDomainRulesStep(BaseStep):
 
         return df
 
-
 class CrossColumnValidationStep(BaseStep):
     """
     Validate consistency between pairs of related columns using
@@ -1226,7 +1207,6 @@ class CrossColumnValidationStep(BaseStep):
 
         return df
 
-
 # ─────────────────────────────────────────────────────────────────────────────
 # Steps: Duplicate Handling
 # ─────────────────────────────────────────────────────────────────────────────
@@ -1236,7 +1216,6 @@ class RemoveDuplicatesRowsStep(BaseStep):
 
     def process(self, data: pd.DataFrame) -> pd.DataFrame:
         return data.copy().drop_duplicates()
-
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Steps: Quality & Audit
@@ -1259,7 +1238,6 @@ class FlagDataQualityStep(BaseStep):
         )
         return df
 
-
 class AddAuditColumnsStep(BaseStep):
     """
     Append lineage-tracking columns:
@@ -1276,7 +1254,6 @@ class AddAuditColumnsStep(BaseStep):
             df[self._ORIGINAL_INDEX_COL] = df.index
         df[self._CLEANED_AT_COL] = datetime.now(tz=timezone.utc)
         return df
-
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Steps: Feature Scaling

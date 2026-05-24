@@ -1,5 +1,10 @@
 """Univariate feature selection scoring: Chi2, ANOVA F, and Mutual Information."""
 
+# #[AI_CONTEXT_START]
+# - CONFIGURACIÓN DE FACTORY: Registrar este calculator en `MlSupportStatisticsFactory` (backends pandas | polars | spark) y exponerlo mediante `StatisticsInyeccionDependency`, inyectada por la Factory Maestra de Agentes junto a las demás fábricas de dominio.
+# - ABSTRACCIÓN DEL DATO: Mutar constructores y `analyze`/`compute` para recibir el contenedor abstracto del backend (`pd.DataFrame`, `pl.DataFrame`/`pl.LazyFrame`, `pyspark.sql.DataFrame`) inyectado por la factory; eliminar `np.ndarray`/`pd.Series` sueltos en firmas públicas.
+# - REFACTOR NATIVO: Resolver métricas con expresiones 100 % nativas del backend activo (Polars: `.select`/`.group_by`/`.agg` sin `.collect()` salvo materialización acordada; PySpark: `pyspark.sql.functions` y ventanas distribuidas; Pandas: operaciones vectorizadas). No convertir a NumPy/Pandas desde backends no-pandas.
+# #[AI_CONTEXT_END]
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
@@ -16,7 +21,6 @@ from sklearn.feature_selection import (
 )
 from sklearn.preprocessing import MinMaxScaler
 
-
 @dataclass(frozen=True)
 class FeatureScore:
     """Immutable score record for a single feature."""
@@ -27,7 +31,6 @@ class FeatureScore:
     p_value: float | None
     normalized_score: float
     method: str
-
 
 class BaseFeatureScoringMethod(ABC):
     """Abstract base for all univariate feature scoring strategies."""
@@ -54,7 +57,6 @@ class BaseFeatureScoringMethod(ABC):
         Returns:
             List of FeatureScore objects (unranked, unsorted).
         """
-
 
 class Chi2Scorer(BaseFeatureScoringMethod):
     """Chi-square test score for categorical targets and non-negative features.
@@ -99,7 +101,6 @@ class Chi2Scorer(BaseFeatureScoringMethod):
             for name, s, p in zip(feature_names, scores, p_values)
         ]
 
-
 class ANOVAFScorer(BaseFeatureScoringMethod):
     """ANOVA F-score between each feature and a categorical/continuous target.
 
@@ -137,7 +138,6 @@ class ANOVAFScorer(BaseFeatureScoringMethod):
             )
             for name, s, p in zip(feature_names, scores, p_values)
         ]
-
 
 class MIScorer(BaseFeatureScoringMethod):
     """Mutual Information scorer for classification or regression targets.
@@ -182,7 +182,6 @@ class MIScorer(BaseFeatureScoringMethod):
             for name, s in zip(feature_names, scores)
         ]
 
-
 class ScoreRanker:
     """Ranks and optionally filters a list of FeatureScore objects."""
 
@@ -213,7 +212,6 @@ class ScoreRanker:
             for i, s in enumerate(sorted_scores)
         ]
         return ranked[:top_n] if top_n is not None else ranked
-
 
 class FeatureSelectionCalculator:
     """Univariate feature scoring with chi2, ANOVA F, and mutual information.

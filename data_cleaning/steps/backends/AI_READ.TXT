@@ -1,0 +1,5 @@
+# #[AI_CONTEXT_START]
+# - CONFIGURACIÓN DE FACTORY: Cada subcarpeta de `statistics/` o `data_cleaning/steps/backends/` define su Factory local (pandas | polars | spark).
+# - ABSTRACCIÓN DEL DATO: Una implementación canónica por backend; eliminar duplicados de nombre/ruta.
+# - REFACTOR NATIVO: Encadenar Factory local → `*InyeccionDependency` de dominio → Factory Maestra de Agentes.
+# #[AI_CONTEXT_END]

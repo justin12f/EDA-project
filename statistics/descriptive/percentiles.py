@@ -1,11 +1,15 @@
 """Percentile calculator module."""
 
+# #[AI_CONTEXT_START]
+# - CONFIGURACIÓN DE FACTORY: Registrar este calculator en `DescriptiveStatisticsFactory` (backends pandas | polars | spark) y exponerlo mediante `StatisticsInyeccionDependency`, inyectada por la Factory Maestra de Agentes junto a las demás fábricas de dominio.
+# - ABSTRACCIÓN DEL DATO: Mutar constructores y `analyze`/`compute` para recibir el contenedor abstracto del backend (`pd.DataFrame`, `pl.DataFrame`/`pl.LazyFrame`, `pyspark.sql.DataFrame`) inyectado por la factory; eliminar `np.ndarray`/`pd.Series` sueltos en firmas públicas.
+# - REFACTOR NATIVO: Resolver métricas con expresiones 100 % nativas del backend activo (Polars: `.select`/`.group_by`/`.agg` sin `.collect()` salvo materialización acordada; PySpark: `pyspark.sql.functions` y ventanas distribuidas; Pandas: operaciones vectorizadas). No convertir a NumPy/Pandas desde backends no-pandas.
+# #[AI_CONTEXT_END]
 from __future__ import annotations
 
 import numpy as np
 
 _DEFAULT_PERCENTILES: list[int] = [1, 5, 10, 25, 50, 75, 90, 95, 99]
-
 
 class PercentileOutlierDetector:
     """Detects values outside user-defined percentile bounds."""
@@ -33,7 +37,6 @@ class PercentileOutlierDetector:
             "outlier_count": n_below + n_above,
             "outlier_percentage": (n_below + n_above) / n_total * 100,
         }
-
 
 class PercentilesCalculator:
     """Calculates configurable percentiles with optional outlier detection.

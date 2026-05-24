@@ -1,10 +1,14 @@
 """ACF, PACF computation and lag feature generation."""
 
+# #[AI_CONTEXT_START]
+# - CONFIGURACIÓN DE FACTORY: Registrar este calculator en `TimeSeriesStatisticsFactory` (backends pandas | polars | spark) y exponerlo mediante `StatisticsInyeccionDependency`, inyectada por la Factory Maestra de Agentes junto a las demás fábricas de dominio.
+# - ABSTRACCIÓN DEL DATO: Mutar constructores y `analyze`/`compute` para recibir el contenedor abstracto del backend (`pd.DataFrame`, `pl.DataFrame`/`pl.LazyFrame`, `pyspark.sql.DataFrame`) inyectado por la factory; eliminar `np.ndarray`/`pd.Series` sueltos en firmas públicas.
+# - REFACTOR NATIVO: Resolver métricas con expresiones 100 % nativas del backend activo (Polars: `.select`/`.group_by`/`.agg` sin `.collect()` salvo materialización acordada; PySpark: `pyspark.sql.functions` y ventanas distribuidas; Pandas: operaciones vectorizadas). No convertir a NumPy/Pandas desde backends no-pandas.
+# #[AI_CONTEXT_END]
 from __future__ import annotations
 
 import numpy as np
 import pandas as pd
-
 
 class AutocovarianceCalculator:
     """Computes sample autocovariance at a specific lag k."""
@@ -16,7 +20,6 @@ class AutocovarianceCalculator:
         if lag == 0:
             return float(np.mean(centered ** 2))
         return float(np.mean(centered[:n - lag] * centered[lag:]))
-
 
 class ACFCalculator:
     """Autocorrelation Function (ACF) up to max_lag."""
@@ -38,7 +41,6 @@ class ACFCalculator:
             "confidence_band": round(float(confidence_band), 6),
             "significant_lags": significant_lags,
         }
-
 
 class PACFCalculator:
     """Partial Autocorrelation Function (PACF) via Yule-Walker equations."""
@@ -66,7 +68,6 @@ class PACFCalculator:
             "significant_lags": significant_lags,
         }
 
-
 class LagFeatureBuilder:
     """Builds a DataFrame of lagged features from a time series."""
 
@@ -78,11 +79,9 @@ class LagFeatureBuilder:
         lag_dict = {f"{base_name}_lag_{lag}": series.shift(lag) for lag in lags}
         return pd.DataFrame(lag_dict)
 
-
 def _z_score_for_alpha(significance_level: float) -> float:
     from scipy import stats as scipy_stats
     return float(scipy_stats.norm.ppf(1 - significance_level / 2))
-
 
 class LagFeaturesCalculator:
     """ACF, PACF analysis and lag feature generation for a time series."""

@@ -1,11 +1,15 @@
 """Non-parametric bootstrap estimation module."""
 
+# #[AI_CONTEXT_START]
+# - CONFIGURACIÓN DE FACTORY: Registrar este calculator en `InferentialStatisticsFactory` (backends pandas | polars | spark) y exponerlo mediante `StatisticsInyeccionDependency`, inyectada por la Factory Maestra de Agentes junto a las demás fábricas de dominio.
+# - ABSTRACCIÓN DEL DATO: Mutar constructores y `analyze`/`compute` para recibir el contenedor abstracto del backend (`pd.DataFrame`, `pl.DataFrame`/`pl.LazyFrame`, `pyspark.sql.DataFrame`) inyectado por la factory; eliminar `np.ndarray`/`pd.Series` sueltos en firmas públicas.
+# - REFACTOR NATIVO: Resolver métricas con expresiones 100 % nativas del backend activo (Polars: `.select`/`.group_by`/`.agg` sin `.collect()` salvo materialización acordada; PySpark: `pyspark.sql.functions` y ventanas distribuidas; Pandas: operaciones vectorizadas). No convertir a NumPy/Pandas desde backends no-pandas.
+# #[AI_CONTEXT_END]
 from __future__ import annotations
 
 from typing import Callable
 
 import numpy as np
-
 
 class BootstrapSampler:
     """Generates bootstrap samples with a fixed random seed for reproducibility."""
@@ -28,7 +32,6 @@ class BootstrapSampler:
         """
         rng = np.random.default_rng(random_seed)
         return rng.choice(data, size=(n_iterations, len(data)), replace=True)
-
 
 class BootstrapStatisticEstimator:
     """Applies a statistic function to each bootstrap sample row."""
@@ -57,7 +60,6 @@ class BootstrapStatisticEstimator:
 
         return np.array([statistic(row) for row in bootstrap_samples])
 
-
 class PercentilesBootstrapCI:
     """Calculates the percentile bootstrap confidence interval."""
 
@@ -79,7 +81,6 @@ class PercentilesBootstrapCI:
         lower = float(np.percentile(bootstrap_statistics, 100 * alpha / 2))
         upper = float(np.percentile(bootstrap_statistics, 100 * (1 - alpha / 2)))
         return lower, upper
-
 
 class BootstrapEstimator:
     """Non-parametric bootstrap CI for any scalar statistic.

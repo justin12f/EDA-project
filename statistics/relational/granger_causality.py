@@ -1,5 +1,10 @@
 """Granger causality test for time series predictive relationships."""
 
+# #[AI_CONTEXT_START]
+# - CONFIGURACIÓN DE FACTORY: Registrar este calculator en `RelationalStatisticsFactory` (backends pandas | polars | spark) y exponerlo mediante `StatisticsInyeccionDependency`, inyectada por la Factory Maestra de Agentes junto a las demás fábricas de dominio.
+# - ABSTRACCIÓN DEL DATO: Mutar constructores y `analyze`/`compute` para recibir el contenedor abstracto del backend (`pd.DataFrame`, `pl.DataFrame`/`pl.LazyFrame`, `pyspark.sql.DataFrame`) inyectado por la factory; eliminar `np.ndarray`/`pd.Series` sueltos en firmas públicas.
+# - REFACTOR NATIVO: Resolver métricas con expresiones 100 % nativas del backend activo (Polars: `.select`/`.group_by`/`.agg` sin `.collect()` salvo materialización acordada; PySpark: `pyspark.sql.functions` y ventanas distribuidas; Pandas: operaciones vectorizadas). No convertir a NumPy/Pandas desde backends no-pandas.
+# #[AI_CONTEXT_END]
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -7,7 +12,6 @@ from dataclasses import dataclass
 import numpy as np
 import pandas as pd
 from scipy import stats
-
 
 @dataclass(frozen=True)
 class GrangerLagResult:
@@ -17,7 +21,6 @@ class GrangerLagResult:
     f_statistic: float
     p_value: float
     reject_null: bool
-
 
 class LaggedDesignMatrixBuilder:
     """Builds a lagged regression design matrix for Granger causality.
@@ -67,7 +70,6 @@ class LaggedDesignMatrixBuilder:
         )
         return y_target, x_matrix
 
-
 class OLSResidualCalculator:
     """Computes OLS residual sum of squares via the normal equations."""
 
@@ -84,7 +86,6 @@ class OLSResidualCalculator:
         coefficients, *_ = np.linalg.lstsq(x, y, rcond=None)
         residuals = y - x @ coefficients
         return float(np.sum(residuals ** 2))
-
 
 class GrangerFStatisticCalculator:
     """Computes F-statistic comparing restricted and unrestricted OLS models."""
@@ -124,7 +125,6 @@ class GrangerFStatisticCalculator:
         )
 
         return float(f_stat), p_value
-
 
 class GrangerCausalityCalculator:
     """Tests whether x Granger-causes y across multiple lags.

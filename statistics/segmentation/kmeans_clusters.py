@@ -1,5 +1,10 @@
 """K-Means clustering with optimal K selection and cluster profiling."""
 
+# #[AI_CONTEXT_START]
+# - CONFIGURACIÓN DE FACTORY: Registrar este calculator en `SegmentationStatisticsFactory` (backends pandas | polars | spark) y exponerlo mediante `StatisticsInyeccionDependency`, inyectada por la Factory Maestra de Agentes junto a las demás fábricas de dominio.
+# - ABSTRACCIÓN DEL DATO: Mutar constructores y `analyze`/`compute` para recibir el contenedor abstracto del backend (`pd.DataFrame`, `pl.DataFrame`/`pl.LazyFrame`, `pyspark.sql.DataFrame`) inyectado por la factory; eliminar `np.ndarray`/`pd.Series` sueltos en firmas públicas.
+# - REFACTOR NATIVO: Resolver métricas con expresiones 100 % nativas del backend activo (Polars: `.select`/`.group_by`/`.agg` sin `.collect()` salvo materialización acordada; PySpark: `pyspark.sql.functions` y ventanas distribuidas; Pandas: operaciones vectorizadas). No convertir a NumPy/Pandas desde backends no-pandas.
+# #[AI_CONTEXT_END]
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -9,7 +14,6 @@ import pandas as pd
 from sklearn.cluster import KMeans
 from sklearn.metrics import silhouette_score, davies_bouldin_score
 from sklearn.preprocessing import StandardScaler
-
 
 @dataclass(frozen=True)
 class ClusterProfile:
@@ -21,7 +25,6 @@ class ClusterProfile:
     centroid: dict[str, float]
     feature_means: dict[str, float]
     feature_stds: dict[str, float]
-
 
 class ElbowMethodCalculator:
     """Computes inertia across a range of K values for elbow detection.
@@ -57,7 +60,6 @@ class ElbowMethodCalculator:
             )
             for k in k_range
         }
-
 
 class SilhouetteScoreCalculator:
     """Computes silhouette score across a range of K values.
@@ -97,7 +99,6 @@ class SilhouetteScoreCalculator:
             scores[k] = float(silhouette_score(x, labels))
         return scores
 
-
 class OptimalKSelector:
     """Selects optimal K as the value maximizing silhouette score."""
 
@@ -118,7 +119,6 @@ class OptimalKSelector:
                 "silhouette_scores is empty. Cannot select optimal K."
             )
         return max(silhouette_scores, key=silhouette_scores.get)
-
 
 class ClusterProfileBuilder:
     """Builds a statistical profile for each cluster."""
@@ -176,7 +176,6 @@ class ClusterProfileBuilder:
             )
 
         return profiles
-
 
 class KMeansClusterCalculator:
     """K-Means clustering with elbow method, silhouette scoring, and profiling.

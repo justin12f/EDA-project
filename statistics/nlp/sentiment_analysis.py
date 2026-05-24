@@ -1,12 +1,16 @@
 """Lexicon-based sentiment analysis with VADER-style scoring."""
 
+# #[AI_CONTEXT_START]
+# - CONFIGURACIÓN DE FACTORY: Registrar este calculator en `NlpStatisticsFactory` (backends pandas | polars | spark) y exponerlo mediante `StatisticsInyeccionDependency`, inyectada por la Factory Maestra de Agentes junto a las demás fábricas de dominio.
+# - ABSTRACCIÓN DEL DATO: Mutar constructores y `analyze`/`compute` para recibir el contenedor abstracto del backend (`pd.DataFrame`, `pl.DataFrame`/`pl.LazyFrame`, `pyspark.sql.DataFrame`) inyectado por la factory; eliminar `np.ndarray`/`pd.Series` sueltos en firmas públicas.
+# - REFACTOR NATIVO: Resolver métricas con expresiones 100 % nativas del backend activo (Polars: `.select`/`.group_by`/`.agg` sin `.collect()` salvo materialización acordada; PySpark: `pyspark.sql.functions` y ventanas distribuidas; Pandas: operaciones vectorizadas). No convertir a NumPy/Pandas desde backends no-pandas.
+# #[AI_CONTEXT_END]
 from __future__ import annotations
 import math
 import re
 from dataclasses import dataclass
 
 import pandas as pd
-
 
 @dataclass(frozen=True)
 class SentimentResult:
@@ -20,7 +24,6 @@ class SentimentResult:
     negative_word_count: int
     word_count: int
 
-
 class SentimentLexicon:
     """Minimal built-in sentiment lexicon for dependency-free analysis.
 
@@ -28,7 +31,6 @@ class SentimentLexicon:
     Extend by subclassing and overriding `_POSITIVE_TERMS`
     and `_NEGATIVE_TERMS`.
     """
-#TODO: add more words for better analysis
     POSITIVE_TERMS: frozenset[str] = frozenset({
         "good", "great", "excellent", "amazing", "wonderful", "fantastic",
         "outstanding", "brilliant", "superb", "perfect", "best", "love",
@@ -88,7 +90,6 @@ class SentimentLexicon:
         "slightly": 0.5,
         "barely": 0.3,
     }
-
 
 class TokenSentimentScorer:
     """Scores individual tokens with negation and intensifier awareness.
@@ -151,7 +152,6 @@ class TokenSentimentScorer:
 
         return raw_score, positive_count, negative_count
 
-
 class PolarityNormalizer:
     """Normalizes raw sentiment score to [-1, 1] using tanh compression.
 
@@ -170,12 +170,10 @@ class PolarityNormalizer:
             Polarity in [-1, 1].
         """
 
-
         if word_count == 0:
             return 0.0
         normalized = raw_score / max(word_count, 1)
         return round(math.tanh(normalized), 6)
-
 
 class SubjectivityEstimator:
     """Estimates subjectivity as the proportion of sentiment-bearing tokens.
@@ -201,7 +199,6 @@ class SubjectivityEstimator:
         if word_count == 0:
             return 0.0
         return round((positive_count + negative_count) / word_count, 6)
-
 
 class SentimentLabelAssigner:
     """Assigns a sentiment label based on polarity and subjectivity.
@@ -231,7 +228,6 @@ class SentimentLabelAssigner:
                 return "mixed"
             return "neutral"
         return "positive" if polarity > 0 else "negative"
-
 
 class SentimentAnalysisCalculator:
     """Lexicon-based sentiment analysis for a text column.

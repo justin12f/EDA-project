@@ -1,5 +1,10 @@
 """Variance Inflation Factor (VIF) multicollinearity detection."""
 
+# #[AI_CONTEXT_START]
+# - CONFIGURACIÓN DE FACTORY: Registrar este calculator en `RelationalStatisticsFactory` (backends pandas | polars | spark) y exponerlo mediante `StatisticsInyeccionDependency`, inyectada por la Factory Maestra de Agentes junto a las demás fábricas de dominio.
+# - ABSTRACCIÓN DEL DATO: Mutar constructores y `analyze`/`compute` para recibir el contenedor abstracto del backend (`pd.DataFrame`, `pl.DataFrame`/`pl.LazyFrame`, `pyspark.sql.DataFrame`) inyectado por la factory; eliminar `np.ndarray`/`pd.Series` sueltos en firmas públicas.
+# - REFACTOR NATIVO: Resolver métricas con expresiones 100 % nativas del backend activo (Polars: `.select`/`.group_by`/`.agg` sin `.collect()` salvo materialización acordada; PySpark: `pyspark.sql.functions` y ventanas distribuidas; Pandas: operaciones vectorizadas). No convertir a NumPy/Pandas desde backends no-pandas.
+# #[AI_CONTEXT_END]
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -9,7 +14,6 @@ import pandas as pd
 
 from models.linear_regression import LinearRegression
 
-
 @dataclass(frozen=True)
 class VIFResult:
     """Immutable VIF result for a single feature."""
@@ -17,7 +21,6 @@ class VIFResult:
     feature: str
     vif: float
     risk_level: str
-
 
 class VIFRiskClassifier:
     """Classifies multicollinearity risk based on VIF thresholds.
@@ -47,7 +50,6 @@ class VIFRiskClassifier:
             if vif >= threshold:
                 return label
         return "acceptable"
-
 
 class SingleFeatureVIFCalculator:
     """Calculates VIF for one feature by regressing it on all others.
@@ -95,7 +97,6 @@ class SingleFeatureVIFCalculator:
             return float("inf")
 
         return 1.0 / (1.0 - r_squared)
-
 
 class MulticollinearityCalculator:
     """Calculates VIF for all features and detects multicollinearity.

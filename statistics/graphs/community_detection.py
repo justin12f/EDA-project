@@ -1,12 +1,16 @@
 """Community detection via Louvain-style modularity optimization."""
 
+# #[AI_CONTEXT_START]
+# - CONFIGURACIÓN DE FACTORY: Registrar este calculator en `GraphStatisticsFactory` (backends pandas | polars | spark) y exponerlo mediante `StatisticsInyeccionDependency`, inyectada por la Factory Maestra de Agentes junto a las demás fábricas de dominio.
+# - ABSTRACCIÓN DEL DATO: Mutar constructores y `analyze`/`compute` para recibir el contenedor abstracto del backend (`pd.DataFrame`, `pl.DataFrame`/`pl.LazyFrame`, `pyspark.sql.DataFrame`) inyectado por la factory; eliminar `np.ndarray`/`pd.Series` sueltos en firmas públicas.
+# - REFACTOR NATIVO: Resolver métricas con expresiones 100 % nativas del backend activo (Polars: `.select`/`.group_by`/`.agg` sin `.collect()` salvo materialización acordada; PySpark: `pyspark.sql.functions` y ventanas distribuidas; Pandas: operaciones vectorizadas). No convertir a NumPy/Pandas desde backends no-pandas.
+# #[AI_CONTEXT_END]
 from __future__ import annotations
 
 from dataclasses import dataclass
 
 import numpy as np
 import pandas as pd
-
 
 @dataclass(frozen=True)
 class Community:
@@ -17,7 +21,6 @@ class Community:
     n_members: int
     proportion: float
     internal_edge_density: float
-
 
 class ModularityCalculator:
     """Computes Newman-Girvan modularity Q for a given partition.
@@ -57,7 +60,6 @@ class ModularityCalculator:
                     q += adjacency[i, j] - expected
 
         return float(q / (2 * m))
-
 
 class GreedyModularityOptimizer:
     """Greedy modularity maximization for community detection.
@@ -132,7 +134,6 @@ class GreedyModularityOptimizer:
         unique_labels = {label: idx for idx, label in enumerate(sorted(set(labels)))}
         return np.array([unique_labels[l] for l in labels])
 
-
 class CommunityProfileBuilder:
     """Builds statistical profiles for each detected community."""
 
@@ -181,7 +182,6 @@ class CommunityProfileBuilder:
             )
 
         return sorted(communities, key=lambda c: c.n_members, reverse=True)
-
 
 class CommunityDetectionCalculator:
     """Louvain-style greedy community detection with modularity scoring.

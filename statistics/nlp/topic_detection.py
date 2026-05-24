@@ -1,4 +1,10 @@
 """LDA-based topic detection via co-occurrence matrix decomposition."""
+
+# #[AI_CONTEXT_START]
+# - CONFIGURACIÓN DE FACTORY: Registrar este calculator en `NlpStatisticsFactory` (backends pandas | polars | spark) y exponerlo mediante `StatisticsInyeccionDependency`, inyectada por la Factory Maestra de Agentes junto a las demás fábricas de dominio.
+# - ABSTRACCIÓN DEL DATO: Mutar constructores y `analyze`/`compute` para recibir el contenedor abstracto del backend (`pd.DataFrame`, `pl.DataFrame`/`pl.LazyFrame`, `pyspark.sql.DataFrame`) inyectado por la factory; eliminar `np.ndarray`/`pd.Series` sueltos en firmas públicas.
+# - REFACTOR NATIVO: Resolver métricas con expresiones 100 % nativas del backend activo (Polars: `.select`/`.group_by`/`.agg` sin `.collect()` salvo materialización acordada; PySpark: `pyspark.sql.functions` y ventanas distribuidas; Pandas: operaciones vectorizadas). No convertir a NumPy/Pandas desde backends no-pandas.
+# #[AI_CONTEXT_END]
 from __future__ import annotations
 
 import re
@@ -8,7 +14,6 @@ import numpy as np
 import pandas as pd
 from sklearn.decomposition import NMF
 
-
 @dataclass(frozen=True)
 class Topic:
     """Immutable representation of a single detected topic."""
@@ -17,7 +22,6 @@ class Topic:
     top_terms: list[str]
     term_weights: dict[str, float]
     coherence_proxy: float
-
 
 class BagOfWordsBuilder:
     """Builds a term-document matrix (bag-of-words) from a corpus.
@@ -90,7 +94,6 @@ class BagOfWordsBuilder:
 
         return matrix, vocabulary, corpus_tokens
 
-
 class NMFTopicExtractor:
     """Non-negative Matrix Factorization topic extraction (LDA-alternative).
 
@@ -132,8 +135,6 @@ class NMFTopicExtractor:
         """
         # Using sklearn.decomposition import NMF
 
-
-
         if n_topics >= tfidf_matrix.shape[0]:
             raise ValueError(
                 f"n_topics ({n_topics}) must be less than n_documents "
@@ -174,7 +175,6 @@ class NMFTopicExtractor:
 
         return topics
 
-
 class TFIDFWeightedMatrixBuilder:
     """Applies TF-IDF weighting to a raw count matrix.
 
@@ -195,7 +195,6 @@ class TFIDFWeightedMatrixBuilder:
         df = (count_matrix > 0).sum(axis=0).astype(float)
         idf = np.log((1 + n_docs) / (1 + df)) + 1
         return tf * idf
-
 
 class TopicDetectionCalculator:
     """NMF-based topic detection for a text column.

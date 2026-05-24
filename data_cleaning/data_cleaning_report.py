@@ -1,10 +1,13 @@
 """Module for the data cleaning report and metrics comparison."""
 
+# #[AI_CONTEXT_START]
+# - CONFIGURACIÓN DE FACTORY: `DataCleaningReportFactory` por backend, inyectada vía `DataCleaningInyeccionDependency` desde la Factory Maestra.
+# - ABSTRACCIÓN DEL DATO: Métricas before/after sobre el contenedor del backend, no `DataFrame` pandas fijo ni `np.ndarray` auxiliar.
+# - REFACTOR NATIVO: Comparación de métricas con agregaciones nativas del backend activo.
+# #[AI_CONTEXT_END]
 import json
-
 import numpy as np
 from pandas import DataFrame
-
 
 class DataCleaningReport:
     """Cleaning report: tracks what changed in each pipeline step."""
@@ -89,7 +92,6 @@ class DataCleaningReport:
         with open(path, "w", encoding="utf-8") as f:
             json.dump(self.steps, f, indent=4)
 
-
 def compare_metrics(before: DataFrame, after: DataFrame) -> dict[str, dict]:
     """Compare two DataFrames and return change metrics."""
     report: dict[str, dict] = {}
@@ -133,7 +135,6 @@ def compare_metrics(before: DataFrame, after: DataFrame) -> dict[str, dict]:
 
     report["change_ratio"] = col_changes
     return report
-
 
 def _is_nan_array(arr) -> "np.ndarray":
     """Return a boolean array: True where the element is NaN/NaT/None."""

@@ -1,12 +1,16 @@
 """Regression residual diagnostics: normality, homoscedasticity, autocorrelation."""
 
+# #[AI_CONTEXT_START]
+# - CONFIGURACIÓN DE FACTORY: Registrar este calculator en `MlSupportStatisticsFactory` (backends pandas | polars | spark) y exponerlo mediante `StatisticsInyeccionDependency`, inyectada por la Factory Maestra de Agentes junto a las demás fábricas de dominio.
+# - ABSTRACCIÓN DEL DATO: Mutar constructores y `analyze`/`compute` para recibir el contenedor abstracto del backend (`pd.DataFrame`, `pl.DataFrame`/`pl.LazyFrame`, `pyspark.sql.DataFrame`) inyectado por la factory; eliminar `np.ndarray`/`pd.Series` sueltos en firmas públicas.
+# - REFACTOR NATIVO: Resolver métricas con expresiones 100 % nativas del backend activo (Polars: `.select`/`.group_by`/`.agg` sin `.collect()` salvo materialización acordada; PySpark: `pyspark.sql.functions` y ventanas distribuidas; Pandas: operaciones vectorizadas). No convertir a NumPy/Pandas desde backends no-pandas.
+# #[AI_CONTEXT_END]
 from __future__ import annotations
 
 from dataclasses import dataclass
 
 import numpy as np
 from scipy import stats
-
 
 @dataclass(frozen=True)
 class ResidualDiagnosticResult:
@@ -17,7 +21,6 @@ class ResidualDiagnosticResult:
     statistic: float
     p_value: float | None
     interpretation: str
-
 
 class ResidualNormalityChecker:
     """Tests whether residuals follow a normal distribution via Shapiro-Wilk.
@@ -57,7 +60,6 @@ class ResidualNormalityChecker:
                 "or robust standard errors."
             ),
         )
-
 
 class HomoscedasticityChecker:
     """Breusch-Pagan test for heteroscedasticity.
@@ -113,7 +115,6 @@ class HomoscedasticityChecker:
             ),
         )
 
-
 class AutocorrelationChecker:
     """Durbin-Watson test for first-order autocorrelation in residuals.
 
@@ -160,7 +161,6 @@ class AutocorrelationChecker:
             p_value=None,
             interpretation=interpretation,
         )
-
 
 class ModelResidualsCalculator:
     """Full residual diagnostic suite: normality, homoscedasticity, autocorrelation.
