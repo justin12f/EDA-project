@@ -4,6 +4,7 @@
 # - REFACTOR NATIVO: Alinear tool-calling con factories reales; documentación y prompts solo en inglés; tests e2e del flujo de tres herramientas.
 # #[AI_CONTEXT_END]
 from api.huggin_face.qwen_3_6 import client_huggingface
+from api.groq.qwen_3_6 import client_groq
 from langchain_core.utils.function_calling import convert_to_openai_function
 from model_tools.create_data_context import create_context_agent_tool
 from model_tools.data_reader_tool import data_reader_tool
@@ -57,10 +58,11 @@ Format your response EXACTLY using the following Markdown structure. Do not incl
 - Are there any anomalies, missing data patterns, or structural quirks the next agents should be aware of before writing code against this data?]
 """
 
+
 class ContextCreatorAgent:
     def __init__(self, file_path: str):
-        self.client = client_huggingface
-        self.model = "Qwen/Qwen3.6-27B:featherless-ai"
+        self.client = client_groq
+        self.model = MODEL_NAME = "qwen/qwen3.6-27b"
         self.file_path = file_path
         self.tools = tools_openai
 

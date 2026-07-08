@@ -76,4 +76,7 @@ def _register_all() -> None:
             if TimeSeriesStatisticsFactory.is_registered(key, backend):
                 StatisticsRegistry.register('time_series.' + key, backend, TimeSeriesStatisticsFactory.get_class(key, backend))
 
-_register_all()
+try:
+    _register_all()
+except ModuleNotFoundError:
+    pass

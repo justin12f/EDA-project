@@ -220,15 +220,17 @@ class AnalyseDataInfoPolars(AbstractAnalyseDataInfo[pl.DataFrame]):
 
     def analyze(self, **kwargs) -> dict:
         # [ACTION puntual: conversio a pandas para calculadoras]
+        import polars as pl
+        df = self._data_frame.collect() if isinstance(self._data_frame, pl.LazyFrame) else self._data_frame
         info = {
             col: {
-                "dtype": str(self._data_frame[col].dtype),
-                "non_null": int(self._data_frame[col].notna().sum()),
-                "null": int(self._data_frame[col].isna().sum()),
+                "dtype": str(df[col].dtype),
+                "non_null": int(df[col].is_not_null().sum()),
+                "null": int(df[col].is_null().sum()),
             }
-            for col in self._data_frame.columns
+            for col in df.columns
         }
-        return {"info": info, "n_rows": len(self._data_frame)}
+        return {"info": info, "n_rows": len(df)}
 
 class AnalyseDataDescribePolars(AbstractAnalyseDataDescribe[pl.DataFrame]):
     """Return pandas describe() as a nested dict."""
@@ -236,7 +238,13 @@ class AnalyseDataDescribePolars(AbstractAnalyseDataDescribe[pl.DataFrame]):
     def analyze(self, **kwargs) -> dict:
         # [ACTION puntual: conversio a pandas para calculadoras]
         include = kwargs.get("include", "all")
-        return self._data_frame.describe(include=include).to_dict()
+        # Polars describe does not support include='all' and requires eager execution
+        import polars as pl
+        df = self._data_frame.collect() if isinstance(self._data_frame, pl.LazyFrame) else self._data_frame
+        try:
+            return df.describe().to_dict(as_series=False)
+        except TypeError:
+            return df.describe().to_dict()
 
 class AnalyseDataColumnsPolars(AbstractAnalyseDataColumns[pl.DataFrame]):
     def analyze(self, **kwargs) -> dict:
@@ -247,43 +255,45 @@ class AnalyseDataIndexPolars(AbstractAnalyseDataIndex[pl.DataFrame]):
     """Return index information."""
 
     def analyze(self, **kwargs) -> dict:
-        # [ACTION puntual: conversio a pandas para calculadoras]
-        idx = self._data_frame.index
+        import polars as pl
+        df = self._data_frame.collect() if isinstance(self._data_frame, pl.LazyFrame) else self._data_frame
+        n = len(df)
         return {
-            "index_name": idx.name,
-            "index_dtype": str(idx.dtype),
-            "start": str(idx[0]) if len(idx) > 0 else None,
-            "end": str(idx[-1]) if len(idx) > 0 else None,
-            "n": len(idx),
+            "index_name": None,
+            "index_dtype": "int64",
+            "start": "0",
+            "end": str(n - 1) if n > 0 else None,
+            "n": n,
         }
 
 class AnalyseDataHeadPolars(AbstractAnalyseDataHead[pl.DataFrame]):
     """Return the first N rows as a dict."""
 
     def analyze(self, **kwargs) -> dict:
-        # [ACTION puntual: conversio a pandas para calculadoras]
+        import polars as pl
+        df = self._data_frame.collect() if isinstance(self._data_frame, pl.LazyFrame) else self._data_frame
         n: int = kwargs.get("n", 5)
-        return self._data_frame.head(n).to_dict(orient="records")
+        return df.head(n).to_dicts()
 
 class AnalyseDataTailPolars(AbstractAnalyseDataTail[pl.DataFrame]):
     """Return the last N rows as a dict."""
 
     def analyze(self, **kwargs) -> dict:
-        # [ACTION puntual: conversio a pandas para calculadoras]
+        import polars as pl
+        df = self._data_frame.collect() if isinstance(self._data_frame, pl.LazyFrame) else self._data_frame
         n: int = kwargs.get("n", 5)
-        return self._data_frame.tail(n).to_dict(orient="records")
+        return df.tail(n).to_dicts()
 
 class AnalyseDataSamplePolars(AbstractAnalyseDataSample[pl.DataFrame]):
     """Return a random sample of N rows as a dict."""
 
     def analyze(self, **kwargs) -> dict:
-        # [ACTION puntual: conversio a pandas para calculadoras]
+        import polars as pl
+        df = self._data_frame.collect() if isinstance(self._data_frame, pl.LazyFrame) else self._data_frame
         n: int = kwargs.get("n", 5)
         random_state: int = kwargs.get("random_state", 42)
-        sample_n = min(n, len(self._data_frame))
-        return self._data_frame.sample(sample_n, random_state=random_state).to_dict(
-            orient="records"
-        )
+        sample_n = min(n, len(df))
+        return df.sample(n=sample_n, seed=random_state).to_dicts()
 
 # ==================== ANALYZERS DE FEATURES ENGINEERING ====================
 

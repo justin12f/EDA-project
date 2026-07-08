@@ -1,105 +1,47 @@
-"""Factory — domain `inferential`."""
+"""Factory for the inferential statistics domain."""
 from __future__ import annotations
-from typing import Any
+
 from core.abstract_factory import RegistryFactory
 
-class InferentialStatisticsFactory(RegistryFactory[str, Any]):
-    pass
+
+class InferentialStatisticsFactory(RegistryFactory):
+    """Registry factory scoped to the inferential statistics domain."""
+
 
 def _register() -> None:
-    from statistics.inferential.backends import pandas_impl as p
-    from statistics.inferential.backends import polars_impl as pl
-    from statistics.inferential.backends import spark_impl as sp
+    from inferential.backends import polars_impl as pl_impl
+    from inferential.backends import spark_impl as sp_impl
+    from inferential.backends import pandas_impl as pd_impl
 
-    InferentialStatisticsFactory.register("tukey_hsd_post_hoc", "pandas", p.TukeyHSDPostHocPandas)
-    InferentialStatisticsFactory.register("tukey_hsd_post_hoc", "polars", pl.TukeyHSDPostHocPolars)
-    InferentialStatisticsFactory.register("tukey_hsd_post_hoc", "spark", sp.TukeyHSDPostHocSpark)
-    InferentialStatisticsFactory.register("one_way_anova_calculator", "pandas", p.OneWayAnovaCalculatorPandas)
-    InferentialStatisticsFactory.register("one_way_anova_calculator", "polars", pl.OneWayAnovaCalculatorPolars)
-    InferentialStatisticsFactory.register("one_way_anova_calculator", "spark", sp.OneWayAnovaCalculatorSpark)
-    InferentialStatisticsFactory.register("bootstrap_sampler", "pandas", p.BootstrapSamplerPandas)
-    InferentialStatisticsFactory.register("bootstrap_sampler", "polars", pl.BootstrapSamplerPolars)
-    InferentialStatisticsFactory.register("bootstrap_sampler", "spark", sp.BootstrapSamplerSpark)
-    InferentialStatisticsFactory.register("bootstrap_statistic_estimator", "pandas", p.BootstrapStatisticEstimatorPandas)
-    InferentialStatisticsFactory.register("bootstrap_statistic_estimator", "polars", pl.BootstrapStatisticEstimatorPolars)
-    InferentialStatisticsFactory.register("bootstrap_statistic_estimator", "spark", sp.BootstrapStatisticEstimatorSpark)
-    InferentialStatisticsFactory.register("percentiles_bootstrap_ci", "pandas", p.PercentilesBootstrapCIPandas)
-    InferentialStatisticsFactory.register("percentiles_bootstrap_ci", "polars", pl.PercentilesBootstrapCIPolars)
-    InferentialStatisticsFactory.register("percentiles_bootstrap_ci", "spark", sp.PercentilesBootstrapCISpark)
-    InferentialStatisticsFactory.register("bootstrap_estimator", "pandas", p.BootstrapEstimatorPandas)
-    InferentialStatisticsFactory.register("bootstrap_estimator", "polars", pl.BootstrapEstimatorPolars)
-    InferentialStatisticsFactory.register("bootstrap_estimator", "spark", sp.BootstrapEstimatorSpark)
-    InferentialStatisticsFactory.register("contingency_table_builder", "pandas", p.ContingencyTableBuilderPandas)
-    InferentialStatisticsFactory.register("contingency_table_builder", "polars", pl.ContingencyTableBuilderPolars)
-    InferentialStatisticsFactory.register("contingency_table_builder", "spark", sp.ContingencyTableBuilderSpark)
-    InferentialStatisticsFactory.register("cramers_v_calculator", "pandas", p.CramersVCalculatorPandas)
-    InferentialStatisticsFactory.register("cramers_v_calculator", "polars", pl.CramersVCalculatorPolars)
-    InferentialStatisticsFactory.register("cramers_v_calculator", "spark", sp.CramersVCalculatorSpark)
-    InferentialStatisticsFactory.register("chi_square_test_calculator", "pandas", p.ChiSquareTestCalculatorPandas)
-    InferentialStatisticsFactory.register("chi_square_test_calculator", "polars", pl.ChiSquareTestCalculatorPolars)
-    InferentialStatisticsFactory.register("chi_square_test_calculator", "spark", sp.ChiSquareTestCalculatorSpark)
-    InferentialStatisticsFactory.register("base_confidence_interval", "pandas", p.BaseConfidenceIntervalPandas)
-    InferentialStatisticsFactory.register("base_confidence_interval", "polars", pl.BaseConfidenceIntervalPolars)
-    InferentialStatisticsFactory.register("base_confidence_interval", "spark", sp.BaseConfidenceIntervalSpark)
-    InferentialStatisticsFactory.register("mean_confidence_interval", "pandas", p.MeanConfidenceIntervalPandas)
-    InferentialStatisticsFactory.register("mean_confidence_interval", "polars", pl.MeanConfidenceIntervalPolars)
-    InferentialStatisticsFactory.register("mean_confidence_interval", "spark", sp.MeanConfidenceIntervalSpark)
-    InferentialStatisticsFactory.register("proportion_confidence_interval", "pandas", p.ProportionConfidenceIntervalPandas)
-    InferentialStatisticsFactory.register("proportion_confidence_interval", "polars", pl.ProportionConfidenceIntervalPolars)
-    InferentialStatisticsFactory.register("proportion_confidence_interval", "spark", sp.ProportionConfidenceIntervalSpark)
-    InferentialStatisticsFactory.register("mean_difference_confidence_interval", "pandas", p.MeanDifferenceConfidenceIntervalPandas)
-    InferentialStatisticsFactory.register("mean_difference_confidence_interval", "polars", pl.MeanDifferenceConfidenceIntervalPolars)
-    InferentialStatisticsFactory.register("mean_difference_confidence_interval", "spark", sp.MeanDifferenceConfidenceIntervalSpark)
-    InferentialStatisticsFactory.register("confidence_interval_calculator", "pandas", p.ConfidenceIntervalCalculatorPandas)
-    InferentialStatisticsFactory.register("confidence_interval_calculator", "polars", pl.ConfidenceIntervalCalculatorPolars)
-    InferentialStatisticsFactory.register("confidence_interval_calculator", "spark", sp.ConfidenceIntervalCalculatorSpark)
-    InferentialStatisticsFactory.register("correlation_interpreter", "pandas", p.CorrelationInterpreterPandas)
-    InferentialStatisticsFactory.register("correlation_interpreter", "polars", pl.CorrelationInterpreterPolars)
-    InferentialStatisticsFactory.register("correlation_interpreter", "spark", sp.CorrelationInterpreterSpark)
-    InferentialStatisticsFactory.register("fisher_z_transformer", "pandas", p.FisherZTransformerPandas)
-    InferentialStatisticsFactory.register("fisher_z_transformer", "polars", pl.FisherZTransformerPolars)
-    InferentialStatisticsFactory.register("fisher_z_transformer", "spark", sp.FisherZTransformerSpark)
-    InferentialStatisticsFactory.register("correlation_significance_calculator", "pandas", p.CorrelationSignificanceCalculatorPandas)
-    InferentialStatisticsFactory.register("correlation_significance_calculator", "polars", pl.CorrelationSignificanceCalculatorPolars)
-    InferentialStatisticsFactory.register("correlation_significance_calculator", "spark", sp.CorrelationSignificanceCalculatorSpark)
-    InferentialStatisticsFactory.register("effect_size_interpreter", "pandas", p.EffectSizeInterpreterPandas)
-    InferentialStatisticsFactory.register("effect_size_interpreter", "polars", pl.EffectSizeInterpreterPolars)
-    InferentialStatisticsFactory.register("effect_size_interpreter", "spark", sp.EffectSizeInterpreterSpark)
-    InferentialStatisticsFactory.register("cohens_d_calculator", "pandas", p.CohensDCalculatorPandas)
-    InferentialStatisticsFactory.register("cohens_d_calculator", "polars", pl.CohensDCalculatorPolars)
-    InferentialStatisticsFactory.register("cohens_d_calculator", "spark", sp.CohensDCalculatorSpark)
-    InferentialStatisticsFactory.register("eta_squared_calculator", "pandas", p.EtaSquaredCalculatorPandas)
-    InferentialStatisticsFactory.register("eta_squared_calculator", "polars", pl.EtaSquaredCalculatorPolars)
-    InferentialStatisticsFactory.register("eta_squared_calculator", "spark", sp.EtaSquaredCalculatorSpark)
-    InferentialStatisticsFactory.register("effect_size_calculator", "pandas", p.EffectSizeCalculatorPandas)
-    InferentialStatisticsFactory.register("effect_size_calculator", "polars", pl.EffectSizeCalculatorPolars)
-    InferentialStatisticsFactory.register("effect_size_calculator", "spark", sp.EffectSizeCalculatorSpark)
-    InferentialStatisticsFactory.register("hypothesis_interpreter", "pandas", p.HypothesisInterpreterPandas)
-    InferentialStatisticsFactory.register("hypothesis_interpreter", "polars", pl.HypothesisInterpreterPolars)
-    InferentialStatisticsFactory.register("hypothesis_interpreter", "spark", sp.HypothesisInterpreterSpark)
-    InferentialStatisticsFactory.register("base_hypothesis_test", "pandas", p.BaseHypothesisTestPandas)
-    InferentialStatisticsFactory.register("base_hypothesis_test", "polars", pl.BaseHypothesisTestPolars)
-    InferentialStatisticsFactory.register("base_hypothesis_test", "spark", sp.BaseHypothesisTestSpark)
-    InferentialStatisticsFactory.register("t_test", "pandas", p.TTestPandas)
-    InferentialStatisticsFactory.register("t_test", "polars", pl.TTestPolars)
-    InferentialStatisticsFactory.register("t_test", "spark", sp.TTestSpark)
-    InferentialStatisticsFactory.register("mann_whitney_test", "pandas", p.MannWhitneyTestPandas)
-    InferentialStatisticsFactory.register("mann_whitney_test", "polars", pl.MannWhitneyTestPolars)
-    InferentialStatisticsFactory.register("mann_whitney_test", "spark", sp.MannWhitneyTestSpark)
-    InferentialStatisticsFactory.register("wilcoxon_test", "pandas", p.WilcoxonTestPandas)
-    InferentialStatisticsFactory.register("wilcoxon_test", "polars", pl.WilcoxonTestPolars)
-    InferentialStatisticsFactory.register("wilcoxon_test", "spark", sp.WilcoxonTestSpark)
-    InferentialStatisticsFactory.register("hypothesis_test_suite", "pandas", p.HypothesisTestSuitePandas)
-    InferentialStatisticsFactory.register("hypothesis_test_suite", "polars", pl.HypothesisTestSuitePolars)
-    InferentialStatisticsFactory.register("hypothesis_test_suite", "spark", sp.HypothesisTestSuiteSpark)
-    InferentialStatisticsFactory.register("minimum_sample_size_calculator", "pandas", p.MinimumSampleSizeCalculatorPandas)
-    InferentialStatisticsFactory.register("minimum_sample_size_calculator", "polars", pl.MinimumSampleSizeCalculatorPolars)
-    InferentialStatisticsFactory.register("minimum_sample_size_calculator", "spark", sp.MinimumSampleSizeCalculatorSpark)
-    InferentialStatisticsFactory.register("observed_power_calculator", "pandas", p.ObservedPowerCalculatorPandas)
-    InferentialStatisticsFactory.register("observed_power_calculator", "polars", pl.ObservedPowerCalculatorPolars)
-    InferentialStatisticsFactory.register("observed_power_calculator", "spark", sp.ObservedPowerCalculatorSpark)
-    InferentialStatisticsFactory.register("power_analysis_calculator", "pandas", p.PowerAnalysisCalculatorPandas)
-    InferentialStatisticsFactory.register("power_analysis_calculator", "polars", pl.PowerAnalysisCalculatorPolars)
-    InferentialStatisticsFactory.register("power_analysis_calculator", "spark", sp.PowerAnalysisCalculatorSpark)
+    # --- Polars ---
+    InferentialStatisticsFactory.register("anova_calculator", "polars", pl_impl.ANOVACalculatorPolars)
+    InferentialStatisticsFactory.register("bootstrap_estimator", "polars", pl_impl.BootstrapEstimatorPolars)
+    InferentialStatisticsFactory.register("chi_square_calculator", "polars", pl_impl.ChiSquareCalculatorPolars)
+    InferentialStatisticsFactory.register("confidence_interval_calculator", "polars", pl_impl.ConfidenceIntervalCalculatorPolars)
+    InferentialStatisticsFactory.register("correlation_significance_calculator", "polars", pl_impl.CorrelationSignificanceCalculatorPolars)
+    InferentialStatisticsFactory.register("effect_size_calculator", "polars", pl_impl.EffectSizeCalculatorPolars)
+    InferentialStatisticsFactory.register("hypothesis_test_suite", "polars", pl_impl.HypothesisTestSuitePolars)
+    InferentialStatisticsFactory.register("power_analysis_calculator", "polars", pl_impl.PowerAnalysisCalculatorPolars)
+
+    # --- Spark ---
+    InferentialStatisticsFactory.register("anova_calculator", "spark", sp_impl.ANOVACalculatorSpark)
+    InferentialStatisticsFactory.register("bootstrap_estimator", "spark", sp_impl.BootstrapEstimatorSpark)
+    InferentialStatisticsFactory.register("chi_square_calculator", "spark", sp_impl.ChiSquareCalculatorSpark)
+    InferentialStatisticsFactory.register("confidence_interval_calculator", "spark", sp_impl.ConfidenceIntervalCalculatorSpark)
+    InferentialStatisticsFactory.register("correlation_significance_calculator", "spark", sp_impl.CorrelationSignificanceCalculatorSpark)
+    InferentialStatisticsFactory.register("effect_size_calculator", "spark", sp_impl.EffectSizeCalculatorSpark)
+    InferentialStatisticsFactory.register("hypothesis_test_suite", "spark", sp_impl.HypothesisTestSuiteSpark)
+    InferentialStatisticsFactory.register("power_analysis_calculator", "spark", sp_impl.PowerAnalysisCalculatorSpark)
+
+    # --- Pandas ---
+    InferentialStatisticsFactory.register("anova_calculator", "pandas", pd_impl.ANOVACalculatorPandas)
+    InferentialStatisticsFactory.register("bootstrap_estimator", "pandas", pd_impl.BootstrapEstimatorPandas)
+    InferentialStatisticsFactory.register("chi_square_calculator", "pandas", pd_impl.ChiSquareCalculatorPandas)
+    InferentialStatisticsFactory.register("confidence_interval_calculator", "pandas", pd_impl.ConfidenceIntervalCalculatorPandas)
+    InferentialStatisticsFactory.register("correlation_significance_calculator", "pandas", pd_impl.CorrelationSignificanceCalculatorPandas)
+    InferentialStatisticsFactory.register("effect_size_calculator", "pandas", pd_impl.EffectSizeCalculatorPandas)
+    InferentialStatisticsFactory.register("hypothesis_test_suite", "pandas", pd_impl.HypothesisTestSuitePandas)
+    InferentialStatisticsFactory.register("power_analysis_calculator", "pandas", pd_impl.PowerAnalysisCalculatorPandas)
+
 
 _register()

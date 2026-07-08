@@ -1,99 +1,41 @@
-"""Factory — domain `segmentation`."""
+"""Factory for the segmentation statistics domain."""
 from __future__ import annotations
-from typing import Any
+
 from core.abstract_factory import RegistryFactory
 
-class SegmentationStatisticsFactory(RegistryFactory[str, Any]):
-    pass
+
+class SegmentationStatisticsFactory(RegistryFactory):
+    """Registry factory scoped to the segmentation statistics domain."""
+
 
 def _register() -> None:
-    from statistics.segmentation.backends import pandas_impl as p
-    from statistics.segmentation.backends import polars_impl as pl
-    from statistics.segmentation.backends import spark_impl as sp
+    from segmentation.backends import polars_impl as pl_impl
+    from segmentation.backends import spark_impl as sp_impl
+    from segmentation.backends import pandas_impl as pd_impl
 
-    SegmentationStatisticsFactory.register("cohort_assigner", "pandas", p.CohortAssignerPandas)
-    SegmentationStatisticsFactory.register("cohort_assigner", "polars", pl.CohortAssignerPolars)
-    SegmentationStatisticsFactory.register("cohort_assigner", "spark", sp.CohortAssignerSpark)
-    SegmentationStatisticsFactory.register("cohort_period_offset_calculator", "pandas", p.CohortPeriodOffsetCalculatorPandas)
-    SegmentationStatisticsFactory.register("cohort_period_offset_calculator", "polars", pl.CohortPeriodOffsetCalculatorPolars)
-    SegmentationStatisticsFactory.register("cohort_period_offset_calculator", "spark", sp.CohortPeriodOffsetCalculatorSpark)
-    SegmentationStatisticsFactory.register("retention_matrix_builder", "pandas", p.RetentionMatrixBuilderPandas)
-    SegmentationStatisticsFactory.register("retention_matrix_builder", "polars", pl.RetentionMatrixBuilderPolars)
-    SegmentationStatisticsFactory.register("retention_matrix_builder", "spark", sp.RetentionMatrixBuilderSpark)
-    SegmentationStatisticsFactory.register("retention_rate_normalizer", "pandas", p.RetentionRateNormalizerPandas)
-    SegmentationStatisticsFactory.register("retention_rate_normalizer", "polars", pl.RetentionRateNormalizerPolars)
-    SegmentationStatisticsFactory.register("retention_rate_normalizer", "spark", sp.RetentionRateNormalizerSpark)
-    SegmentationStatisticsFactory.register("cohort_analysis_calculator", "pandas", p.CohortAnalysisCalculatorPandas)
-    SegmentationStatisticsFactory.register("cohort_analysis_calculator", "polars", pl.CohortAnalysisCalculatorPolars)
-    SegmentationStatisticsFactory.register("cohort_analysis_calculator", "spark", sp.CohortAnalysisCalculatorSpark)
-    SegmentationStatisticsFactory.register("epsilon_estimator", "pandas", p.EpsilonEstimatorPandas)
-    SegmentationStatisticsFactory.register("epsilon_estimator", "polars", pl.EpsilonEstimatorPolars)
-    SegmentationStatisticsFactory.register("epsilon_estimator", "spark", sp.EpsilonEstimatorSpark)
-    SegmentationStatisticsFactory.register("dbscan_cluster_profile_builder", "pandas", p.DBSCANClusterProfileBuilderPandas)
-    SegmentationStatisticsFactory.register("dbscan_cluster_profile_builder", "polars", pl.DBSCANClusterProfileBuilderPolars)
-    SegmentationStatisticsFactory.register("dbscan_cluster_profile_builder", "spark", sp.DBSCANClusterProfileBuilderSpark)
-    SegmentationStatisticsFactory.register("dbscan_cluster_calculator", "pandas", p.DBSCANClusterCalculatorPandas)
-    SegmentationStatisticsFactory.register("dbscan_cluster_calculator", "polars", pl.DBSCANClusterCalculatorPolars)
-    SegmentationStatisticsFactory.register("dbscan_cluster_calculator", "spark", sp.DBSCANClusterCalculatorSpark)
-    SegmentationStatisticsFactory.register("linkage_matrix_builder", "pandas", p.LinkageMatrixBuilderPandas)
-    SegmentationStatisticsFactory.register("linkage_matrix_builder", "polars", pl.LinkageMatrixBuilderPolars)
-    SegmentationStatisticsFactory.register("linkage_matrix_builder", "spark", sp.LinkageMatrixBuilderSpark)
-    SegmentationStatisticsFactory.register("cophenetic_correlation_calculator", "pandas", p.CopheneticCorrelationCalculatorPandas)
-    SegmentationStatisticsFactory.register("cophenetic_correlation_calculator", "polars", pl.CopheneticCorrelationCalculatorPolars)
-    SegmentationStatisticsFactory.register("cophenetic_correlation_calculator", "spark", sp.CopheneticCorrelationCalculatorSpark)
-    SegmentationStatisticsFactory.register("optimal_cutoff_selector", "pandas", p.OptimalCutoffSelectorPandas)
-    SegmentationStatisticsFactory.register("optimal_cutoff_selector", "polars", pl.OptimalCutoffSelectorPolars)
-    SegmentationStatisticsFactory.register("optimal_cutoff_selector", "spark", sp.OptimalCutoffSelectorSpark)
-    SegmentationStatisticsFactory.register("dendrogram_data_extractor", "pandas", p.DendrogramDataExtractorPandas)
-    SegmentationStatisticsFactory.register("dendrogram_data_extractor", "polars", pl.DendrogramDataExtractorPolars)
-    SegmentationStatisticsFactory.register("dendrogram_data_extractor", "spark", sp.DendrogramDataExtractorSpark)
-    SegmentationStatisticsFactory.register("hierarchical_cluster_profile_builder", "pandas", p.HierarchicalClusterProfileBuilderPandas)
-    SegmentationStatisticsFactory.register("hierarchical_cluster_profile_builder", "polars", pl.HierarchicalClusterProfileBuilderPolars)
-    SegmentationStatisticsFactory.register("hierarchical_cluster_profile_builder", "spark", sp.HierarchicalClusterProfileBuilderSpark)
-    SegmentationStatisticsFactory.register("hierarchical_cluster_calculator", "pandas", p.HierarchicalClusterCalculatorPandas)
-    SegmentationStatisticsFactory.register("hierarchical_cluster_calculator", "polars", pl.HierarchicalClusterCalculatorPolars)
-    SegmentationStatisticsFactory.register("hierarchical_cluster_calculator", "spark", sp.HierarchicalClusterCalculatorSpark)
-    SegmentationStatisticsFactory.register("elbow_method_calculator", "pandas", p.ElbowMethodCalculatorPandas)
-    SegmentationStatisticsFactory.register("elbow_method_calculator", "polars", pl.ElbowMethodCalculatorPolars)
-    SegmentationStatisticsFactory.register("elbow_method_calculator", "spark", sp.ElbowMethodCalculatorSpark)
-    SegmentationStatisticsFactory.register("silhouette_score_calculator", "pandas", p.SilhouetteScoreCalculatorPandas)
-    SegmentationStatisticsFactory.register("silhouette_score_calculator", "polars", pl.SilhouetteScoreCalculatorPolars)
-    SegmentationStatisticsFactory.register("silhouette_score_calculator", "spark", sp.SilhouetteScoreCalculatorSpark)
-    SegmentationStatisticsFactory.register("optimal_k_selector", "pandas", p.OptimalKSelectorPandas)
-    SegmentationStatisticsFactory.register("optimal_k_selector", "polars", pl.OptimalKSelectorPolars)
-    SegmentationStatisticsFactory.register("optimal_k_selector", "spark", sp.OptimalKSelectorSpark)
-    SegmentationStatisticsFactory.register("cluster_profile_builder", "pandas", p.ClusterProfileBuilderPandas)
-    SegmentationStatisticsFactory.register("cluster_profile_builder", "polars", pl.ClusterProfileBuilderPolars)
-    SegmentationStatisticsFactory.register("cluster_profile_builder", "spark", sp.ClusterProfileBuilderSpark)
-    SegmentationStatisticsFactory.register("k_means_cluster_calculator", "pandas", p.KMeansClusterCalculatorPandas)
-    SegmentationStatisticsFactory.register("k_means_cluster_calculator", "polars", pl.KMeansClusterCalculatorPolars)
-    SegmentationStatisticsFactory.register("k_means_cluster_calculator", "spark", sp.KMeansClusterCalculatorSpark)
-    SegmentationStatisticsFactory.register("welch_t_test_comparator", "pandas", p.WelchTTestComparatorPandas)
-    SegmentationStatisticsFactory.register("welch_t_test_comparator", "polars", pl.WelchTTestComparatorPolars)
-    SegmentationStatisticsFactory.register("welch_t_test_comparator", "spark", sp.WelchTTestComparatorSpark)
-    SegmentationStatisticsFactory.register("cohens_d_computer", "pandas", p.CohensDComputerPandas)
-    SegmentationStatisticsFactory.register("cohens_d_computer", "polars", pl.CohensDComputerPolars)
-    SegmentationStatisticsFactory.register("cohens_d_computer", "spark", sp.CohensDComputerSpark)
-    SegmentationStatisticsFactory.register("effect_magnitude_classifier", "pandas", p.EffectMagnitudeClassifierPandas)
-    SegmentationStatisticsFactory.register("effect_magnitude_classifier", "polars", pl.EffectMagnitudeClassifierPolars)
-    SegmentationStatisticsFactory.register("effect_magnitude_classifier", "spark", sp.EffectMagnitudeClassifierSpark)
-    SegmentationStatisticsFactory.register("categorical_distribution_comparator", "pandas", p.CategoricalDistributionComparatorPandas)
-    SegmentationStatisticsFactory.register("categorical_distribution_comparator", "polars", pl.CategoricalDistributionComparatorPolars)
-    SegmentationStatisticsFactory.register("categorical_distribution_comparator", "spark", sp.CategoricalDistributionComparatorSpark)
-    SegmentationStatisticsFactory.register("population_splits_calculator", "pandas", p.PopulationSplitsCalculatorPandas)
-    SegmentationStatisticsFactory.register("population_splits_calculator", "polars", pl.PopulationSplitsCalculatorPolars)
-    SegmentationStatisticsFactory.register("population_splits_calculator", "spark", sp.PopulationSplitsCalculatorSpark)
-    SegmentationStatisticsFactory.register("rfm_metrics_computer", "pandas", p.RFMMetricsComputerPandas)
-    SegmentationStatisticsFactory.register("rfm_metrics_computer", "polars", pl.RFMMetricsComputerPolars)
-    SegmentationStatisticsFactory.register("rfm_metrics_computer", "spark", sp.RFMMetricsComputerSpark)
-    SegmentationStatisticsFactory.register("quantile_rfm_scorer", "pandas", p.QuantileRFMScorerPandas)
-    SegmentationStatisticsFactory.register("quantile_rfm_scorer", "polars", pl.QuantileRFMScorerPolars)
-    SegmentationStatisticsFactory.register("quantile_rfm_scorer", "spark", sp.QuantileRFMScorerSpark)
-    SegmentationStatisticsFactory.register("rfm_segment_assigner", "pandas", p.RFMSegmentAssignerPandas)
-    SegmentationStatisticsFactory.register("rfm_segment_assigner", "polars", pl.RFMSegmentAssignerPolars)
-    SegmentationStatisticsFactory.register("rfm_segment_assigner", "spark", sp.RFMSegmentAssignerSpark)
-    SegmentationStatisticsFactory.register("rfm_segmentation_calculator", "pandas", p.RFMSegmentationCalculatorPandas)
-    SegmentationStatisticsFactory.register("rfm_segmentation_calculator", "polars", pl.RFMSegmentationCalculatorPolars)
-    SegmentationStatisticsFactory.register("rfm_segmentation_calculator", "spark", sp.RFMSegmentationCalculatorSpark)
+    # --- Polars ---
+    SegmentationStatisticsFactory.register("cohort_analysis_calculator", "polars", pl_impl.CohortAnalysisCalculatorPolars)
+    SegmentationStatisticsFactory.register("dbscan_clusters_calculator", "polars", pl_impl.DBSCANClustersCalculatorPolars)
+    SegmentationStatisticsFactory.register("hierarchical_clusters_calculator", "polars", pl_impl.HierarchicalClustersCalculatorPolars)
+    SegmentationStatisticsFactory.register("kmeans_clusters_calculator", "polars", pl_impl.KMeansClustersCalculatorPolars)
+    SegmentationStatisticsFactory.register("population_splits_calculator", "polars", pl_impl.PopulationSplitsCalculatorPolars)
+    SegmentationStatisticsFactory.register("rfm_segmentation_calculator", "polars", pl_impl.RFMSegmentationCalculatorPolars)
+
+    # --- Spark ---
+    SegmentationStatisticsFactory.register("cohort_analysis_calculator", "spark", sp_impl.CohortAnalysisCalculatorSpark)
+    SegmentationStatisticsFactory.register("dbscan_clusters_calculator", "spark", sp_impl.DBSCANClustersCalculatorSpark)
+    SegmentationStatisticsFactory.register("hierarchical_clusters_calculator", "spark", sp_impl.HierarchicalClustersCalculatorSpark)
+    SegmentationStatisticsFactory.register("kmeans_clusters_calculator", "spark", sp_impl.KMeansClustersCalculatorSpark)
+    SegmentationStatisticsFactory.register("population_splits_calculator", "spark", sp_impl.PopulationSplitsCalculatorSpark)
+    SegmentationStatisticsFactory.register("rfm_segmentation_calculator", "spark", sp_impl.RFMSegmentationCalculatorSpark)
+
+    # --- Pandas ---
+    SegmentationStatisticsFactory.register("cohort_analysis_calculator", "pandas", pd_impl.CohortAnalysisCalculatorPandas)
+    SegmentationStatisticsFactory.register("dbscan_clusters_calculator", "pandas", pd_impl.DBSCANClustersCalculatorPandas)
+    SegmentationStatisticsFactory.register("hierarchical_clusters_calculator", "pandas", pd_impl.HierarchicalClustersCalculatorPandas)
+    SegmentationStatisticsFactory.register("kmeans_clusters_calculator", "pandas", pd_impl.KMeansClustersCalculatorPandas)
+    SegmentationStatisticsFactory.register("population_splits_calculator", "pandas", pd_impl.PopulationSplitsCalculatorPandas)
+    SegmentationStatisticsFactory.register("rfm_segmentation_calculator", "pandas", pd_impl.RFMSegmentationCalculatorPandas)
+
 
 _register()

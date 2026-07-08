@@ -1,0 +1,29 @@
+"""Abstract contract for Stationarity."""
+from __future__ import annotations
+from abc import ABC, abstractmethod
+from typing import Any
+
+
+class AbstractStationarityCalculator(ABC):
+    """Contract for testing time series stationarity (e.g. Augmented Dickey-Fuller test).
+
+    Parameters
+    ----------
+    data:
+        Backend-native dataframe (assumed ordered by time).
+    value_column:
+        Column containing the time series values.
+
+    Returns
+    -------
+    dict[str, Any]
+        Dictionary with test statistic and p-value.
+    """
+
+    @abstractmethod
+    def calculate(
+        self,
+        data: Any,
+        value_column: str,
+    ) -> dict[str, Any]:
+        """Test stationarity."""

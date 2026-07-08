@@ -1,1 +1,1 @@
-"""Descriptive statistics backend implementations."""
+"""Backends package for descriptive statistics."""

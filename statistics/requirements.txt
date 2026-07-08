@@ -1,0 +1,9 @@
+numpy
+polars
+pandas
+scikit-learn
+openai
+python-dotenv
+langchain_core
+pyspark
+pyarrow

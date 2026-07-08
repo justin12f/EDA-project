@@ -1,108 +1,52 @@
-"""Factory — domain `descriptive`."""
+"""Factory for the descriptive statistics domain.
+
+Registers all three backends (polars, spark, pandas) for every calculator
+that the domain exposes.  The pandas backend delegates to the original
+implementation classes so no existing logic is duplicated.
+"""
 from __future__ import annotations
-from typing import Any
+
 from core.abstract_factory import RegistryFactory
 
-class DescriptiveStatisticsFactory(RegistryFactory[str, Any]):
-    pass
+
+class DescriptiveStatisticsFactory(RegistryFactory):
+    """Registry factory scoped to the descriptive statistics domain."""
+
 
 def _register() -> None:
-    from statistics.descriptive.backends import pandas_impl as p
-    from statistics.descriptive.backends import polars_impl as pl
-    from statistics.descriptive.backends import spark_impl as sp
+    from descriptive.backends import polars_impl as pl_impl
+    from descriptive.backends import spark_impl as sp_impl
 
-    DescriptiveStatisticsFactory.register("mean_calculator", "pandas", p.MeanCalculatorPandas)
-    DescriptiveStatisticsFactory.register("mean_calculator", "polars", pl.MeanCalculatorPolars)
-    DescriptiveStatisticsFactory.register("mean_calculator", "spark", sp.MeanCalculatorSpark)
-    DescriptiveStatisticsFactory.register("median_calculator", "pandas", p.MedianCalculatorPandas)
-    DescriptiveStatisticsFactory.register("median_calculator", "polars", pl.MedianCalculatorPolars)
-    DescriptiveStatisticsFactory.register("median_calculator", "spark", sp.MedianCalculatorSpark)
-    DescriptiveStatisticsFactory.register("mode_calculator", "pandas", p.ModeCalculatorPandas)
-    DescriptiveStatisticsFactory.register("mode_calculator", "polars", pl.ModeCalculatorPolars)
-    DescriptiveStatisticsFactory.register("mode_calculator", "spark", sp.ModeCalculatorSpark)
-    DescriptiveStatisticsFactory.register("trimmed_mean_calculator", "pandas", p.TrimmedMeanCalculatorPandas)
-    DescriptiveStatisticsFactory.register("trimmed_mean_calculator", "polars", pl.TrimmedMeanCalculatorPolars)
-    DescriptiveStatisticsFactory.register("trimmed_mean_calculator", "spark", sp.TrimmedMeanCalculatorSpark)
-    DescriptiveStatisticsFactory.register("central_tendency_interpreter", "pandas", p.CentralTendencyInterpreterPandas)
-    DescriptiveStatisticsFactory.register("central_tendency_interpreter", "polars", pl.CentralTendencyInterpreterPolars)
-    DescriptiveStatisticsFactory.register("central_tendency_interpreter", "spark", sp.CentralTendencyInterpreterSpark)
-    DescriptiveStatisticsFactory.register("central_tendency_calculator", "pandas", p.CentralTendencyCalculatorPandas)
-    DescriptiveStatisticsFactory.register("central_tendency_calculator", "polars", pl.CentralTendencyCalculatorPolars)
-    DescriptiveStatisticsFactory.register("central_tendency_calculator", "spark", sp.CentralTendencyCalculatorSpark)
-    DescriptiveStatisticsFactory.register("variance_calculator", "pandas", p.VarianceCalculatorPandas)
-    DescriptiveStatisticsFactory.register("variance_calculator", "polars", pl.VarianceCalculatorPolars)
-    DescriptiveStatisticsFactory.register("variance_calculator", "spark", sp.VarianceCalculatorSpark)
-    DescriptiveStatisticsFactory.register("standard_deviation_calculator", "pandas", p.StandardDeviationCalculatorPandas)
-    DescriptiveStatisticsFactory.register("standard_deviation_calculator", "polars", pl.StandardDeviationCalculatorPolars)
-    DescriptiveStatisticsFactory.register("standard_deviation_calculator", "spark", sp.StandardDeviationCalculatorSpark)
-    DescriptiveStatisticsFactory.register("range_calculator", "pandas", p.RangeCalculatorPandas)
-    DescriptiveStatisticsFactory.register("range_calculator", "polars", pl.RangeCalculatorPolars)
-    DescriptiveStatisticsFactory.register("range_calculator", "spark", sp.RangeCalculatorSpark)
-    DescriptiveStatisticsFactory.register("iqr_calculator", "pandas", p.IQRCalculatorPandas)
-    DescriptiveStatisticsFactory.register("iqr_calculator", "polars", pl.IQRCalculatorPolars)
-    DescriptiveStatisticsFactory.register("iqr_calculator", "spark", sp.IQRCalculatorSpark)
-    DescriptiveStatisticsFactory.register("mad_calculator", "pandas", p.MADCalculatorPandas)
-    DescriptiveStatisticsFactory.register("mad_calculator", "polars", pl.MADCalculatorPolars)
-    DescriptiveStatisticsFactory.register("mad_calculator", "spark", sp.MADCalculatorSpark)
-    DescriptiveStatisticsFactory.register("coefficient_of_variation_calculator", "pandas", p.CoefficientOfVariationCalculatorPandas)
-    DescriptiveStatisticsFactory.register("coefficient_of_variation_calculator", "polars", pl.CoefficientOfVariationCalculatorPolars)
-    DescriptiveStatisticsFactory.register("coefficient_of_variation_calculator", "spark", sp.CoefficientOfVariationCalculatorSpark)
-    DescriptiveStatisticsFactory.register("dispersion_calculator", "pandas", p.DispersionCalculatorPandas)
-    DescriptiveStatisticsFactory.register("dispersion_calculator", "polars", pl.DispersionCalculatorPolars)
-    DescriptiveStatisticsFactory.register("dispersion_calculator", "spark", sp.DispersionCalculatorSpark)
-    DescriptiveStatisticsFactory.register("bimodality_detector", "pandas", p.BimodalityDetectorPandas)
-    DescriptiveStatisticsFactory.register("bimodality_detector", "polars", pl.BimodalityDetectorPolars)
-    DescriptiveStatisticsFactory.register("bimodality_detector", "spark", sp.BimodalityDetectorSpark)
-    DescriptiveStatisticsFactory.register("transformation_advisor", "pandas", p.TransformationAdvisorPandas)
-    DescriptiveStatisticsFactory.register("transformation_advisor", "polars", pl.TransformationAdvisorPolars)
-    DescriptiveStatisticsFactory.register("transformation_advisor", "spark", sp.TransformationAdvisorSpark)
-    DescriptiveStatisticsFactory.register("distribution_fitter", "pandas", p.DistributionFitterPandas)
-    DescriptiveStatisticsFactory.register("distribution_fitter", "polars", pl.DistributionFitterPolars)
-    DescriptiveStatisticsFactory.register("distribution_fitter", "spark", sp.DistributionFitterSpark)
-    DescriptiveStatisticsFactory.register("distribution_classifier", "pandas", p.DistributionClassifierPandas)
-    DescriptiveStatisticsFactory.register("distribution_classifier", "polars", pl.DistributionClassifierPolars)
-    DescriptiveStatisticsFactory.register("distribution_classifier", "spark", sp.DistributionClassifierSpark)
-    DescriptiveStatisticsFactory.register("bin_count_selector", "pandas", p.BinCountSelectorPandas)
-    DescriptiveStatisticsFactory.register("bin_count_selector", "polars", pl.BinCountSelectorPolars)
-    DescriptiveStatisticsFactory.register("bin_count_selector", "spark", sp.BinCountSelectorSpark)
-    DescriptiveStatisticsFactory.register("frequency_table_builder", "pandas", p.FrequencyTableBuilderPandas)
-    DescriptiveStatisticsFactory.register("frequency_table_builder", "polars", pl.FrequencyTableBuilderPolars)
-    DescriptiveStatisticsFactory.register("frequency_table_builder", "spark", sp.FrequencyTableBuilderSpark)
-    DescriptiveStatisticsFactory.register("frequency_distribution_builder", "pandas", p.FrequencyDistributionBuilderPandas)
-    DescriptiveStatisticsFactory.register("frequency_distribution_builder", "polars", pl.FrequencyDistributionBuilderPolars)
-    DescriptiveStatisticsFactory.register("frequency_distribution_builder", "spark", sp.FrequencyDistributionBuilderSpark)
-    DescriptiveStatisticsFactory.register("base_normality_test", "pandas", p.BaseNormalityTestPandas)
-    DescriptiveStatisticsFactory.register("base_normality_test", "polars", pl.BaseNormalityTestPolars)
-    DescriptiveStatisticsFactory.register("base_normality_test", "spark", sp.BaseNormalityTestSpark)
-    DescriptiveStatisticsFactory.register("shapiro_wilk_test", "pandas", p.ShapiroWilkTestPandas)
-    DescriptiveStatisticsFactory.register("shapiro_wilk_test", "polars", pl.ShapiroWilkTestPolars)
-    DescriptiveStatisticsFactory.register("shapiro_wilk_test", "spark", sp.ShapiroWilkTestSpark)
-    DescriptiveStatisticsFactory.register("anderson_darling_test", "pandas", p.AndersonDarlingTestPandas)
-    DescriptiveStatisticsFactory.register("anderson_darling_test", "polars", pl.AndersonDarlingTestPolars)
-    DescriptiveStatisticsFactory.register("anderson_darling_test", "spark", sp.AndersonDarlingTestSpark)
-    DescriptiveStatisticsFactory.register("kolmogorov_smirnov_test", "pandas", p.KolmogorovSmirnovTestPandas)
-    DescriptiveStatisticsFactory.register("kolmogorov_smirnov_test", "polars", pl.KolmogorovSmirnovTestPolars)
-    DescriptiveStatisticsFactory.register("kolmogorov_smirnov_test", "spark", sp.KolmogorovSmirnovTestSpark)
-    DescriptiveStatisticsFactory.register("normality_test_suite", "pandas", p.NormalityTestSuitePandas)
-    DescriptiveStatisticsFactory.register("normality_test_suite", "polars", pl.NormalityTestSuitePolars)
-    DescriptiveStatisticsFactory.register("normality_test_suite", "spark", sp.NormalityTestSuiteSpark)
-    DescriptiveStatisticsFactory.register("percentile_outlier_detector", "pandas", p.PercentileOutlierDetectorPandas)
-    DescriptiveStatisticsFactory.register("percentile_outlier_detector", "polars", pl.PercentileOutlierDetectorPolars)
-    DescriptiveStatisticsFactory.register("percentile_outlier_detector", "spark", sp.PercentileOutlierDetectorSpark)
-    DescriptiveStatisticsFactory.register("percentiles_calculator", "pandas", p.PercentilesCalculatorPandas)
-    DescriptiveStatisticsFactory.register("percentiles_calculator", "polars", pl.PercentilesCalculatorPolars)
-    DescriptiveStatisticsFactory.register("percentiles_calculator", "spark", sp.PercentilesCalculatorSpark)
-    DescriptiveStatisticsFactory.register("skewness_interpreter", "pandas", p.SkewnessInterpreterPandas)
-    DescriptiveStatisticsFactory.register("skewness_interpreter", "polars", pl.SkewnessInterpreterPolars)
-    DescriptiveStatisticsFactory.register("skewness_interpreter", "spark", sp.SkewnessInterpreterSpark)
-    DescriptiveStatisticsFactory.register("kurtosis_interpreter", "pandas", p.KurtosisInterpreterPandas)
-    DescriptiveStatisticsFactory.register("kurtosis_interpreter", "polars", pl.KurtosisInterpreterPolars)
-    DescriptiveStatisticsFactory.register("kurtosis_interpreter", "spark", sp.KurtosisInterpreterSpark)
-    DescriptiveStatisticsFactory.register("skewness_kurtosis_calculator", "pandas", p.SkewnessKurtosisCalculatorPandas)
-    DescriptiveStatisticsFactory.register("skewness_kurtosis_calculator", "polars", pl.SkewnessKurtosisCalculatorPolars)
-    DescriptiveStatisticsFactory.register("skewness_kurtosis_calculator", "spark", sp.SkewnessKurtosisCalculatorSpark)
-    DescriptiveStatisticsFactory.register("value_counts_calculator", "pandas", p.ValueCountsCalculatorPandas)
-    DescriptiveStatisticsFactory.register("value_counts_calculator", "polars", pl.ValueCountsCalculatorPolars)
-    DescriptiveStatisticsFactory.register("value_counts_calculator", "spark", sp.ValueCountsCalculatorSpark)
+    # --- Polars ---
+    DescriptiveStatisticsFactory.register("central_tendency_calculator", "polars", pl_impl.CentralTendencyCalculatorPolars)
+    DescriptiveStatisticsFactory.register("dispersion_calculator",       "polars", pl_impl.DispersionCalculatorPolars)
+    DescriptiveStatisticsFactory.register("distribution_classifier",     "polars", pl_impl.DistributionClassifierPolars)
+    DescriptiveStatisticsFactory.register("frequency_distribution_builder", "polars", pl_impl.FrequencyDistributionBuilderPolars)
+    DescriptiveStatisticsFactory.register("normality_test_suite",        "polars", pl_impl.NormalityTestSuitePolars)
+    DescriptiveStatisticsFactory.register("percentiles_calculator",      "polars", pl_impl.PercentilesCalculatorPolars)
+    DescriptiveStatisticsFactory.register("skewness_kurtosis_calculator","polars", pl_impl.SkewnessKurtosisCalculatorPolars)
+    DescriptiveStatisticsFactory.register("value_counts_calculator",     "polars", pl_impl.ValueCountsCalculatorPolars)
+
+    # --- Spark ---
+    DescriptiveStatisticsFactory.register("central_tendency_calculator", "spark", sp_impl.CentralTendencyCalculatorSpark)
+    DescriptiveStatisticsFactory.register("dispersion_calculator",       "spark", sp_impl.DispersionCalculatorSpark)
+    DescriptiveStatisticsFactory.register("distribution_classifier",     "spark", sp_impl.DistributionClassifierSpark)
+    DescriptiveStatisticsFactory.register("frequency_distribution_builder", "spark", sp_impl.FrequencyDistributionBuilderSpark)
+    DescriptiveStatisticsFactory.register("normality_test_suite",        "spark", sp_impl.NormalityTestSuiteSpark)
+    DescriptiveStatisticsFactory.register("percentiles_calculator",      "spark", sp_impl.PercentilesCalculatorSpark)
+    DescriptiveStatisticsFactory.register("skewness_kurtosis_calculator","spark", sp_impl.SkewnessKurtosisCalculatorSpark)
+    DescriptiveStatisticsFactory.register("value_counts_calculator",     "spark", sp_impl.ValueCountsCalculatorSpark)
+
+    # --- Pandas (original implementations wrapped) ---
+    from descriptive.backends import pandas_impl as pd_impl  # noqa: PLC0415
+    DescriptiveStatisticsFactory.register("central_tendency_calculator", "pandas", pd_impl.CentralTendencyCalculatorPandas)
+    DescriptiveStatisticsFactory.register("dispersion_calculator",       "pandas", pd_impl.DispersionCalculatorPandas)
+    DescriptiveStatisticsFactory.register("distribution_classifier",     "pandas", pd_impl.DistributionClassifierPandas)
+    DescriptiveStatisticsFactory.register("frequency_distribution_builder", "pandas", pd_impl.FrequencyDistributionBuilderPandas)
+    DescriptiveStatisticsFactory.register("normality_test_suite",        "pandas", pd_impl.NormalityTestSuitePandas)
+    DescriptiveStatisticsFactory.register("percentiles_calculator",      "pandas", pd_impl.PercentilesCalculatorPandas)
+    DescriptiveStatisticsFactory.register("skewness_kurtosis_calculator","pandas", pd_impl.SkewnessKurtosisCalculatorPandas)
+    DescriptiveStatisticsFactory.register("value_counts_calculator",     "pandas", pd_impl.ValueCountsCalculatorPandas)
+
 
 _register()

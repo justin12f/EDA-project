@@ -1,415 +1,163 @@
-"""Pandas statistics backends — `business`."""
+"""Pandas adapter backend for the business statistics domain."""
 from __future__ import annotations
+
 from typing import Any
 import pandas as pd
-from statistics.core.frame_extract import column_to_numpy
-from statistics.business.abstract import *
 
-import statistics.business.churn_rate as _mod_churn_rate
-import statistics.business.conversion_funnel as _mod_conversion_funnel
-import statistics.business.customer_lifetime_value as _mod_customer_lifetime_value
-import statistics.business.financial_ratios as _mod_financial_ratios
-import statistics.business.growth_rates as _mod_growth_rates
-import statistics.business.pareto_analysis as _mod_pareto_analysis
-import statistics.business.risk_metrics as _mod_risk_metrics
-import statistics.business.run_rate as _mod_run_rate
+from business.abstract.churn_rate import AbstractChurnRateCalculator
+from business.abstract.conversion_funnel import AbstractConversionFunnelCalculator
+from business.abstract.customer_lifetime_value import AbstractCustomerLifetimeValueCalculator
+from business.abstract.financial_ratios import AbstractFinancialRatiosCalculator
+from business.abstract.growth_rates import AbstractGrowthRatesCalculator
+from business.abstract.pareto_analysis import AbstractParetoAnalysisCalculator
+from business.abstract.risk_metrics import AbstractRiskMetricsCalculator
+from business.abstract.run_rate import AbstractRunRateCalculator
 
-class PeriodChurnCalculatorPandas(AbstractPeriodChurnCalculator[pd.DataFrame]):
+from business.churn_rate import ChurnRateCalculator
+from business.conversion_funnel import ConversionFunnelCalculator
+from business.customer_lifetime_value import CustomerLifetimeValueCalculator
+from business.financial_ratios import FinancialRatiosCalculator
+from business.growth_rates import GrowthRatesCalculator
+from business.pareto_analysis import ParetoAnalysisCalculator
+from business.risk_metrics import RiskMetricsCalculator
+from business.run_rate import RunRateCalculator
+
+
+class ChurnRateCalculatorPandas(AbstractChurnRateCalculator):
     def __init__(self) -> None:
-        self._legacy = _mod_churn_rate.PeriodChurnCalculator()
+        self._impl = ChurnRateCalculator()
 
-    def calculate(self, data: pd.DataFrame, column: str, **kwargs: Any) -> Any:
-        arr = column_to_numpy(data, column)
-        return self._legacy.calculate(arr, **kwargs)
+    def calculate(
+        self,
+        data: Any,
+        customer_id_column: str,
+        start_date_column: str,
+        end_date_column: str,
+        analysis_start: str,
+        analysis_end: str,
+    ) -> dict[str, Any]:
+        df = data if isinstance(data, pd.DataFrame) else pd.DataFrame(data)
+        return self._impl.calculate(
+            df,
+            customer_id_column,
+            start_date_column,
+            end_date_column,
+            analysis_start,
+            analysis_end
+        )
 
-class ChurnFromEventsCalculatorPandas(AbstractChurnFromEventsCalculator[pd.DataFrame]):
+
+class ConversionFunnelCalculatorPandas(AbstractConversionFunnelCalculator):
     def __init__(self) -> None:
-        self._legacy = _mod_churn_rate.ChurnFromEventsCalculator()
+        self._impl = ConversionFunnelCalculator()
 
-    def calculate(self, data: pd.DataFrame, column: str, **kwargs: Any) -> Any:
-        arr = column_to_numpy(data, column)
-        return self._legacy.calculate(arr, **kwargs)
+    def calculate(
+        self,
+        data: Any,
+        step_column: str,
+        user_column: str,
+        steps_order: list[str],
+    ) -> dict[str, Any]:
+        df = data if isinstance(data, pd.DataFrame) else pd.DataFrame(data)
+        return self._impl.calculate(df, step_column, user_column, steps_order)
 
-class ChurnRateCalculatorPandas(AbstractChurnRateCalculator[pd.DataFrame]):
+
+class CustomerLifetimeValueCalculatorPandas(AbstractCustomerLifetimeValueCalculator):
     def __init__(self) -> None:
-        self._legacy = _mod_churn_rate.ChurnRateCalculator()
+        self._impl = CustomerLifetimeValueCalculator()
 
-    def calculate(self, data: pd.DataFrame, column: str, **kwargs: Any) -> Any:
-        arr = column_to_numpy(data, column)
-        return self._legacy.calculate(arr, **kwargs)
+    def calculate(
+        self,
+        data: Any,
+        customer_column: str,
+        order_value_column: str,
+        date_column: str,
+        discount_rate: float = 0.1,
+        margin_rate: float = 0.3,
+        periods_per_year: int = 12,
+    ) -> dict[str, Any]:
+        df = data if isinstance(data, pd.DataFrame) else pd.DataFrame(data)
+        return self._impl.calculate(
+            df,
+            customer_column,
+            order_value_column,
+            date_column,
+            discount_rate,
+            margin_rate,
+            periods_per_year
+        )
 
-class FunnelMetricsComputerPandas(AbstractFunnelMetricsComputer[pd.DataFrame]):
+
+class FinancialRatiosCalculatorPandas(AbstractFinancialRatiosCalculator):
     def __init__(self) -> None:
-        self._legacy = _mod_conversion_funnel.FunnelMetricsComputer()
+        self._impl = FinancialRatiosCalculator()
 
-    def compute(self, data: pd.DataFrame, column: str, **kwargs: Any) -> Any:
-        arr = column_to_numpy(data, column)
-        return self._legacy.compute(arr, **kwargs)
+    def calculate(
+        self,
+        data: Any,
+        revenue_column: str,
+        cost_column: str,
+        equity_column: str | None = None,
+        assets_column: str | None = None,
+    ) -> dict[str, Any]:
+        df = data if isinstance(data, pd.DataFrame) else pd.DataFrame(data)
+        return self._impl.calculate(df, revenue_column, cost_column, equity_column, assets_column)
 
-class FunnelFromEventsBuilderPandas(AbstractFunnelFromEventsBuilder[pd.DataFrame]):
+
+class GrowthRatesCalculatorPandas(AbstractGrowthRatesCalculator):
     def __init__(self) -> None:
-        self._legacy = _mod_conversion_funnel.FunnelFromEventsBuilder()
+        self._impl = GrowthRatesCalculator()
 
-    def build(self, data: pd.DataFrame, column: str, **kwargs: Any) -> Any:
-        arr = column_to_numpy(data, column)
-        return self._legacy.build(arr, **kwargs)
+    def calculate(
+        self,
+        data: Any,
+        date_column: str,
+        value_column: str,
+        periods: int = 1,
+    ) -> dict[str, Any]:
+        df = data if isinstance(data, pd.DataFrame) else pd.DataFrame(data)
+        return self._impl.calculate(df, date_column, value_column, periods)
 
-class ConversionFunnelCalculatorPandas(AbstractConversionFunnelCalculator[pd.DataFrame]):
+
+class ParetoAnalysisCalculatorPandas(AbstractParetoAnalysisCalculator):
     def __init__(self) -> None:
-        self._legacy = _mod_conversion_funnel.ConversionFunnelCalculator()
+        self._impl = ParetoAnalysisCalculator()
 
-    def calculate(self, data: pd.DataFrame, column: str, **kwargs: Any) -> Any:
-        arr = column_to_numpy(data, column)
-        return self._legacy.calculate(arr, **kwargs)
+    def calculate(
+        self,
+        data: Any,
+        entity_column: str,
+        value_column: str,
+    ) -> dict[str, Any]:
+        df = data if isinstance(data, pd.DataFrame) else pd.DataFrame(data)
+        return self._impl.calculate(df, entity_column, value_column)
 
-class SimpleCLVCalculatorPandas(AbstractSimpleCLVCalculator[pd.DataFrame]):
+
+class RiskMetricsCalculatorPandas(AbstractRiskMetricsCalculator):
     def __init__(self) -> None:
-        self._legacy = _mod_customer_lifetime_value.SimpleCLVCalculator()
+        self._impl = RiskMetricsCalculator()
 
-    def calculate(self, data: pd.DataFrame, column: str, **kwargs: Any) -> Any:
-        arr = column_to_numpy(data, column)
-        return self._legacy.calculate(arr, **kwargs)
+    def calculate(
+        self,
+        data: Any,
+        returns_column: str,
+        risk_free_rate: float = 0.0,
+        confidence_level: float = 0.95,
+    ) -> dict[str, Any]:
+        df = data if isinstance(data, pd.DataFrame) else pd.DataFrame(data)
+        return self._impl.calculate(df, returns_column, risk_free_rate, confidence_level)
 
-class DiscountedCLVCalculatorPandas(AbstractDiscountedCLVCalculator[pd.DataFrame]):
+
+class RunRateCalculatorPandas(AbstractRunRateCalculator):
     def __init__(self) -> None:
-        self._legacy = _mod_customer_lifetime_value.DiscountedCLVCalculator()
-
-    def calculate(self, data: pd.DataFrame, column: str, **kwargs: Any) -> Any:
-        arr = column_to_numpy(data, column)
-        return self._legacy.calculate(arr, **kwargs)
-
-class CLVSegmentAssignerPandas(AbstractCLVSegmentAssigner[pd.DataFrame]):
-    def __init__(self) -> None:
-        self._legacy = _mod_customer_lifetime_value.CLVSegmentAssigner()
-
-    def assign(self, data: pd.DataFrame, column: str, **kwargs: Any) -> Any:
-        arr = column_to_numpy(data, column)
-        return self._legacy.assign(arr, **kwargs)
-
-class CustomerLifetimeValueCalculatorPandas(AbstractCustomerLifetimeValueCalculator[pd.DataFrame]):
-    def __init__(self) -> None:
-        self._legacy = _mod_customer_lifetime_value.CustomerLifetimeValueCalculator()
-
-    def calculate(self, data: pd.DataFrame, column: str, **kwargs: Any) -> Any:
-        arr = column_to_numpy(data, column)
-        return self._legacy.calculate(arr, **kwargs)
-
-class BaseRatioCalculatorPandas(AbstractBaseRatioCalculator[pd.DataFrame]):
-    def __init__(self) -> None:
-        self._legacy = _mod_financial_ratios.BaseRatioCalculator()
-
-    def name(self, data: pd.DataFrame, column: str, **kwargs: Any) -> Any:
-        arr = column_to_numpy(data, column)
-        return self._legacy.name(arr, **kwargs)
-
-    def category(self, data: pd.DataFrame, column: str, **kwargs: Any) -> Any:
-        arr = column_to_numpy(data, column)
-        return self._legacy.category(arr, **kwargs)
-
-    def compute(self, data: pd.DataFrame, column: str, **kwargs: Any) -> Any:
-        arr = column_to_numpy(data, column)
-        return self._legacy.compute(arr, **kwargs)
-
-class GrossMarginCalculatorPandas(AbstractGrossMarginCalculator[pd.DataFrame]):
-    def __init__(self) -> None:
-        self._legacy = _mod_financial_ratios.GrossMarginCalculator()
-
-    def name(self, data: pd.DataFrame, column: str, **kwargs: Any) -> Any:
-        arr = column_to_numpy(data, column)
-        return self._legacy.name(arr, **kwargs)
-
-    def category(self, data: pd.DataFrame, column: str, **kwargs: Any) -> Any:
-        arr = column_to_numpy(data, column)
-        return self._legacy.category(arr, **kwargs)
-
-    def compute(self, data: pd.DataFrame, column: str, **kwargs: Any) -> Any:
-        arr = column_to_numpy(data, column)
-        return self._legacy.compute(arr, **kwargs)
-
-class NetMarginCalculatorPandas(AbstractNetMarginCalculator[pd.DataFrame]):
-    def __init__(self) -> None:
-        self._legacy = _mod_financial_ratios.NetMarginCalculator()
-
-    def name(self, data: pd.DataFrame, column: str, **kwargs: Any) -> Any:
-        arr = column_to_numpy(data, column)
-        return self._legacy.name(arr, **kwargs)
-
-    def category(self, data: pd.DataFrame, column: str, **kwargs: Any) -> Any:
-        arr = column_to_numpy(data, column)
-        return self._legacy.category(arr, **kwargs)
-
-    def compute(self, data: pd.DataFrame, column: str, **kwargs: Any) -> Any:
-        arr = column_to_numpy(data, column)
-        return self._legacy.compute(arr, **kwargs)
-
-class ROECalculatorPandas(AbstractROECalculator[pd.DataFrame]):
-    def __init__(self) -> None:
-        self._legacy = _mod_financial_ratios.ROECalculator()
-
-    def name(self, data: pd.DataFrame, column: str, **kwargs: Any) -> Any:
-        arr = column_to_numpy(data, column)
-        return self._legacy.name(arr, **kwargs)
-
-    def category(self, data: pd.DataFrame, column: str, **kwargs: Any) -> Any:
-        arr = column_to_numpy(data, column)
-        return self._legacy.category(arr, **kwargs)
-
-    def compute(self, data: pd.DataFrame, column: str, **kwargs: Any) -> Any:
-        arr = column_to_numpy(data, column)
-        return self._legacy.compute(arr, **kwargs)
-
-class ROACalculatorPandas(AbstractROACalculator[pd.DataFrame]):
-    def __init__(self) -> None:
-        self._legacy = _mod_financial_ratios.ROACalculator()
-
-    def name(self, data: pd.DataFrame, column: str, **kwargs: Any) -> Any:
-        arr = column_to_numpy(data, column)
-        return self._legacy.name(arr, **kwargs)
-
-    def category(self, data: pd.DataFrame, column: str, **kwargs: Any) -> Any:
-        arr = column_to_numpy(data, column)
-        return self._legacy.category(arr, **kwargs)
-
-    def compute(self, data: pd.DataFrame, column: str, **kwargs: Any) -> Any:
-        arr = column_to_numpy(data, column)
-        return self._legacy.compute(arr, **kwargs)
-
-class CurrentRatioCalculatorPandas(AbstractCurrentRatioCalculator[pd.DataFrame]):
-    def __init__(self) -> None:
-        self._legacy = _mod_financial_ratios.CurrentRatioCalculator()
-
-    def name(self, data: pd.DataFrame, column: str, **kwargs: Any) -> Any:
-        arr = column_to_numpy(data, column)
-        return self._legacy.name(arr, **kwargs)
-
-    def category(self, data: pd.DataFrame, column: str, **kwargs: Any) -> Any:
-        arr = column_to_numpy(data, column)
-        return self._legacy.category(arr, **kwargs)
-
-    def compute(self, data: pd.DataFrame, column: str, **kwargs: Any) -> Any:
-        arr = column_to_numpy(data, column)
-        return self._legacy.compute(arr, **kwargs)
-
-class QuickRatioCalculatorPandas(AbstractQuickRatioCalculator[pd.DataFrame]):
-    def __init__(self) -> None:
-        self._legacy = _mod_financial_ratios.QuickRatioCalculator()
-
-    def name(self, data: pd.DataFrame, column: str, **kwargs: Any) -> Any:
-        arr = column_to_numpy(data, column)
-        return self._legacy.name(arr, **kwargs)
-
-    def category(self, data: pd.DataFrame, column: str, **kwargs: Any) -> Any:
-        arr = column_to_numpy(data, column)
-        return self._legacy.category(arr, **kwargs)
-
-    def compute(self, data: pd.DataFrame, column: str, **kwargs: Any) -> Any:
-        arr = column_to_numpy(data, column)
-        return self._legacy.compute(arr, **kwargs)
-
-class DebtToEquityCalculatorPandas(AbstractDebtToEquityCalculator[pd.DataFrame]):
-    def __init__(self) -> None:
-        self._legacy = _mod_financial_ratios.DebtToEquityCalculator()
-
-    def name(self, data: pd.DataFrame, column: str, **kwargs: Any) -> Any:
-        arr = column_to_numpy(data, column)
-        return self._legacy.name(arr, **kwargs)
-
-    def category(self, data: pd.DataFrame, column: str, **kwargs: Any) -> Any:
-        arr = column_to_numpy(data, column)
-        return self._legacy.category(arr, **kwargs)
-
-    def compute(self, data: pd.DataFrame, column: str, **kwargs: Any) -> Any:
-        arr = column_to_numpy(data, column)
-        return self._legacy.compute(arr, **kwargs)
-
-class AssetTurnoverCalculatorPandas(AbstractAssetTurnoverCalculator[pd.DataFrame]):
-    def __init__(self) -> None:
-        self._legacy = _mod_financial_ratios.AssetTurnoverCalculator()
-
-    def name(self, data: pd.DataFrame, column: str, **kwargs: Any) -> Any:
-        arr = column_to_numpy(data, column)
-        return self._legacy.name(arr, **kwargs)
-
-    def category(self, data: pd.DataFrame, column: str, **kwargs: Any) -> Any:
-        arr = column_to_numpy(data, column)
-        return self._legacy.category(arr, **kwargs)
-
-    def compute(self, data: pd.DataFrame, column: str, **kwargs: Any) -> Any:
-        arr = column_to_numpy(data, column)
-        return self._legacy.compute(arr, **kwargs)
-
-class InventoryTurnoverCalculatorPandas(AbstractInventoryTurnoverCalculator[pd.DataFrame]):
-    def __init__(self) -> None:
-        self._legacy = _mod_financial_ratios.InventoryTurnoverCalculator()
-
-    def name(self, data: pd.DataFrame, column: str, **kwargs: Any) -> Any:
-        arr = column_to_numpy(data, column)
-        return self._legacy.name(arr, **kwargs)
-
-    def category(self, data: pd.DataFrame, column: str, **kwargs: Any) -> Any:
-        arr = column_to_numpy(data, column)
-        return self._legacy.category(arr, **kwargs)
-
-    def compute(self, data: pd.DataFrame, column: str, **kwargs: Any) -> Any:
-        arr = column_to_numpy(data, column)
-        return self._legacy.compute(arr, **kwargs)
-
-class FinancialRatiosCalculatorPandas(AbstractFinancialRatiosCalculator[pd.DataFrame]):
-    def __init__(self) -> None:
-        self._legacy = _mod_financial_ratios.FinancialRatiosCalculator()
-
-    def calculate(self, data: pd.DataFrame, column: str, **kwargs: Any) -> Any:
-        arr = column_to_numpy(data, column)
-        return self._legacy.calculate(arr, **kwargs)
-
-class PeriodOverPeriodCalculatorPandas(AbstractPeriodOverPeriodCalculator[pd.DataFrame]):
-    def __init__(self) -> None:
-        self._legacy = _mod_growth_rates.PeriodOverPeriodCalculator()
-
-    def calculate(self, data: pd.DataFrame, column: str, **kwargs: Any) -> Any:
-        arr = column_to_numpy(data, column)
-        return self._legacy.calculate(arr, **kwargs)
-
-class CAGRCalculatorPandas(AbstractCAGRCalculator[pd.DataFrame]):
-    def __init__(self) -> None:
-        self._legacy = _mod_growth_rates.CAGRCalculator()
-
-    def calculate(self, data: pd.DataFrame, column: str, **kwargs: Any) -> Any:
-        arr = column_to_numpy(data, column)
-        return self._legacy.calculate(arr, **kwargs)
-
-class RollingGrowthCalculatorPandas(AbstractRollingGrowthCalculator[pd.DataFrame]):
-    def __init__(self) -> None:
-        self._legacy = _mod_growth_rates.RollingGrowthCalculator()
-
-    def calculate(self, data: pd.DataFrame, column: str, **kwargs: Any) -> Any:
-        arr = column_to_numpy(data, column)
-        return self._legacy.calculate(arr, **kwargs)
-
-class GrowthRatesCalculatorPandas(AbstractGrowthRatesCalculator[pd.DataFrame]):
-    def __init__(self) -> None:
-        self._legacy = _mod_growth_rates.GrowthRatesCalculator()
-
-    def calculate(self, data: pd.DataFrame, column: str, **kwargs: Any) -> Any:
-        arr = column_to_numpy(data, column)
-        return self._legacy.calculate(arr, **kwargs)
-
-class ParetoThresholdFinderPandas(AbstractParetoThresholdFinder[pd.DataFrame]):
-    def __init__(self) -> None:
-        self._legacy = _mod_pareto_analysis.ParetoThresholdFinder()
-
-    def find(self, data: pd.DataFrame, column: str, **kwargs: Any) -> Any:
-        arr = column_to_numpy(data, column)
-        return self._legacy.find(arr, **kwargs)
-
-class ParetoConcentrationCalculatorPandas(AbstractParetoConcentrationCalculator[pd.DataFrame]):
-    def __init__(self) -> None:
-        self._legacy = _mod_pareto_analysis.ParetoConcentrationCalculator()
-
-    def calculate(self, data: pd.DataFrame, column: str, **kwargs: Any) -> Any:
-        arr = column_to_numpy(data, column)
-        return self._legacy.calculate(arr, **kwargs)
-
-class ParetoAnalysisCalculatorPandas(AbstractParetoAnalysisCalculator[pd.DataFrame]):
-    def __init__(self) -> None:
-        self._legacy = _mod_pareto_analysis.ParetoAnalysisCalculator()
-
-    def calculate(self, data: pd.DataFrame, column: str, **kwargs: Any) -> Any:
-        arr = column_to_numpy(data, column)
-        return self._legacy.calculate(arr, **kwargs)
-
-class ReturnsComputerPandas(AbstractReturnsComputer[pd.DataFrame]):
-    def __init__(self) -> None:
-        self._legacy = _mod_risk_metrics.ReturnsComputer()
-
-    def compute(self, data: pd.DataFrame, column: str, **kwargs: Any) -> Any:
-        arr = column_to_numpy(data, column)
-        return self._legacy.compute(arr, **kwargs)
-
-class VaRCalculatorPandas(AbstractVaRCalculator[pd.DataFrame]):
-    def __init__(self) -> None:
-        self._legacy = _mod_risk_metrics.VaRCalculator()
-
-    def calculate(self, data: pd.DataFrame, column: str, **kwargs: Any) -> Any:
-        arr = column_to_numpy(data, column)
-        return self._legacy.calculate(arr, **kwargs)
-
-class CVaRCalculatorPandas(AbstractCVaRCalculator[pd.DataFrame]):
-    def __init__(self) -> None:
-        self._legacy = _mod_risk_metrics.CVaRCalculator()
-
-    def calculate(self, data: pd.DataFrame, column: str, **kwargs: Any) -> Any:
-        arr = column_to_numpy(data, column)
-        return self._legacy.calculate(arr, **kwargs)
-
-class SharpeRatioCalculatorPandas(AbstractSharpeRatioCalculator[pd.DataFrame]):
-    def __init__(self) -> None:
-        self._legacy = _mod_risk_metrics.SharpeRatioCalculator()
-
-    def calculate(self, data: pd.DataFrame, column: str, **kwargs: Any) -> Any:
-        arr = column_to_numpy(data, column)
-        return self._legacy.calculate(arr, **kwargs)
-
-class SortinoRatioCalculatorPandas(AbstractSortinoRatioCalculator[pd.DataFrame]):
-    def __init__(self) -> None:
-        self._legacy = _mod_risk_metrics.SortinoRatioCalculator()
-
-    def calculate(self, data: pd.DataFrame, column: str, **kwargs: Any) -> Any:
-        arr = column_to_numpy(data, column)
-        return self._legacy.calculate(arr, **kwargs)
-
-class MaxDrawdownCalculatorPandas(AbstractMaxDrawdownCalculator[pd.DataFrame]):
-    def __init__(self) -> None:
-        self._legacy = _mod_risk_metrics.MaxDrawdownCalculator()
-
-    def calculate(self, data: pd.DataFrame, column: str, **kwargs: Any) -> Any:
-        arr = column_to_numpy(data, column)
-        return self._legacy.calculate(arr, **kwargs)
-
-class CalmarRatioCalculatorPandas(AbstractCalmarRatioCalculator[pd.DataFrame]):
-    def __init__(self) -> None:
-        self._legacy = _mod_risk_metrics.CalmarRatioCalculator()
-
-    def calculate(self, data: pd.DataFrame, column: str, **kwargs: Any) -> Any:
-        arr = column_to_numpy(data, column)
-        return self._legacy.calculate(arr, **kwargs)
-
-class RiskMetricsCalculatorPandas(AbstractRiskMetricsCalculator[pd.DataFrame]):
-    def __init__(self) -> None:
-        self._legacy = _mod_risk_metrics.RiskMetricsCalculator()
-
-    def calculate(self, data: pd.DataFrame, column: str, **kwargs: Any) -> Any:
-        arr = column_to_numpy(data, column)
-        return self._legacy.calculate(arr, **kwargs)
-
-class SimpleRunRateProjectorPandas(AbstractSimpleRunRateProjector[pd.DataFrame]):
-    def __init__(self) -> None:
-        self._legacy = _mod_run_rate.SimpleRunRateProjector()
-
-    def project(self, data: pd.DataFrame, column: str, **kwargs: Any) -> Any:
-        arr = column_to_numpy(data, column)
-        return self._legacy.project(arr, **kwargs)
-
-class TrailingAverageProjectorPandas(AbstractTrailingAverageProjector[pd.DataFrame]):
-    def __init__(self) -> None:
-        self._legacy = _mod_run_rate.TrailingAverageProjector()
-
-    def project(self, data: pd.DataFrame, column: str, **kwargs: Any) -> Any:
-        arr = column_to_numpy(data, column)
-        return self._legacy.project(arr, **kwargs)
-
-class WeightedRecentProjectorPandas(AbstractWeightedRecentProjector[pd.DataFrame]):
-    def __init__(self) -> None:
-        self._legacy = _mod_run_rate.WeightedRecentProjector()
-
-    def project(self, data: pd.DataFrame, column: str, **kwargs: Any) -> Any:
-        arr = column_to_numpy(data, column)
-        return self._legacy.project(arr, **kwargs)
-
-class RunRateCalculatorPandas(AbstractRunRateCalculator[pd.DataFrame]):
-    def __init__(self) -> None:
-        self._legacy = _mod_run_rate.RunRateCalculator()
-
-    def calculate(self, data: pd.DataFrame, column: str, **kwargs: Any) -> Any:
-        arr = column_to_numpy(data, column)
-        return self._legacy.calculate(arr, **kwargs)
+        self._impl = RunRateCalculator()
+
+    def calculate(
+        self,
+        data: Any,
+        date_column: str,
+        value_column: str,
+        extrapolation_periods: int = 12,
+    ) -> dict[str, Any]:
+        df = data if isinstance(data, pd.DataFrame) else pd.DataFrame(data)
+        return self._impl.calculate(df, date_column, value_column, extrapolation_periods)

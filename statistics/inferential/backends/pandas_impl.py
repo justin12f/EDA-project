@@ -1,263 +1,176 @@
-"""Pandas statistics backends — `inferential`."""
+"""Pandas adapter backend for the inferential statistics domain."""
 from __future__ import annotations
+
 from typing import Any
 import pandas as pd
-from statistics.core.frame_extract import column_to_numpy
-from statistics.inferential.abstract import *
+import numpy as np
 
-import statistics.inferential.anova as _mod_anova
-import statistics.inferential.bootstrap as _mod_bootstrap
-import statistics.inferential.chi_square as _mod_chi_square
-import statistics.inferential.confidence_intervals as _mod_confidence_intervals
-import statistics.inferential.correlation_significance as _mod_correlation_significance
-import statistics.inferential.effect_size as _mod_effect_size
-import statistics.inferential.hypothesis_test as _mod_hypothesis_test
-import statistics.inferential.power_analysis as _mod_power_analysis
+from inferential.abstract.anova import AbstractANOVACalculator
+from inferential.abstract.bootstrap import AbstractBootstrapEstimator
+from inferential.abstract.chi_square import AbstractChiSquareCalculator
+from inferential.abstract.confidence_intervals import AbstractConfidenceIntervalCalculator
+from inferential.abstract.correlation_significance import AbstractCorrelationSignificanceCalculator
+from inferential.abstract.effect_size import AbstractEffectSizeCalculator
+from inferential.abstract.hypothesis_test import AbstractHypothesisTestSuite
+from inferential.abstract.power_analysis import AbstractPowerAnalysisCalculator
 
-class TukeyHSDPostHocPandas(AbstractTukeyHSDPostHoc[pd.DataFrame]):
+from inferential.anova import OneWayAnovaCalculator
+from inferential.bootstrap import BootstrapEstimator
+from inferential.chi_square import ChiSquareCalculator
+from inferential.confidence_intervals import ConfidenceIntervalCalculator
+from inferential.correlation import CorrelationCalculator
+from inferential.effect_size import EffectSizeCalculator
+from inferential.hypothesis_test import HypothesisTestSuite
+from inferential.power_analysis import PowerAnalysisCalculator
+from core.frame_extract import column_to_numpy
+
+
+class ANOVACalculatorPandas(AbstractANOVACalculator):
     def __init__(self) -> None:
-        self._legacy = _mod_anova.TukeyHSDPostHoc()
+        self._impl = OneWayAnovaCalculator()
 
-    def calculate(self, data: pd.DataFrame, column: str, **kwargs: Any) -> Any:
-        arr = column_to_numpy(data, column)
-        return self._legacy.calculate(arr, **kwargs)
+    def calculate(
+        self,
+        data: Any,
+        value_column: str,
+        group_column: str,
+        significance_level: float = 0.05,
+        run_post_hoc: bool = True,
+    ) -> dict[str, Any]:
+        df = data if isinstance(data, pd.DataFrame) else pd.DataFrame(data)
+        groups = {str(name): group[value_column].values for name, group in df.groupby(group_column)}
+        return self._impl.calculate(groups, significance_level=significance_level, run_post_hoc=run_post_hoc)
 
-class OneWayAnovaCalculatorPandas(AbstractOneWayAnovaCalculator[pd.DataFrame]):
+
+class BootstrapEstimatorPandas(AbstractBootstrapEstimator):
     def __init__(self) -> None:
-        self._legacy = _mod_anova.OneWayAnovaCalculator()
+        self._impl = BootstrapEstimator()
 
-    def calculate(self, data: pd.DataFrame, column: str, **kwargs: Any) -> Any:
+    def estimate(
+        self,
+        data: Any,
+        column: str,
+        statistic_expr: Any,
+        n_iterations: int = 5_000,
+        confidence_level: float = 0.95,
+        random_seed: int | None = 42,
+    ) -> dict[str, Any]:
         arr = column_to_numpy(data, column)
-        return self._legacy.calculate(arr, **kwargs)
+        return self._impl.estimate(
+            data=arr,
+            statistic=statistic_expr,
+            n_iterations=n_iterations,
+            confidence_level=confidence_level,
+            random_seed=random_seed
+        )
 
-class BootstrapSamplerPandas(AbstractBootstrapSampler[pd.DataFrame]):
+
+class ChiSquareCalculatorPandas(AbstractChiSquareCalculator):
     def __init__(self) -> None:
-        self._legacy = _mod_bootstrap.BootstrapSampler()
+        self._impl = ChiSquareCalculator()
 
-    def generate(self, data: pd.DataFrame, column: str, **kwargs: Any) -> Any:
-        arr = column_to_numpy(data, column)
-        return self._legacy.generate(arr, **kwargs)
+    def calculate(
+        self,
+        data: Any,
+        column1: str,
+        column2: str | None = None,
+        significance_level: float = 0.05,
+    ) -> dict[str, Any]:
+        df = data if isinstance(data, pd.DataFrame) else pd.DataFrame(data)
+        if column2 is None:
+            counts = df[column1].value_counts().values
+            return self._impl.calculate("goodness_of_fit", observed_frequencies=counts, significance_level=significance_level)
+        else:
+            crosstab = pd.crosstab(df[column1], df[column2]).values
+            return self._impl.calculate("independence", contingency_table=crosstab, significance_level=significance_level)
 
-class BootstrapStatisticEstimatorPandas(AbstractBootstrapStatisticEstimator[pd.DataFrame]):
+
+class ConfidenceIntervalCalculatorPandas(AbstractConfidenceIntervalCalculator):
     def __init__(self) -> None:
-        self._legacy = _mod_bootstrap.BootstrapStatisticEstimator()
+        self._impl = ConfidenceIntervalCalculator()
 
-    def estimate(self, data: pd.DataFrame, column: str, **kwargs: Any) -> Any:
+    def calculate(
+        self,
+        data: Any,
+        column: str,
+        confidence_level: float = 0.95,
+        method: str = "t",
+    ) -> dict[str, Any]:
         arr = column_to_numpy(data, column)
-        return self._legacy.estimate(arr, **kwargs)
+        return self._impl.calculate("mean", data=arr, confidence_level=confidence_level)
 
-class PercentilesBootstrapCIPandas(AbstractPercentilesBootstrapCI[pd.DataFrame]):
+
+class CorrelationSignificanceCalculatorPandas(AbstractCorrelationSignificanceCalculator):
     def __init__(self) -> None:
-        self._legacy = _mod_bootstrap.PercentilesBootstrapCI()
+        self._impl = CorrelationCalculator()
 
-    def calculate(self, data: pd.DataFrame, column: str, **kwargs: Any) -> Any:
-        arr = column_to_numpy(data, column)
-        return self._legacy.calculate(arr, **kwargs)
+    def calculate(
+        self,
+        data: Any,
+        column1: str,
+        column2: str,
+        method: str = "pearson",
+        significance_level: float = 0.05,
+    ) -> dict[str, Any]:
+        arr1 = column_to_numpy(data, column1)
+        arr2 = column_to_numpy(data, column2)
+        return self._impl.calculate(method, arr1, arr2, significance_level=significance_level)
 
-class BootstrapEstimatorPandas(AbstractBootstrapEstimator[pd.DataFrame]):
+
+class EffectSizeCalculatorPandas(AbstractEffectSizeCalculator):
     def __init__(self) -> None:
-        self._legacy = _mod_bootstrap.BootstrapEstimator()
+        self._impl = EffectSizeCalculator()
 
-    def estimate(self, data: pd.DataFrame, column: str, **kwargs: Any) -> Any:
-        arr = column_to_numpy(data, column)
-        return self._legacy.estimate(arr, **kwargs)
+    def calculate(
+        self,
+        data: Any,
+        value_column: str,
+        group_column: str,
+    ) -> dict[str, Any]:
+        df = data if isinstance(data, pd.DataFrame) else pd.DataFrame(data)
+        groups = [group[value_column].values for name, group in df.groupby(group_column)]
+        if len(groups) != 2:
+            raise ValueError("Effect size requires exactly 2 groups.")
+        return self._impl.calculate("cohens_d", groups[0], groups[1])
 
-class ContingencyTableBuilderPandas(AbstractContingencyTableBuilder[pd.DataFrame]):
+
+class HypothesisTestSuitePandas(AbstractHypothesisTestSuite):
     def __init__(self) -> None:
-        self._legacy = _mod_chi_square.ContingencyTableBuilder()
+        self._impl = HypothesisTestSuite()
 
-    def build(self, data: pd.DataFrame, column: str, **kwargs: Any) -> Any:
-        arr = column_to_numpy(data, column)
-        return self._legacy.build(arr, **kwargs)
+    def run(
+        self,
+        data: Any,
+        value_column: str,
+        group_column: str,
+        test_type: str = "t_test_ind",
+        significance_level: float = 0.05,
+    ) -> dict[str, Any]:
+        df = data if isinstance(data, pd.DataFrame) else pd.DataFrame(data)
+        groups = [group[value_column].values for name, group in df.groupby(group_column)]
+        if len(groups) != 2:
+            raise ValueError("Hypothesis test requires exactly 2 groups.")
+        
+        test_key = "t_test" if "t_test" in test_type else "mann_whitney"
+        return self._impl.run(groups[0], groups[1], test=test_key, significance_level=significance_level)
 
-class CramersVCalculatorPandas(AbstractCramersVCalculator[pd.DataFrame]):
+
+class PowerAnalysisCalculatorPandas(AbstractPowerAnalysisCalculator):
     def __init__(self) -> None:
-        self._legacy = _mod_chi_square.CramersVCalculator()
+        self._impl = PowerAnalysisCalculator()
 
-    def calculate(self, data: pd.DataFrame, column: str, **kwargs: Any) -> Any:
-        arr = column_to_numpy(data, column)
-        return self._legacy.calculate(arr, **kwargs)
-
-class ChiSquareTestCalculatorPandas(AbstractChiSquareTestCalculator[pd.DataFrame]):
-    def __init__(self) -> None:
-        self._legacy = _mod_chi_square.ChiSquareTestCalculator()
-
-    def calculate(self, data: pd.DataFrame, column: str, **kwargs: Any) -> Any:
-        arr = column_to_numpy(data, column)
-        return self._legacy.calculate(arr, **kwargs)
-
-class BaseConfidenceIntervalPandas(AbstractBaseConfidenceInterval[pd.DataFrame]):
-    def __init__(self) -> None:
-        self._legacy = _mod_confidence_intervals.BaseConfidenceInterval()
-
-    def calculate(self, data: pd.DataFrame, column: str, **kwargs: Any) -> Any:
-        arr = column_to_numpy(data, column)
-        return self._legacy.calculate(arr, **kwargs)
-
-class MeanConfidenceIntervalPandas(AbstractMeanConfidenceInterval[pd.DataFrame]):
-    def __init__(self) -> None:
-        self._legacy = _mod_confidence_intervals.MeanConfidenceInterval()
-
-    def calculate(self, data: pd.DataFrame, column: str, **kwargs: Any) -> Any:
-        arr = column_to_numpy(data, column)
-        return self._legacy.calculate(arr, **kwargs)
-
-class ProportionConfidenceIntervalPandas(AbstractProportionConfidenceInterval[pd.DataFrame]):
-    def __init__(self) -> None:
-        self._legacy = _mod_confidence_intervals.ProportionConfidenceInterval()
-
-    def calculate(self, data: pd.DataFrame, column: str, **kwargs: Any) -> Any:
-        arr = column_to_numpy(data, column)
-        return self._legacy.calculate(arr, **kwargs)
-
-class MeanDifferenceConfidenceIntervalPandas(AbstractMeanDifferenceConfidenceInterval[pd.DataFrame]):
-    def __init__(self) -> None:
-        self._legacy = _mod_confidence_intervals.MeanDifferenceConfidenceInterval()
-
-    def calculate(self, data: pd.DataFrame, column: str, **kwargs: Any) -> Any:
-        arr = column_to_numpy(data, column)
-        return self._legacy.calculate(arr, **kwargs)
-
-class ConfidenceIntervalCalculatorPandas(AbstractConfidenceIntervalCalculator[pd.DataFrame]):
-    def __init__(self) -> None:
-        self._legacy = _mod_confidence_intervals.ConfidenceIntervalCalculator()
-
-    def calculate(self, data: pd.DataFrame, column: str, **kwargs: Any) -> Any:
-        arr = column_to_numpy(data, column)
-        return self._legacy.calculate(arr, **kwargs)
-
-class CorrelationInterpreterPandas(AbstractCorrelationInterpreter[pd.DataFrame]):
-    def __init__(self) -> None:
-        self._legacy = _mod_correlation_significance.CorrelationInterpreter()
-
-    def interpret(self, data: pd.DataFrame, column: str, **kwargs: Any) -> Any:
-        arr = column_to_numpy(data, column)
-        return self._legacy.interpret(arr, **kwargs)
-
-class FisherZTransformerPandas(AbstractFisherZTransformer[pd.DataFrame]):
-    def __init__(self) -> None:
-        self._legacy = _mod_correlation_significance.FisherZTransformer()
-
-    def confidence_interval(self, data: pd.DataFrame, column: str, **kwargs: Any) -> Any:
-        arr = column_to_numpy(data, column)
-        return self._legacy.confidence_interval(arr, **kwargs)
-
-class CorrelationSignificanceCalculatorPandas(AbstractCorrelationSignificanceCalculator[pd.DataFrame]):
-    def __init__(self) -> None:
-        self._legacy = _mod_correlation_significance.CorrelationSignificanceCalculator()
-
-    def calculate(self, data: pd.DataFrame, column: str, **kwargs: Any) -> Any:
-        arr = column_to_numpy(data, column)
-        return self._legacy.calculate(arr, **kwargs)
-
-class EffectSizeInterpreterPandas(AbstractEffectSizeInterpreter[pd.DataFrame]):
-    def __init__(self) -> None:
-        self._legacy = _mod_effect_size.EffectSizeInterpreter()
-
-    def interpret_cohens_d(self, data: pd.DataFrame, column: str, **kwargs: Any) -> Any:
-        arr = column_to_numpy(data, column)
-        return self._legacy.interpret_cohens_d(arr, **kwargs)
-
-    def interpret_cramers_v(self, data: pd.DataFrame, column: str, **kwargs: Any) -> Any:
-        arr = column_to_numpy(data, column)
-        return self._legacy.interpret_cramers_v(arr, **kwargs)
-
-    def interpret_eta_squared(self, data: pd.DataFrame, column: str, **kwargs: Any) -> Any:
-        arr = column_to_numpy(data, column)
-        return self._legacy.interpret_eta_squared(arr, **kwargs)
-
-class CohensDCalculatorPandas(AbstractCohensDCalculator[pd.DataFrame]):
-    def __init__(self) -> None:
-        self._legacy = _mod_effect_size.CohensDCalculator()
-
-    def calculate(self, data: pd.DataFrame, column: str, **kwargs: Any) -> Any:
-        arr = column_to_numpy(data, column)
-        return self._legacy.calculate(arr, **kwargs)
-
-class EtaSquaredCalculatorPandas(AbstractEtaSquaredCalculator[pd.DataFrame]):
-    def __init__(self) -> None:
-        self._legacy = _mod_effect_size.EtaSquaredCalculator()
-
-    def calculate(self, data: pd.DataFrame, column: str, **kwargs: Any) -> Any:
-        arr = column_to_numpy(data, column)
-        return self._legacy.calculate(arr, **kwargs)
-
-class EffectSizeCalculatorPandas(AbstractEffectSizeCalculator[pd.DataFrame]):
-    def __init__(self) -> None:
-        self._legacy = _mod_effect_size.EffectSizeCalculator()
-
-    def calculate(self, data: pd.DataFrame, column: str, **kwargs: Any) -> Any:
-        arr = column_to_numpy(data, column)
-        return self._legacy.calculate(arr, **kwargs)
-
-class HypothesisInterpreterPandas(AbstractHypothesisInterpreter[pd.DataFrame]):
-    def __init__(self) -> None:
-        self._legacy = _mod_hypothesis_test.HypothesisInterpreter()
-
-    def interpret(self, data: pd.DataFrame, column: str, **kwargs: Any) -> Any:
-        arr = column_to_numpy(data, column)
-        return self._legacy.interpret(arr, **kwargs)
-
-class BaseHypothesisTestPandas(AbstractBaseHypothesisTest[pd.DataFrame]):
-    def __init__(self) -> None:
-        self._legacy = _mod_hypothesis_test.BaseHypothesisTest()
-
-    def test(self, data: pd.DataFrame, column: str, **kwargs: Any) -> Any:
-        arr = column_to_numpy(data, column)
-        return self._legacy.test(arr, **kwargs)
-
-class TTestPandas(AbstractTTest[pd.DataFrame]):
-    def __init__(self) -> None:
-        self._legacy = _mod_hypothesis_test.TTest()
-
-    def test(self, data: pd.DataFrame, column: str, **kwargs: Any) -> Any:
-        arr = column_to_numpy(data, column)
-        return self._legacy.test(arr, **kwargs)
-
-class MannWhitneyTestPandas(AbstractMannWhitneyTest[pd.DataFrame]):
-    def __init__(self) -> None:
-        self._legacy = _mod_hypothesis_test.MannWhitneyTest()
-
-    def test(self, data: pd.DataFrame, column: str, **kwargs: Any) -> Any:
-        arr = column_to_numpy(data, column)
-        return self._legacy.test(arr, **kwargs)
-
-class WilcoxonTestPandas(AbstractWilcoxonTest[pd.DataFrame]):
-    def __init__(self) -> None:
-        self._legacy = _mod_hypothesis_test.WilcoxonTest()
-
-    def test(self, data: pd.DataFrame, column: str, **kwargs: Any) -> Any:
-        arr = column_to_numpy(data, column)
-        return self._legacy.test(arr, **kwargs)
-
-class HypothesisTestSuitePandas(AbstractHypothesisTestSuite[pd.DataFrame]):
-    def __init__(self) -> None:
-        self._legacy = _mod_hypothesis_test.HypothesisTestSuite()
-
-    def run(self, data: pd.DataFrame, column: str, **kwargs: Any) -> Any:
-        arr = column_to_numpy(data, column)
-        return self._legacy.run(arr, **kwargs)
-
-class MinimumSampleSizeCalculatorPandas(AbstractMinimumSampleSizeCalculator[pd.DataFrame]):
-    def __init__(self) -> None:
-        self._legacy = _mod_power_analysis.MinimumSampleSizeCalculator()
-
-    def calculate(self, data: pd.DataFrame, column: str, **kwargs: Any) -> Any:
-        arr = column_to_numpy(data, column)
-        return self._legacy.calculate(arr, **kwargs)
-
-class ObservedPowerCalculatorPandas(AbstractObservedPowerCalculator[pd.DataFrame]):
-    def __init__(self) -> None:
-        self._legacy = _mod_power_analysis.ObservedPowerCalculator()
-
-    def calculate(self, data: pd.DataFrame, column: str, **kwargs: Any) -> Any:
-        arr = column_to_numpy(data, column)
-        return self._legacy.calculate(arr, **kwargs)
-
-class PowerAnalysisCalculatorPandas(AbstractPowerAnalysisCalculator[pd.DataFrame]):
-    def __init__(self) -> None:
-        self._legacy = _mod_power_analysis.PowerAnalysisCalculator()
-
-    def calculate(self, data: pd.DataFrame, column: str, **kwargs: Any) -> Any:
-        arr = column_to_numpy(data, column)
-        return self._legacy.calculate(arr, **kwargs)
+    def calculate(
+        self,
+        effect_size: float,
+        alpha: float = 0.05,
+        power: float | None = 0.8,
+        n: int | None = None,
+        test_type: str = "t_test_ind",
+    ) -> dict[str, Any]:
+        return self._impl.calculate(
+            test_type=test_type,
+            effect_size=effect_size,
+            alpha=alpha,
+            power=power,
+            n=n
+        )
