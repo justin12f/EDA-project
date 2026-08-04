@@ -9,3 +9,9 @@ Thumbs.db
 *.pyd
 .superpowers/
 
+.cache/
+.llm-bridge/
+apps/web/node_modules/
+apps/web/.output/
+apps/web/.vinxi/
+apps/web/.tanstack/

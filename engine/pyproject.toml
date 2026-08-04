@@ -9,12 +9,18 @@ dependencies = [
   "pyarrow>=16",
   "scikit-learn>=1.5",
   "python-dotenv>=1.0",
-  "langchain-core>=0.3",
+  # Chat providers. Neither is required to run: with no key configured,
+  # lumen.llm falls back to the deterministic MockProvider.
+  "anthropic>=0.40",
+  "openai>=1.55",
 ]
 
 [project.optional-dependencies]
 spark = ["pyspark>=3.5"]
-dev = ["pytest>=8", "pytest-asyncio>=0.24"]
+# Local embeddings for the pgvector context store. Optional because the model is
+# a ~130MB download; EMBEDDING_PROVIDER=none disables semantic search cleanly.
+embeddings = ["fastembed>=0.4"]
+dev = ["pytest>=8", "pytest-asyncio>=0.24", "ruff>=0.8"]
 
 [build-system]
 requires = ["hatchling"]
@@ -26,3 +32,8 @@ packages = ["src/lumen"]
 [tool.pytest.ini_options]
 pythonpath = ["src"]
 testpaths = ["tests"]
+asyncio_mode = "auto"
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"

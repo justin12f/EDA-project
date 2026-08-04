@@ -19,6 +19,7 @@
 - Every LLM call writes `llm_input_tokens` and `llm_output_tokens` usage records with the real model id. Every job writes `compute_seconds`.
 - New tables carry `org_id` and an RLS policy, and are added to `ORG_SCOPED_TABLES` in the RLS migration.
 - Model ids are configuration. Never hardcode a model string outside `settings.py`.
+- **The product must run end to end with no API key.** `LLM_MODE` defaults to `auto`, which resolves to Anthropic when `ANTHROPIC_API_KEY` is set and to the deterministic `MockProvider` (Task 9) otherwise. No test, no `make dev`, and no end-to-end run may require a credential. A test that skips without a key is a test that does not run — derive the behaviour from real tool results instead.
 
 ---
 
@@ -536,6 +537,722 @@ Expected: PASS — 5 passed
 ```bash
 git add engine
 git commit -m "feat: add provider-agnostic llm client with claude default and groq fast tier"
+```
+
+---
+
+### Task 9: Keyless LLM providers — run the whole flow with no API key
+
+> **Ordering:** execute this immediately after Task 1. It is numbered 9 only because it
+> was added after the plan was first written. Tasks 5–8 and the web plan's Task 8 all
+> depend on it, because it is what lets the vertical slice run green with no API key.
+
+**Files:**
+- Create: `engine/src/lumen/llm/mock_provider.py`, `engine/src/lumen/llm/bridge_provider.py`
+- Modify: `engine/src/lumen/llm/registry.py`, `engine/src/lumen/llm/__init__.py`
+- Test: `engine/tests/test_mock_provider.py`, `engine/tests/test_bridge_provider.py`
+
+**Interfaces:**
+- Consumes: `LLMProvider`, `ChatMessage`, `ToolSpec`, `ToolCall`, `LLMResponse`, `TokenUsage` from Task 1
+- Produces:
+  - `MockProvider(model="mock-agent-v1", null_threshold=0.005)` — a deterministic, network-free `LLMProvider`
+  - `BridgeProvider(inbox: Path, poll_seconds=1.0, timeout_seconds=600)` — an `LLMProvider` that writes each request to a file and waits for a human- or agent-authored reply
+  - `get_provider(tier, *, anthropic_key, groq_key, tiers, mode="auto")` where `mode ∈ {"auto","anthropic","groq","mock","bridge"}`; `"auto"` resolves to `anthropic` when `anthropic_key` is set and to `mock` otherwise
+
+**Why this exists.** Requiring a paid API key to see the product work is a bad default: it blocks CI, blocks a new contributor's first hour, and makes the end-to-end test unrunnable on a laptop. `MockProvider` removes that requirement without faking the result. It does **not** replay canned text — it reads the tool results it is handed and derives its next move from them, so a run over a real uploaded CSV produces a proposal whose steps come from that file's actual null rates and duplicate counts. Swapping in a real model changes the wording of the rationale, not the shape of the flow.
+
+`BridgeProvider` covers the other half: it lets a human — or Claude in an agent session — answer each model call by hand, which is how you exercise a path the mock does not cover without spending a token.
+
+- [ ] **Step 1: Write the failing tests**
+
+Create `engine/tests/test_mock_provider.py`:
+
+```python
+"""MockProvider must play the real flow, deriving each move from real tool results."""
+import json
+
+import pytest
+
+from lumen.llm.base import ChatMessage, ToolSpec
+from lumen.llm.mock_provider import MockProvider
+
+TOOLS = [
+    ToolSpec(name="read_source", description="load a source",
+             input_schema={"type": "object", "properties": {"source_id": {"type": "string"}}}),
+    ToolSpec(name="profile_source", description="profile a dataset",
+             input_schema={"type": "object", "properties": {"rid": {"type": "string"}}}),
+    ToolSpec(name="propose_cleaning_pipeline", description="propose steps",
+             input_schema={"type": "object", "properties": {"rid": {"type": "string"}}}),
+]
+
+
+def tool_result(call_id: str, payload: dict) -> ChatMessage:
+    return ChatMessage(role="tool", tool_call_id=call_id, content=json.dumps(payload))
+
+
+@pytest.mark.asyncio
+async def test_first_move_is_read_source_with_the_id_from_the_prompt():
+    provider = MockProvider()
+    response = await provider.complete(
+        [
+            ChatMessage(role="system", content="You are the Cleaning Agent."),
+            ChatMessage(
+                role="user",
+                content="Propose a cleaning pipeline for source 4a1f2c9e-0000-4000-8000-000000000001.",
+            ),
+        ],
+        TOOLS,
+    )
+    assert len(response.tool_calls) == 1
+    call = response.tool_calls[0]
+    assert call.name == "read_source"
+    assert call.arguments == {"source_id": "4a1f2c9e-0000-4000-8000-000000000001"}
+    assert response.stop_reason == "tool_use"
+
+
+@pytest.mark.asyncio
+async def test_second_move_profiles_the_handle_the_first_move_returned():
+    provider = MockProvider()
+    messages = [
+        ChatMessage(role="user", content="Propose a cleaning pipeline for dataset ab12cd34."),
+        ChatMessage(role="assistant", content="", tool_calls=[
+            __import__("lumen.llm.base", fromlist=["ToolCall"]).ToolCall(
+                id="c1", name="read_source", arguments={"source_id": "s1"})
+        ]),
+        tool_result("c1", {"ok": True, "data": {"rid": "ab12cd34", "row_count": 5, "schema": {"a": "str"}}}),
+    ]
+    response = await provider.complete(messages, TOOLS)
+    assert response.tool_calls[0].name == "profile_source"
+    assert response.tool_calls[0].arguments == {"rid": "ab12cd34"}
+
+
+@pytest.mark.asyncio
+async def test_steps_are_derived_from_the_observed_null_rates():
+    provider = MockProvider()
+    profile = {
+        "ok": True,
+        "data": {
+            "rid": "ab12cd34",
+            "row_count": 1000,
+            "columns": {"id": "int64", "country_code": "str", "note": "str"},
+            "null_rate_by_column": {"id": 0.0, "country_code": 0.032, "note": 0.001},
+            "duplicate_counts": {"email_hash": 412},
+        },
+    }
+    messages = [
+        ChatMessage(role="user", content="Propose a cleaning pipeline for dataset ab12cd34."),
+        tool_result("c2", profile),
+    ]
+    response = await provider.complete(messages, TOOLS)
+
+    call = response.tool_calls[0]
+    assert call.name == "propose_cleaning_pipeline"
+    steps = call.arguments["steps"]
+
+    # country_code is above the 0.5% threshold; note (0.1%) and id (0%) are not.
+    assert {"drop_nulls": {"columns": ["country_code"]}} in steps
+    assert not any("note" in json.dumps(step) for step in steps)
+    # a duplicate signal produces a dedupe step on that column
+    assert {"drop_duplicates": {"columns": ["email_hash"], "keep": "last"}} in steps
+    # the rationale cites the real number it saw
+    assert "3.2%" in call.arguments["rationale"]
+
+
+@pytest.mark.asyncio
+async def test_a_clean_dataset_produces_no_proposal_and_says_so():
+    provider = MockProvider()
+    profile = {
+        "ok": True,
+        "data": {
+            "rid": "ab12cd34",
+            "row_count": 1000,
+            "columns": {"id": "int64"},
+            "null_rate_by_column": {"id": 0.0},
+            "duplicate_counts": {},
+        },
+    }
+    response = await provider.complete(
+        [
+            ChatMessage(role="user", content="Propose a cleaning pipeline for dataset ab12cd34."),
+            tool_result("c2", profile),
+        ],
+        TOOLS,
+    )
+    assert response.tool_calls == []
+    assert response.stop_reason == "end_turn"
+    assert "no material" in (response.text or "").lower()
+
+
+@pytest.mark.asyncio
+async def test_after_a_successful_proposal_it_finishes_with_a_summary():
+    provider = MockProvider()
+    messages = [
+        ChatMessage(role="user", content="Propose a cleaning pipeline for dataset ab12cd34."),
+        tool_result("c2", {"ok": True, "data": {"null_rate_by_column": {"c": 0.03}, "row_count": 10}}),
+        tool_result("c3", {"ok": True, "data": {"rid": "ab12cd34", "steps": [{"drop_nulls": {"columns": ["c"]}}],
+                                                "rationale": "3.0% nulls in c"}}),
+    ]
+    response = await provider.complete(messages, TOOLS)
+    assert response.tool_calls == []
+    assert response.stop_reason == "end_turn"
+    assert response.text and len(response.text) > 20
+
+
+@pytest.mark.asyncio
+async def test_a_failed_tool_result_is_not_retried_forever():
+    provider = MockProvider()
+    messages = [ChatMessage(role="user", content="Propose a cleaning pipeline for dataset ab12cd34.")]
+    for i in range(4):
+        messages.append(tool_result(f"c{i}", {"ok": False, "error": "boom"}))
+    response = await provider.complete(messages, TOOLS)
+    assert response.tool_calls == []
+    assert "could not" in (response.text or "").lower()
+
+
+@pytest.mark.asyncio
+async def test_usage_is_reported_and_nonzero():
+    provider = MockProvider()
+    response = await provider.complete(
+        [ChatMessage(role="user", content="Profile source s1.")], TOOLS
+    )
+    assert response.usage.model == "mock-agent-v1"
+    assert response.usage.input_tokens > 0
+    assert response.usage.output_tokens > 0
+
+
+@pytest.mark.asyncio
+async def test_it_never_calls_a_tool_that_was_not_offered():
+    provider = MockProvider()
+    response = await provider.complete(
+        [ChatMessage(role="user", content="Propose a cleaning pipeline for dataset ab12cd34.")],
+        tools=[],
+    )
+    assert response.tool_calls == []
+
+
+@pytest.mark.asyncio
+async def test_it_is_deterministic():
+    messages = [ChatMessage(role="user", content="Propose a cleaning pipeline for source s1.")]
+    first = await MockProvider().complete(messages, TOOLS)
+    second = await MockProvider().complete(messages, TOOLS)
+    assert first.tool_calls == second.tool_calls
+    assert first.text == second.text
+```
+
+Create `engine/tests/test_bridge_provider.py`:
+
+```python
+"""BridgeProvider lets a human or an agent answer each model call by hand."""
+import asyncio
+import json
+
+import pytest
+
+from lumen.llm.base import ChatMessage, ToolSpec
+from lumen.llm.bridge_provider import BridgeProvider
+
+
+@pytest.mark.asyncio
+async def test_it_writes_a_request_file_and_reads_the_reply(tmp_path):
+    provider = BridgeProvider(inbox=tmp_path, poll_seconds=0.05, timeout_seconds=10)
+
+    async def answer():
+        for _ in range(200):
+            requests = sorted(tmp_path.glob("*.request.json"))
+            if requests:
+                request = requests[0]
+                payload = json.loads(request.read_text(encoding="utf-8"))
+                assert payload["messages"][-1]["content"] == "Profile source s1."
+                assert payload["tools"][0]["name"] == "profile_source"
+                request.with_suffix("").with_suffix(".response.json").write_text(
+                    json.dumps({"text": "done", "tool_calls": []}), encoding="utf-8"
+                )
+                return
+            await asyncio.sleep(0.02)
+        raise AssertionError("no request file appeared")
+
+    responder = asyncio.create_task(answer())
+    response = await provider.complete(
+        [ChatMessage(role="user", content="Profile source s1.")],
+        [ToolSpec(name="profile_source", description="d", input_schema={"type": "object"})],
+    )
+    await responder
+
+    assert response.text == "done"
+    assert response.tool_calls == []
+
+
+@pytest.mark.asyncio
+async def test_a_reply_may_carry_tool_calls(tmp_path):
+    provider = BridgeProvider(inbox=tmp_path, poll_seconds=0.05, timeout_seconds=10)
+
+    async def answer():
+        for _ in range(200):
+            requests = sorted(tmp_path.glob("*.request.json"))
+            if requests:
+                requests[0].with_suffix("").with_suffix(".response.json").write_text(
+                    json.dumps(
+                        {
+                            "text": None,
+                            "tool_calls": [
+                                {"name": "profile_source", "arguments": {"rid": "ab12cd34"}}
+                            ],
+                        }
+                    ),
+                    encoding="utf-8",
+                )
+                return
+            await asyncio.sleep(0.02)
+        raise AssertionError("no request file appeared")
+
+    responder = asyncio.create_task(answer())
+    response = await provider.complete([ChatMessage(role="user", content="go")], [])
+    await responder
+
+    assert response.stop_reason == "tool_use"
+    assert response.tool_calls[0].name == "profile_source"
+    assert response.tool_calls[0].arguments == {"rid": "ab12cd34"}
+    assert response.tool_calls[0].id
+
+
+@pytest.mark.asyncio
+async def test_it_times_out_with_an_actionable_error(tmp_path):
+    provider = BridgeProvider(inbox=tmp_path, poll_seconds=0.02, timeout_seconds=0.15)
+    with pytest.raises(TimeoutError, match=str(tmp_path.name)):
+        await provider.complete([ChatMessage(role="user", content="go")], [])
+```
+
+Add to `engine/tests/test_llm_provider.py`:
+
+```python
+def test_auto_mode_falls_back_to_mock_without_a_key():
+    from lumen.llm.mock_provider import MockProvider
+    from lumen.llm.registry import ModelTiers, get_provider
+
+    provider = get_provider(
+        "specialist", anthropic_key=None, groq_key=None, tiers=ModelTiers(), mode="auto"
+    )
+    assert isinstance(provider, MockProvider)
+
+
+def test_auto_mode_prefers_anthropic_when_a_key_is_present(monkeypatch):
+    from lumen.llm.anthropic_provider import AnthropicProvider
+    from lumen.llm.registry import ModelTiers, get_provider
+
+    provider = get_provider(
+        "specialist", anthropic_key="sk-test", groq_key=None, tiers=ModelTiers(), mode="auto"
+    )
+    assert isinstance(provider, AnthropicProvider)
+
+
+def test_explicit_anthropic_mode_still_raises_without_a_key():
+    from lumen.llm.registry import ModelTiers, get_provider
+
+    with pytest.raises(ValueError, match="ANTHROPIC_API_KEY"):
+        get_provider(
+            "specialist", anthropic_key=None, groq_key=None, tiers=ModelTiers(), mode="anthropic"
+        )
+```
+
+- [ ] **Step 2: Run tests to verify they fail**
+
+Run: `uv run --directory engine pytest tests/test_mock_provider.py tests/test_bridge_provider.py -v`
+Expected: FAIL — `ModuleNotFoundError: No module named 'lumen.llm.mock_provider'`
+
+- [ ] **Step 3: Implement MockProvider**
+
+Create `engine/src/lumen/llm/mock_provider.py`:
+
+```python
+"""A deterministic, network-free LLMProvider.
+
+This is not a stub that replays canned text. It inspects the tool results already in the
+transcript and derives its next move from them, so an end-to-end run over a real dataset
+produces a proposal built from that dataset's real null rates and duplicate counts.
+
+Swapping in a real model changes the wording of the rationale, not the shape of the flow —
+which is what makes this safe to use as the default when no API key is configured.
+"""
+from __future__ import annotations
+
+import json
+import re
+from typing import Any
+
+from lumen.llm.base import ChatMessage, LLMProvider, LLMResponse, ToolCall, ToolSpec, TokenUsage
+
+UUID_RE = re.compile(r"[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}", re.I)
+RID_RE = re.compile(r"\bdataset ([0-9a-f]{8,32})\b", re.I)
+MAX_CONSECUTIVE_FAILURES = 3
+
+
+class MockProvider(LLMProvider):
+    def __init__(self, model: str = "mock-agent-v1", null_threshold: float = 0.005) -> None:
+        self.model = model
+        self._null_threshold = null_threshold
+
+    async def complete(
+        self,
+        messages: list[ChatMessage],
+        tools: list[ToolSpec],
+        max_tokens: int = 4096,
+        temperature: float = 0.0,
+    ) -> LLMResponse:
+        available = {tool.name for tool in tools}
+        results = _tool_results(messages)
+        prompt = _first_user_text(messages)
+
+        if _consecutive_failures(results) >= MAX_CONSECUTIVE_FAILURES:
+            return self._answer(
+                messages,
+                "I could not complete this: every tool call failed. "
+                "The last error was: " + str(results[-1].get("error", "unknown")),
+            )
+
+        proposal = _latest_ok(results, lambda data: "steps" in data)
+        if proposal is not None:
+            steps = proposal.get("steps") or []
+            return self._answer(
+                messages,
+                f"Proposed {len(steps)} cleaning step(s). "
+                + str(proposal.get("rationale", "")).strip(),
+            )
+
+        profile = _latest_ok(results, lambda data: "null_rate_by_column" in data)
+        if profile is not None and "propose_cleaning_pipeline" in available:
+            steps, rationale = _plan(profile, self._null_threshold)
+            if not steps:
+                return self._answer(
+                    messages,
+                    "I profiled the dataset and found no material data-quality problems: "
+                    + rationale,
+                )
+            return self._call(
+                messages,
+                "propose_cleaning_pipeline",
+                {
+                    "rid": str(profile.get("rid") or _rid_from(messages) or ""),
+                    "steps": steps,
+                    "rationale": rationale,
+                },
+            )
+
+        handle = _latest_ok(results, lambda data: "rid" in data)
+        if handle is not None and "profile_source" in available:
+            return self._call(messages, "profile_source", {"rid": str(handle["rid"])})
+
+        rid = _rid_from(messages)
+        if rid and "profile_source" in available and not results:
+            return self._call(messages, "profile_source", {"rid": rid})
+
+        source_id = _source_id_from(prompt)
+        if source_id and "read_source" in available:
+            return self._call(messages, "read_source", {"source_id": source_id})
+
+        if "list_data_sources" in available and not results:
+            return self._call(messages, "list_data_sources", {})
+
+        return self._answer(messages, "No further action is available with the tools provided.")
+
+    # ── response builders ────────────────────────────────────────────────
+
+    def _call(self, messages: list[ChatMessage], name: str, arguments: dict[str, Any]) -> LLMResponse:
+        call_id = f"mock_{name}_{len(messages)}"
+        return LLMResponse(
+            text=None,
+            tool_calls=[ToolCall(id=call_id, name=name, arguments=arguments)],
+            usage=_usage(messages, json.dumps(arguments), self.model),
+            stop_reason="tool_use",
+        )
+
+    def _answer(self, messages: list[ChatMessage], text: str) -> LLMResponse:
+        return LLMResponse(
+            text=text,
+            tool_calls=[],
+            usage=_usage(messages, text, self.model),
+            stop_reason="end_turn",
+        )
+
+
+# ── transcript inspection ────────────────────────────────────────────────
+
+
+def _tool_results(messages: list[ChatMessage]) -> list[dict[str, Any]]:
+    out: list[dict[str, Any]] = []
+    for message in messages:
+        if message.role != "tool":
+            continue
+        try:
+            parsed = json.loads(message.content)
+        except (ValueError, TypeError):
+            continue
+        if isinstance(parsed, dict):
+            out.append(parsed)
+    return out
+
+
+def _latest_ok(results: list[dict[str, Any]], predicate) -> dict[str, Any] | None:
+    for result in reversed(results):
+        if not result.get("ok"):
+            continue
+        data = result.get("data")
+        if isinstance(data, dict) and predicate(data):
+            return data
+    return None
+
+
+def _consecutive_failures(results: list[dict[str, Any]]) -> int:
+    count = 0
+    for result in reversed(results):
+        if result.get("ok"):
+            break
+        count += 1
+    return count
+
+
+def _first_user_text(messages: list[ChatMessage]) -> str:
+    for message in messages:
+        if message.role == "user":
+            return message.content
+    return ""
+
+
+def _source_id_from(prompt: str) -> str | None:
+    match = UUID_RE.search(prompt)
+    return match.group(0) if match else None
+
+
+def _rid_from(messages: list[ChatMessage]) -> str | None:
+    match = RID_RE.search(_first_user_text(messages))
+    return match.group(1) if match else None
+
+
+# ── planning ─────────────────────────────────────────────────────────────
+
+
+def _plan(profile: dict[str, Any], threshold: float) -> tuple[list[dict[str, Any]], str]:
+    null_rates: dict[str, float] = profile.get("null_rate_by_column") or {}
+    duplicates: dict[str, int] = profile.get("duplicate_counts") or {}
+
+    offenders = sorted(
+        (column, rate)
+        for column, rate in null_rates.items()
+        if isinstance(rate, (int, float)) and rate > threshold
+    )
+
+    steps: list[dict[str, Any]] = []
+    notes: list[str] = []
+
+    if offenders:
+        steps.append({"drop_nulls": {"columns": [column for column, _ in offenders]}})
+        notes.append(
+            ", ".join(f"{rate * 100:.1f}% nulls in {column}" for column, rate in offenders)
+        )
+
+    for column, count in sorted(duplicates.items()):
+        if count and count > 0:
+            steps.append({"drop_duplicates": {"columns": [column], "keep": "last"}})
+            notes.append(f"{count} duplicate {column} values")
+
+    if not steps:
+        rows = profile.get("row_count", "an unknown number of")
+        return [], (
+            f"every column is below the {threshold * 100:.1f}% null threshold "
+            f"across {rows} rows, and no duplicate keys were reported."
+        )
+
+    return steps, "Found " + "; ".join(notes) + "."
+
+
+def _usage(messages: list[ChatMessage], output: str, model: str) -> TokenUsage:
+    prompt_chars = sum(len(m.content or "") for m in messages)
+    return TokenUsage(
+        input_tokens=max(1, prompt_chars // 4),
+        output_tokens=max(1, len(output) // 4),
+        model=model,
+    )
+```
+
+- [ ] **Step 4: Implement BridgeProvider**
+
+Create `engine/src/lumen/llm/bridge_provider.py`:
+
+```python
+"""An LLMProvider whose replies come from a file, not a network call.
+
+Each `complete` writes `NNN.request.json` into the inbox and polls for `NNN.response.json`.
+A human — or an agent driving the session — reads the request and writes the reply. Useful
+for exercising a path MockProvider does not cover without spending a token, and for
+demonstrating the agent flow with a person in the model's seat.
+
+Response file format:
+    {"text": "…" | null,
+     "tool_calls": [{"name": "…", "arguments": {…}}, …]}
+"""
+from __future__ import annotations
+
+import asyncio
+import json
+from dataclasses import asdict
+from pathlib import Path
+
+from lumen.llm.base import ChatMessage, LLMProvider, LLMResponse, ToolCall, ToolSpec, TokenUsage
+
+
+class BridgeProvider(LLMProvider):
+    def __init__(
+        self,
+        inbox: Path | str,
+        model: str = "bridge",
+        poll_seconds: float = 1.0,
+        timeout_seconds: float = 600.0,
+    ) -> None:
+        self.model = model
+        self._inbox = Path(inbox)
+        self._inbox.mkdir(parents=True, exist_ok=True)
+        self._poll = poll_seconds
+        self._timeout = timeout_seconds
+        self._turn = 0
+
+    async def complete(
+        self,
+        messages: list[ChatMessage],
+        tools: list[ToolSpec],
+        max_tokens: int = 4096,
+        temperature: float = 0.0,
+    ) -> LLMResponse:
+        self._turn += 1
+        stem = f"{self._turn:03d}"
+        request_path = self._inbox / f"{stem}.request.json"
+        response_path = self._inbox / f"{stem}.response.json"
+
+        request_path.write_text(
+            json.dumps(
+                {
+                    "turn": self._turn,
+                    "messages": [asdict(m) for m in messages],
+                    "tools": [asdict(t) for t in tools],
+                    "max_tokens": max_tokens,
+                    "reply_to": response_path.name,
+                },
+                indent=2,
+                default=str,
+            ),
+            encoding="utf-8",
+        )
+
+        waited = 0.0
+        while waited < self._timeout:
+            if response_path.exists():
+                payload = json.loads(response_path.read_text(encoding="utf-8"))
+                calls = [
+                    ToolCall(
+                        id=call.get("id") or f"bridge_{stem}_{index}",
+                        name=call["name"],
+                        arguments=call.get("arguments") or {},
+                    )
+                    for index, call in enumerate(payload.get("tool_calls") or [])
+                ]
+                text = payload.get("text")
+                return LLMResponse(
+                    text=text,
+                    tool_calls=calls,
+                    usage=TokenUsage(
+                        input_tokens=max(1, sum(len(m.content or "") for m in messages) // 4),
+                        output_tokens=max(1, len(json.dumps(payload)) // 4),
+                        model=self.model,
+                    ),
+                    stop_reason="tool_use" if calls else "end_turn",
+                )
+            await asyncio.sleep(self._poll)
+            waited += self._poll
+
+        raise TimeoutError(
+            f"No reply within {self._timeout:.0f}s. Write {response_path} to answer "
+            f"the request in {request_path}."
+        )
+```
+
+- [ ] **Step 5: Wire the registry**
+
+Replace `get_provider` in `engine/src/lumen/llm/registry.py` — keep `ModelTiers` and `Tier` as they are and add `Mode`:
+
+```python
+Mode = Literal["auto", "anthropic", "groq", "mock", "bridge"]
+
+
+def get_provider(
+    tier: Tier,
+    *,
+    anthropic_key: str | None,
+    groq_key: str | None,
+    tiers: ModelTiers | None = None,
+    mode: Mode = "auto",
+    bridge_inbox: str | None = None,
+) -> LLMProvider:
+    """Resolve a provider.
+
+    `auto` is the default and is what makes the product runnable with no credentials:
+    Anthropic when a key is configured, the deterministic MockProvider otherwise.
+    An explicit mode never silently falls back — asking for `anthropic` without a key
+    is a configuration error and is raised as one.
+    """
+    tiers = tiers or ModelTiers()
+
+    if mode == "auto":
+        mode = "anthropic" if anthropic_key else "mock"
+
+    if mode == "mock":
+        from lumen.llm.mock_provider import MockProvider
+
+        return MockProvider()
+
+    if mode == "bridge":
+        from lumen.llm.bridge_provider import BridgeProvider
+
+        return BridgeProvider(inbox=bridge_inbox or ".llm-bridge")
+
+    if mode == "anthropic":
+        if not anthropic_key:
+            raise ValueError(f"ANTHROPIC_API_KEY is required for the '{tier}' tier")
+        from anthropic import AsyncAnthropic
+
+        from lumen.llm.anthropic_provider import AnthropicProvider
+
+        model = tiers.reasoning if tier == "reasoning" else tiers.specialist
+        return AnthropicProvider(client=AsyncAnthropic(api_key=anthropic_key), model=model)
+
+    if not groq_key:
+        raise ValueError("GROQ_API_KEY is required for the 'groq' mode")
+    from openai import AsyncOpenAI
+
+    from lumen.llm.groq_provider import GroqProvider
+
+    client = AsyncOpenAI(api_key=groq_key, base_url="https://api.groq.com/openai/v1")
+    return GroqProvider(client=client, model=tiers.fast)
+```
+
+Export both providers from `engine/src/lumen/llm/__init__.py` alongside the existing names:
+
+```python
+from lumen.llm.bridge_provider import BridgeProvider
+from lumen.llm.mock_provider import MockProvider
+```
+
+and add `"MockProvider"`, `"BridgeProvider"` to `__all__`.
+
+- [ ] **Step 6: Run the tests to verify they pass**
+
+Run: `uv run --directory engine pytest tests/test_mock_provider.py tests/test_bridge_provider.py tests/test_llm_provider.py -v`
+Expected: PASS — 12 mock/bridge tests plus the 8 registry/provider tests.
+
+Note on the `test_first_move_is_read_source_with_the_id_from_the_prompt` assertion: the prompt the cleaning agent actually sends is `"Propose a cleaning pipeline for dataset {rid}."` (agent-layer Task 6) and the context agent sends `"Profile data source {source_id}."` (Task 6). `MockProvider` handles both shapes — a bare `rid` goes straight to `profile_source`, a UUID goes through `read_source` first.
+
+- [ ] **Step 7: Commit**
+
+```bash
+git add engine
+git commit -m "feat: add keyless mock and bridge llm providers so the flow runs without an api key"
 ```
 
 ---
@@ -2141,7 +2858,13 @@ Add to `Settings` in `services/api/src/lumen_api/settings.py`:
     model_reasoning: str = "claude-opus-5"
     model_specialist: str = "claude-sonnet-5"
     model_fast: str = "qwen/qwen3.6-27b"
+    llm_mode: Literal["auto", "anthropic", "groq", "mock", "bridge"] = "auto"
+    llm_bridge_inbox: str = ".llm-bridge"
 ```
+
+`Literal` is already imported in `settings.py`. `auto` means: Anthropic when `ANTHROPIC_API_KEY`
+is set, the deterministic `MockProvider` from Task 9 otherwise — so a fresh checkout runs the
+whole flow with no credentials.
 
 - [ ] **Step 4: Write the prompts**
 
@@ -2249,6 +2972,8 @@ def _provider():
             specialist=settings.model_specialist,
             fast=settings.model_fast,
         ),
+        mode=settings.llm_mode,
+        bridge_inbox=settings.llm_bridge_inbox,
     )
 
 
