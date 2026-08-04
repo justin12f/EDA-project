@@ -26,7 +26,7 @@ class DataAnalyzerFactory(RegistryFactory[str, AbstractBaseDataAnalysis[Any]]):
 
 
 def _register_analyzers() -> None:
-    from lumen.analyze_data.analyzers.backends import pandas_impl, polars_impl, spark_impl
+    from lumen.analyze_data.analyzers.backends import pandas_impl, polars_impl
 
     mapping = {
         "columns": ("AnalyseDataColumns", "AnalyseDataColumnsPolars", "AnalyseDataColumnsSpark"),
@@ -39,10 +39,21 @@ def _register_analyzers() -> None:
         "tail": ("AnalyseDataTail", "AnalyseDataTailPolars", "AnalyseDataTailSpark"),
         "types": ("AnalyseDataTypes", "AnalyseDataTypesPolars", "AnalyseDataTypesSpark"),
     }
+
+    # PySpark is an optional dependency (the ``spark`` extra) — the API and
+    # worker install ``lumen-engine`` without it. Requesting the spark
+    # backend without PySpark installed raises a clear ValueError from
+    # RegistryFactory.get_class() instead of a bare ModuleNotFoundError.
+    try:
+        from lumen.analyze_data.analyzers.backends import spark_impl
+    except ImportError:
+        spark_impl = None
+
     for key, (pd_name, pl_name, sp_name) in mapping.items():
         DataAnalyzerFactory.register(key, "pandas", getattr(pandas_impl, pd_name))
         DataAnalyzerFactory.register(key, "polars", getattr(polars_impl, pl_name))
-        DataAnalyzerFactory.register(key, "spark", getattr(spark_impl, sp_name))
+        if spark_impl is not None:
+            DataAnalyzerFactory.register(key, "spark", getattr(spark_impl, sp_name))
 
 
 _register_analyzers()

@@ -108,11 +108,21 @@ def _register_backend_steps(
 
 
 def _bootstrap_registries() -> None:
-    from lumen.data_cleaning.steps.backends import pandas_impl, polars_impl, spark_impl
+    from lumen.data_cleaning.steps.backends import pandas_impl, polars_impl
 
     _register_backend_steps(AbstractDataCleaningStepFactory, "pandas", pandas_impl)
     _register_backend_steps(AbstractDataCleaningStepFactory, "polars", polars_impl)
-    _register_backend_steps(AbstractDataCleaningStepFactory, "spark", spark_impl)
+
+    # PySpark is an optional dependency (the ``spark`` extra) — the API and
+    # worker install ``lumen-engine`` without it. Requesting the spark
+    # backend without PySpark installed raises a clear ValueError from
+    # RegistryFactory.get_class() instead of a bare ModuleNotFoundError.
+    try:
+        from lumen.data_cleaning.steps.backends import spark_impl
+    except ImportError:
+        pass
+    else:
+        _register_backend_steps(AbstractDataCleaningStepFactory, "spark", spark_impl)
 
 
 _bootstrap_registries()

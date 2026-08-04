@@ -34,11 +34,20 @@ from lumen.readers.polars_impl import (
 )
 
 # ── PySpark readers ───────────────────────────────────────────────────────────
-from lumen.readers.spark_impl import (
-    SparkCSVReader,
-    SparkJSONReader,
-    SparkParquetReader,
-)
+# PySpark is an optional dependency (the ``spark`` extra) — the API and worker
+# install ``lumen-engine`` without it. Importing it here must never break the
+# pandas/polars-only install; requesting the spark backend without PySpark
+# raises a clear BackendNotSupportedError instead (see create() below).
+try:
+    from lumen.readers.spark_impl import (
+        SparkCSVReader,
+        SparkJSONReader,
+        SparkParquetReader,
+    )
+    _SPARK_AVAILABLE = True
+except ImportError:
+    _SPARK_AVAILABLE = False
+
 from lumen.readers.pandas_impl import (
     PandasCSVReader,
     PandasExcelReader,
@@ -100,6 +109,15 @@ class ReaderFactory:
             # Check if the backend exists at all
             available_backends = sorted({b for (_, b) in cls._registry})
             if backend not in available_backends:
+                if backend == "spark" and not _SPARK_AVAILABLE:
+                    raise BackendNotSupportedError(
+                        backend,
+                        available_backends,
+                        reason=(
+                            "Backend 'spark' requires PySpark. "
+                            "Install it with: uv sync --extra spark"
+                        ),
+                    )
                 raise BackendNotSupportedError(backend, available_backends)
 
             # Backend exists but extension is not supported
@@ -135,9 +153,10 @@ ReaderFactory.register(".xlsx", "polars", PolarsExcelReader)
 ReaderFactory.register(".xls", "polars", PolarsExcelReader)
 
 # ── PySpark ───────────────────────────────────────────────────────────────────
-ReaderFactory.register(".csv", "spark", SparkCSVReader)
-ReaderFactory.register(".parquet", "spark", SparkParquetReader)
-ReaderFactory.register(".json", "spark", SparkJSONReader)
+if _SPARK_AVAILABLE:
+    ReaderFactory.register(".csv", "spark", SparkCSVReader)
+    ReaderFactory.register(".parquet", "spark", SparkParquetReader)
+    ReaderFactory.register(".json", "spark", SparkJSONReader)
 
 # ── Pandas ────────────────────────────────────────────────────────────────────
 ReaderFactory.register(".csv", "pandas", PandasCSVReader)

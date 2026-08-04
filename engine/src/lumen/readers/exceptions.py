@@ -11,21 +11,35 @@ class ReaderError(Exception):
     """
 
 
-class BackendNotSupportedError(ReaderError):
+class BackendNotSupportedError(ReaderError, ImportError):
     """Raised when a requested backend is not registered.
+
+    Also inherits from ``ImportError`` so callers doing the standard
+    "missing optional dependency" check (``except ImportError``) catch it
+    directly — this is the common case when the backend is a real engine
+    (e.g. ``spark``) that simply is not installed.
 
     Args:
         backend: The backend name that was requested.
         available: List of available backend names.
+        reason: Optional override for the default message — used to give
+            an actionable hint (e.g. how to install the missing package)
+            instead of the generic "not supported" wording.
     """
 
-    def __init__(self, backend: str, available: list[str]) -> None:
+    def __init__(
+        self,
+        backend: str,
+        available: list[str],
+        reason: str | None = None,
+    ) -> None:
         self.backend = backend
         self.available = available
-        super().__init__(
+        message = reason or (
             f"Backend '{backend}' is not supported. "
             f"Available backends: {available}"
         )
+        super().__init__(message)
 
 
 class FileFormatError(ReaderError):

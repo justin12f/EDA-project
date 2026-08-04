@@ -32,19 +32,7 @@ from lumen.analyze_data.analyzers.backends.polars_impl import (
     AnalyseDataTailPolars,
     AnalyseDataTypesPolars
     )
-from lumen.analyze_data.analyzers.backends.spark_impl import (
-    AnalyseDataColumnsSpark,
-    AnalyseDataDescribeSpark,
-    AnalyseDataHeadSpark,
-    AnalyseDataIndexSpark,
-    AnalyseDataInfoSpark,
-    AnalyseDataSampleSpark,
-    AnalyseDataShapeSpark,
-    AnalyseDataTailSpark,
-    AnalyseDataTypesSpark
-    )
-
-from typing import Generic 
+from typing import Generic
 
 class AnalyzeContextAbstract:
     """Base class for all AnalyzeContext classes"""
@@ -101,6 +89,26 @@ class AnalyzeContextPandas(AnalyzeContextAbstract):
         
 class AnalyzeContextSpark(AnalyzeContextAbstract):
     def analyze_context(self, Generic):
+        # PySpark is an optional dependency (the ``spark`` extra) — imported
+        # lazily here so importing this module never requires it.
+        try:
+            from lumen.analyze_data.analyzers.backends.spark_impl import (
+                AnalyseDataColumnsSpark,
+                AnalyseDataDescribeSpark,
+                AnalyseDataHeadSpark,
+                AnalyseDataIndexSpark,
+                AnalyseDataInfoSpark,
+                AnalyseDataSampleSpark,
+                AnalyseDataShapeSpark,
+                AnalyseDataTailSpark,
+                AnalyseDataTypesSpark,
+            )
+        except ImportError as exc:
+            raise ImportError(
+                "Backend 'spark' requires PySpark. "
+                "Install it with: uv sync --extra spark"
+            ) from exc
+
         context: dict[str, str] = {}
 
         analyzer = AnalyseDataColumnsSpark()

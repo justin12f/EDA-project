@@ -31,10 +31,17 @@ from lumen.preproccesing.encoders.polars_impl import (
 )
 
 # ── Spark encoders ────────────────────────────────────────────────────────────
-from lumen.preproccesing.encoders.spark_impl import (
-    SparkOneHotEncoder,
-    SparkOrdinalEncoder,
-)
+# PySpark is an optional dependency (the ``spark`` extra). Importing it here
+# must never break a pandas/polars-only install; requesting the spark backend
+# without PySpark raises a clear error instead (see EncoderFactory.create()).
+try:
+    from lumen.preproccesing.encoders.spark_impl import (
+        SparkOneHotEncoder,
+        SparkOrdinalEncoder,
+    )
+    _SPARK_AVAILABLE = True
+except ImportError:
+    _SPARK_AVAILABLE = False
 
 from lumen.preproccesing.encoders.pandas_impl import (
     PandasOneHotEncoder,
@@ -80,6 +87,11 @@ class EncoderFactory:
         key = (encoder_class, backend)
         encoder_cls = cls._registry.get(key)
         if encoder_cls is None:
+            if backend == "spark" and not _SPARK_AVAILABLE:
+                raise ImportError(
+                    "Backend 'spark' requires PySpark. "
+                    "Install it with: uv sync --extra spark"
+                )
             available = [
                 f"{t} ({b})" for (t, b) in sorted(cls._registry.keys())
             ]
@@ -98,8 +110,9 @@ EncoderFactory.register("one_hot", "polars", PolarsOneHotEncoder)
 EncoderFactory.register("ordinal", "polars", PolarsOrdinalEncoder)
 
 # ── PySpark ───────────────────────────────────────────────────────────────────
-EncoderFactory.register("one_hot", "spark", SparkOneHotEncoder)
-EncoderFactory.register("ordinal", "spark", SparkOrdinalEncoder)
+if _SPARK_AVAILABLE:
+    EncoderFactory.register("one_hot", "spark", SparkOneHotEncoder)
+    EncoderFactory.register("ordinal", "spark", SparkOrdinalEncoder)
 
 # ── Pandas ────────────────────────────────────────────────────────────────────
 EncoderFactory.register("one_hot", "pandas", PandasOneHotEncoder)
