@@ -112,7 +112,9 @@ def require_role(*allowed: str) -> Callable[..., object]:
 
     async def _check(identity: Annotated[Identity, Depends(current_identity)]) -> Identity:
         if ROLE_RANK.get(identity.role, -1) < floor:
-            raise Forbidden(f"Requires at least the '{min(allowed, key=lambda r: ROLE_RANK[r])}' role")
+            raise Forbidden(
+                f"Requires at least the '{min(allowed, key=lambda r: ROLE_RANK[r])}' role"
+            )
         return identity
 
     return _check

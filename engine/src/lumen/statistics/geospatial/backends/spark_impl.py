@@ -8,11 +8,11 @@ import numpy as np
 from pyspark.sql import DataFrame as SparkDataFrame
 from pyspark.sql import functions as F
 
-from geospatial.abstract.geo_bounding_box import AbstractGeoBoundingBoxCalculator
-from geospatial.abstract.geo_clustering import AbstractGeoClusteringCalculator
-from geospatial.abstract.geo_distribution import AbstractGeoDistributionCalculator
-from geospatial.abstract.geo_heatmap import AbstractGeoHeatmapCalculator
-from geospatial.abstract.proximity_analysis import AbstractProximityAnalysisCalculator
+from lumen.statistics.geospatial.abstract.geo_bounding_box import AbstractGeoBoundingBoxCalculator
+from lumen.statistics.geospatial.abstract.geo_clustering import AbstractGeoClusteringCalculator
+from lumen.statistics.geospatial.abstract.geo_distribution import AbstractGeoDistributionCalculator
+from lumen.statistics.geospatial.abstract.geo_heatmap import AbstractGeoHeatmapCalculator
+from lumen.statistics.geospatial.abstract.proximity_analysis import AbstractProximityAnalysisCalculator
 
 def _haversine_expr(lat1: float, lon1: float, lat2_col: str, lon2_col: str) -> Any:
     R = 6371.0 # Earth radius in km

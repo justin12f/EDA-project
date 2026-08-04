@@ -14,14 +14,14 @@ from pyspark.sql import DataFrame as SparkDataFrame
 from pyspark.sql import functions as F
 from pyspark.sql import Window
 
-from descriptive.abstract.central_tendency import AbstractCentralTendencyCalculator
-from descriptive.abstract.dispersion import AbstractDispersionCalculator
-from descriptive.abstract.distribution import AbstractDistributionClassifier
-from descriptive.abstract.frequency import AbstractFrequencyDistributionBuilder
-from descriptive.abstract.normality import AbstractNormalityTestSuite
-from descriptive.abstract.percentiles import AbstractPercentilesCalculator
-from descriptive.abstract.skewness_kurtosis import AbstractSkewnessKurtosisCalculator
-from descriptive.abstract.value_counts import AbstractValueCountsCalculator
+from lumen.statistics.descriptive.abstract.central_tendency import AbstractCentralTendencyCalculator
+from lumen.statistics.descriptive.abstract.dispersion import AbstractDispersionCalculator
+from lumen.statistics.descriptive.abstract.distribution import AbstractDistributionClassifier
+from lumen.statistics.descriptive.abstract.frequency import AbstractFrequencyDistributionBuilder
+from lumen.statistics.descriptive.abstract.normality import AbstractNormalityTestSuite
+from lumen.statistics.descriptive.abstract.percentiles import AbstractPercentilesCalculator
+from lumen.statistics.descriptive.abstract.skewness_kurtosis import AbstractSkewnessKurtosisCalculator
+from lumen.statistics.descriptive.abstract.value_counts import AbstractValueCountsCalculator
 
 # ---------------------------------------------------------------------------
 # Internal helpers

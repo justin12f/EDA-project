@@ -3,15 +3,15 @@ from __future__ import annotations
 
 from typing import Literal
 
-from business.abstract.churn_rate import AbstractChurnRateCalculator
-from business.abstract.conversion_funnel import AbstractConversionFunnelCalculator
-from business.abstract.customer_lifetime_value import AbstractCustomerLifetimeValueCalculator
-from business.abstract.financial_ratios import AbstractFinancialRatiosCalculator
-from business.abstract.growth_rates import AbstractGrowthRatesCalculator
-from business.abstract.pareto_analysis import AbstractParetoAnalysisCalculator
-from business.abstract.risk_metrics import AbstractRiskMetricsCalculator
-from business.abstract.run_rate import AbstractRunRateCalculator
-from business.factory import BusinessStatisticsFactory
+from lumen.statistics.business.abstract.churn_rate import AbstractChurnRateCalculator
+from lumen.statistics.business.abstract.conversion_funnel import AbstractConversionFunnelCalculator
+from lumen.statistics.business.abstract.customer_lifetime_value import AbstractCustomerLifetimeValueCalculator
+from lumen.statistics.business.abstract.financial_ratios import AbstractFinancialRatiosCalculator
+from lumen.statistics.business.abstract.growth_rates import AbstractGrowthRatesCalculator
+from lumen.statistics.business.abstract.pareto_analysis import AbstractParetoAnalysisCalculator
+from lumen.statistics.business.abstract.risk_metrics import AbstractRiskMetricsCalculator
+from lumen.statistics.business.abstract.run_rate import AbstractRunRateCalculator
+from lumen.statistics.business.factory import BusinessStatisticsFactory
 
 Backend = Literal["polars", "spark", "pandas"]
 

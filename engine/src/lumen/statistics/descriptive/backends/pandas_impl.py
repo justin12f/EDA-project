@@ -12,25 +12,25 @@ from typing import Any
 import numpy as np
 import pandas as pd
 
-from descriptive.abstract.central_tendency import AbstractCentralTendencyCalculator
-from descriptive.abstract.dispersion import AbstractDispersionCalculator
-from descriptive.abstract.distribution import AbstractDistributionClassifier
-from descriptive.abstract.frequency import AbstractFrequencyDistributionBuilder
-from descriptive.abstract.normality import AbstractNormalityTestSuite
-from descriptive.abstract.percentiles import AbstractPercentilesCalculator
-from descriptive.abstract.skewness_kurtosis import AbstractSkewnessKurtosisCalculator
-from descriptive.abstract.value_counts import AbstractValueCountsCalculator
+from lumen.statistics.descriptive.abstract.central_tendency import AbstractCentralTendencyCalculator
+from lumen.statistics.descriptive.abstract.dispersion import AbstractDispersionCalculator
+from lumen.statistics.descriptive.abstract.distribution import AbstractDistributionClassifier
+from lumen.statistics.descriptive.abstract.frequency import AbstractFrequencyDistributionBuilder
+from lumen.statistics.descriptive.abstract.normality import AbstractNormalityTestSuite
+from lumen.statistics.descriptive.abstract.percentiles import AbstractPercentilesCalculator
+from lumen.statistics.descriptive.abstract.skewness_kurtosis import AbstractSkewnessKurtosisCalculator
+from lumen.statistics.descriptive.abstract.value_counts import AbstractValueCountsCalculator
 
 # Import original implementations
-from descriptive.central_tendency import CentralTendencyCalculator
-from descriptive.dispersion import DispersionCalculator
-from descriptive.distribution import DistributionClassifier
-from descriptive.frequency import FrequencyDistributionBuilder
-from descriptive.normality import NormalityTestSuite
-from descriptive.percentiles import PercentilesCalculator
-from descriptive.skewness_kurtosis import SkewnessKurtosisCalculator
-from descriptive.value_counts import ValueCountsCalculator
-from lumen.core.frame_extract import column_to_numpy
+from lumen.statistics.descriptive.central_tendency import CentralTendencyCalculator
+from lumen.statistics.descriptive.dispersion import DispersionCalculator
+from lumen.statistics.descriptive.distribution import DistributionClassifier
+from lumen.statistics.descriptive.frequency import FrequencyDistributionBuilder
+from lumen.statistics.descriptive.normality import NormalityTestSuite
+from lumen.statistics.descriptive.percentiles import PercentilesCalculator
+from lumen.statistics.descriptive.skewness_kurtosis import SkewnessKurtosisCalculator
+from lumen.statistics.descriptive.value_counts import ValueCountsCalculator
+from lumen.statistics.core.frame_extract import column_to_numpy
 
 
 class CentralTendencyCalculatorPandas(AbstractCentralTendencyCalculator):

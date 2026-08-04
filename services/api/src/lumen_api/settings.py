@@ -14,11 +14,12 @@ Two rules this module exists to enforce:
 
 from __future__ import annotations
 
+import re
 from functools import lru_cache
 from pathlib import Path
 from typing import Literal
 
-from pydantic import Field, SecretStr, model_validator
+from pydantic import AliasChoices, Field, SecretStr, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 Environment = Literal["dev", "test", "prod"]
@@ -27,8 +28,22 @@ EmbeddingProviderName = Literal["fastembed", "none"]
 
 _REPO_ROOT = Path(__file__).resolve().parents[4]
 
-# Substrings that mark a value as still-a-placeholder rather than a credential.
-_PLACEHOLDERS = ("YOUR-PROJECT-REF", "YOUR-DB-PASSWORD", "changeme", "xxx")
+# A value matching any of these is a placeholder somebody forgot to replace, not
+# a setting. Case-insensitive, and deliberately broad: `your_supabase_url_here`,
+# `YOUR-PROJECT-REF` and `changeme` are all the same mistake.
+_PLACEHOLDER_RE = re.compile(
+    r"your[-_ ]|[-_]here\b|YOUR-PROJECT-REF|YOUR-DB-PASSWORD|changeme|<[^>]+>|\bxxx+\b",
+    re.IGNORECASE,
+)
+
+# Prefixes each provider's keys actually carry. A value that does not start with
+# one is not a key, whatever it is — most often it is a trailing comment that
+# python-dotenv folded into the value, which would otherwise send the app down
+# the "credential configured" path with a comment as the credential.
+_KEY_PREFIXES = {
+    "anthropic": ("sk-ant-",),
+    "groq": ("gsk_",),
+}
 
 
 class Settings(BaseSettings):
@@ -37,25 +52,37 @@ class Settings(BaseSettings):
         env_file_encoding="utf-8",
         extra="ignore",
         case_sensitive=False,
+        # A field with a validation_alias would otherwise reject its own name as
+        # a constructor argument — which silently ignored `Settings(groq_api_key=…)`
+        # instead of failing, so tests passed values that never landed.
+        populate_by_name=True,
     )
 
     environment: Environment = "dev"
 
     # ── Supabase ────────────────────────────────────────────────────────────
+    #
+    # The alias lists accept the names this project used before the rename, so
+    # an existing .env keeps working through the migration instead of silently
+    # reading as unconfigured.
     supabase_url: str = "http://127.0.0.1:54321"
-    supabase_anon_key: SecretStr = SecretStr("")
+    supabase_anon_key: SecretStr = Field(
+        default=SecretStr(""),
+        validation_alias=AliasChoices("SUPABASE_ANON_KEY", "SUPABASE_KEY"),
+    )
     supabase_service_role_key: SecretStr = SecretStr("")
     supabase_jwt_secret: SecretStr = SecretStr("")
     storage_bucket: str = "lumen"
 
-    database_url: str = (
-        "postgresql+asyncpg://postgres:postgres@127.0.0.1:54322/postgres"
-    )
+    database_url: str = "postgresql+asyncpg://postgres:postgres@127.0.0.1:54322/postgres"
 
     # ── LLM ─────────────────────────────────────────────────────────────────
     llm_mode: LLMMode = "auto"
     anthropic_api_key: SecretStr | None = None
-    groq_api_key: SecretStr | None = None
+    groq_api_key: SecretStr | None = Field(
+        default=None,
+        validation_alias=AliasChoices("GROQ_API_KEY", "API_KEY_groq"),
+    )
 
     model_reasoning: str = "claude-opus-5"
     model_specialist: str = "claude-sonnet-5"
@@ -83,11 +110,11 @@ class Settings(BaseSettings):
 
     @property
     def has_anthropic(self) -> bool:
-        return _is_real(self.anthropic_api_key)
+        return _is_key(self.anthropic_api_key, "anthropic")
 
     @property
     def has_groq(self) -> bool:
-        return _is_real(self.groq_api_key)
+        return _is_key(self.groq_api_key, "groq")
 
     @property
     def resolved_llm_mode(self) -> LLMMode:
@@ -141,14 +168,38 @@ class Settings(BaseSettings):
         return self
 
 
-def _is_real(value: SecretStr | str | None) -> bool:
+def _raw(value: SecretStr | str | None) -> str:
     if value is None:
-        return False
-    raw = value.get_secret_value() if isinstance(value, SecretStr) else value
-    raw = raw.strip()
+        return ""
+    return (value.get_secret_value() if isinstance(value, SecretStr) else value).strip()
+
+
+def _is_real(value: SecretStr | str | None) -> bool:
+    """True when a setting holds something an operator actually filled in."""
+    raw = _raw(value)
     if not raw:
         return False
-    return not any(marker in raw for marker in _PLACEHOLDERS)
+    # A value that starts with '#' is a comment python-dotenv folded in, not a
+    # setting. Same for a bare '='-less fragment carrying whitespace.
+    if raw.startswith("#"):
+        return False
+    return _PLACEHOLDER_RE.search(raw) is None
+
+
+def _is_key(value: SecretStr | str | None, provider: str) -> bool:
+    """True when a setting holds something shaped like that provider's key.
+
+    Stricter than `_is_real` on purpose: reporting "key configured" for a value
+    that cannot be a key sends the operator to the provider's dashboard to debug
+    a 401, when the real problem is in their `.env`.
+    """
+    raw = _raw(value)
+    if not _is_real(raw):
+        return False
+    prefixes = _KEY_PREFIXES.get(provider, ())
+    if not prefixes:
+        return True
+    return raw.startswith(prefixes)
 
 
 @lru_cache

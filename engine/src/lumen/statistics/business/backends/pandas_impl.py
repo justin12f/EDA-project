@@ -4,23 +4,23 @@ from __future__ import annotations
 from typing import Any
 import pandas as pd
 
-from business.abstract.churn_rate import AbstractChurnRateCalculator
-from business.abstract.conversion_funnel import AbstractConversionFunnelCalculator
-from business.abstract.customer_lifetime_value import AbstractCustomerLifetimeValueCalculator
-from business.abstract.financial_ratios import AbstractFinancialRatiosCalculator
-from business.abstract.growth_rates import AbstractGrowthRatesCalculator
-from business.abstract.pareto_analysis import AbstractParetoAnalysisCalculator
-from business.abstract.risk_metrics import AbstractRiskMetricsCalculator
-from business.abstract.run_rate import AbstractRunRateCalculator
+from lumen.statistics.business.abstract.churn_rate import AbstractChurnRateCalculator
+from lumen.statistics.business.abstract.conversion_funnel import AbstractConversionFunnelCalculator
+from lumen.statistics.business.abstract.customer_lifetime_value import AbstractCustomerLifetimeValueCalculator
+from lumen.statistics.business.abstract.financial_ratios import AbstractFinancialRatiosCalculator
+from lumen.statistics.business.abstract.growth_rates import AbstractGrowthRatesCalculator
+from lumen.statistics.business.abstract.pareto_analysis import AbstractParetoAnalysisCalculator
+from lumen.statistics.business.abstract.risk_metrics import AbstractRiskMetricsCalculator
+from lumen.statistics.business.abstract.run_rate import AbstractRunRateCalculator
 
-from business.churn_rate import ChurnRateCalculator
-from business.conversion_funnel import ConversionFunnelCalculator
-from business.customer_lifetime_value import CustomerLifetimeValueCalculator
-from business.financial_ratios import FinancialRatiosCalculator
-from business.growth_rates import GrowthRatesCalculator
-from business.pareto_analysis import ParetoAnalysisCalculator
-from business.risk_metrics import RiskMetricsCalculator
-from business.run_rate import RunRateCalculator
+from lumen.statistics.business.churn_rate import ChurnRateCalculator
+from lumen.statistics.business.conversion_funnel import ConversionFunnelCalculator
+from lumen.statistics.business.customer_lifetime_value import CustomerLifetimeValueCalculator
+from lumen.statistics.business.financial_ratios import FinancialRatiosCalculator
+from lumen.statistics.business.growth_rates import GrowthRatesCalculator
+from lumen.statistics.business.pareto_analysis import ParetoAnalysisCalculator
+from lumen.statistics.business.risk_metrics import RiskMetricsCalculator
+from lumen.statistics.business.run_rate import RunRateCalculator
 
 
 class ChurnRateCalculatorPandas(AbstractChurnRateCalculator):

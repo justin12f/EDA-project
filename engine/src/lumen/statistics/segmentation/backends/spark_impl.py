@@ -12,12 +12,12 @@ from pyspark.sql.window import Window
 from pyspark.ml.clustering import KMeans
 from pyspark.ml.feature import VectorAssembler
 
-from segmentation.abstract.cohort_analysis import AbstractCohortAnalysisCalculator
-from segmentation.abstract.dbscan_clusters import AbstractDBSCANClustersCalculator
-from segmentation.abstract.hierarchical_clusters import AbstractHierarchicalClustersCalculator
-from segmentation.abstract.kmeans_clusters import AbstractKMeansClustersCalculator
-from segmentation.abstract.population_splits import AbstractPopulationSplitsCalculator
-from segmentation.abstract.rfm_segmentation import AbstractRFMSegmentationCalculator
+from lumen.statistics.segmentation.abstract.cohort_analysis import AbstractCohortAnalysisCalculator
+from lumen.statistics.segmentation.abstract.dbscan_clusters import AbstractDBSCANClustersCalculator
+from lumen.statistics.segmentation.abstract.hierarchical_clusters import AbstractHierarchicalClustersCalculator
+from lumen.statistics.segmentation.abstract.kmeans_clusters import AbstractKMeansClustersCalculator
+from lumen.statistics.segmentation.abstract.population_splits import AbstractPopulationSplitsCalculator
+from lumen.statistics.segmentation.abstract.rfm_segmentation import AbstractRFMSegmentationCalculator
 
 
 class CohortAnalysisCalculatorSpark(AbstractCohortAnalysisCalculator):

@@ -1,82 +1,104 @@
-"""Unified statistics factory registry."""
+"""Unified statistics factory registry.
+
+Keys are `{domain}.{calculator}`, so `StatisticsRegistry.create("descriptive.
+central_tendency_calculator", "polars")` reaches one implementation out of
+twelve domains × three backends.
+
+**Discovery is tolerant on purpose.** A domain whose factory has not been written
+yet, or one whose backend needs an optional dependency that is not installed,
+is skipped and recorded — it does not take the other eleven domains down with
+it. The previous hard-coded version failed the entire registry on the first
+missing module, which meant a missing `graphs.factory` disabled descriptive
+statistics for every caller.
+
+Anything skipped is visible: `unavailable_domains()` reports what was not loaded
+and why, and `/v1/config` surfaces it.
+"""
+
 from __future__ import annotations
+
+import importlib
+import pkgutil
 from typing import Any
+
 from lumen.core.abstract_factory import RegistryFactory
+from lumen.core.backend import BACKENDS
+
 
 class StatisticsRegistry(RegistryFactory[str, Any]):
     """Keys: `{domain}.{calculator}`"""
 
+
 DOMAIN_FACTORIES: dict[str, type] = {}
+_UNAVAILABLE: dict[str, str] = {}
+_LOADED = False
 
-def _register_all() -> None:
-    from lumen.statistics.business.factory import BusinessStatisticsFactory
-    DOMAIN_FACTORIES['business'] = BusinessStatisticsFactory
-    for key in BusinessStatisticsFactory.registered_keys():
-        for backend in ('pandas', 'polars', 'spark'):
-            if BusinessStatisticsFactory.is_registered(key, backend):
-                StatisticsRegistry.register('business.' + key, backend, BusinessStatisticsFactory.get_class(key, backend))
-    from lumen.statistics.descriptive.factory import DescriptiveStatisticsFactory
-    DOMAIN_FACTORIES['descriptive'] = DescriptiveStatisticsFactory
-    for key in DescriptiveStatisticsFactory.registered_keys():
-        for backend in ('pandas', 'polars', 'spark'):
-            if DescriptiveStatisticsFactory.is_registered(key, backend):
-                StatisticsRegistry.register('descriptive.' + key, backend, DescriptiveStatisticsFactory.get_class(key, backend))
-    from lumen.statistics.geospatial.factory import GeospatialStatisticsFactory
-    DOMAIN_FACTORIES['geospatial'] = GeospatialStatisticsFactory
-    for key in GeospatialStatisticsFactory.registered_keys():
-        for backend in ('pandas', 'polars', 'spark'):
-            if GeospatialStatisticsFactory.is_registered(key, backend):
-                StatisticsRegistry.register('geospatial.' + key, backend, GeospatialStatisticsFactory.get_class(key, backend))
-    from lumen.statistics.graphs.factory import GraphsStatisticsFactory
-    DOMAIN_FACTORIES['graphs'] = GraphsStatisticsFactory
-    for key in GraphsStatisticsFactory.registered_keys():
-        for backend in ('pandas', 'polars', 'spark'):
-            if GraphsStatisticsFactory.is_registered(key, backend):
-                StatisticsRegistry.register('graphs.' + key, backend, GraphsStatisticsFactory.get_class(key, backend))
-    from lumen.statistics.inferential.factory import InferentialStatisticsFactory
-    DOMAIN_FACTORIES['inferential'] = InferentialStatisticsFactory
-    for key in InferentialStatisticsFactory.registered_keys():
-        for backend in ('pandas', 'polars', 'spark'):
-            if InferentialStatisticsFactory.is_registered(key, backend):
-                StatisticsRegistry.register('inferential.' + key, backend, InferentialStatisticsFactory.get_class(key, backend))
-    from lumen.statistics.ml_support.factory import MlSupportStatisticsFactory
-    DOMAIN_FACTORIES['ml_support'] = MlSupportStatisticsFactory
-    for key in MlSupportStatisticsFactory.registered_keys():
-        for backend in ('pandas', 'polars', 'spark'):
-            if MlSupportStatisticsFactory.is_registered(key, backend):
-                StatisticsRegistry.register('ml_support.' + key, backend, MlSupportStatisticsFactory.get_class(key, backend))
-    from lumen.statistics.nlp.factory import NlpStatisticsFactory
-    DOMAIN_FACTORIES['nlp'] = NlpStatisticsFactory
-    for key in NlpStatisticsFactory.registered_keys():
-        for backend in ('pandas', 'polars', 'spark'):
-            if NlpStatisticsFactory.is_registered(key, backend):
-                StatisticsRegistry.register('nlp.' + key, backend, NlpStatisticsFactory.get_class(key, backend))
-    from lumen.statistics.relational.factory import RelationalStatisticsFactory
-    DOMAIN_FACTORIES['relational'] = RelationalStatisticsFactory
-    for key in RelationalStatisticsFactory.registered_keys():
-        for backend in ('pandas', 'polars', 'spark'):
-            if RelationalStatisticsFactory.is_registered(key, backend):
-                StatisticsRegistry.register('relational.' + key, backend, RelationalStatisticsFactory.get_class(key, backend))
-    from lumen.statistics.segmentation.factory import SegmentationStatisticsFactory
-    DOMAIN_FACTORIES['segmentation'] = SegmentationStatisticsFactory
-    for key in SegmentationStatisticsFactory.registered_keys():
-        for backend in ('pandas', 'polars', 'spark'):
-            if SegmentationStatisticsFactory.is_registered(key, backend):
-                StatisticsRegistry.register('segmentation.' + key, backend, SegmentationStatisticsFactory.get_class(key, backend))
-    from lumen.statistics.survival.factory import SurvivalStatisticsFactory
-    DOMAIN_FACTORIES['survival'] = SurvivalStatisticsFactory
-    for key in SurvivalStatisticsFactory.registered_keys():
-        for backend in ('pandas', 'polars', 'spark'):
-            if SurvivalStatisticsFactory.is_registered(key, backend):
-                StatisticsRegistry.register('survival.' + key, backend, SurvivalStatisticsFactory.get_class(key, backend))
-    from lumen.statistics.time_series.factory import TimeSeriesStatisticsFactory
-    DOMAIN_FACTORIES['time_series'] = TimeSeriesStatisticsFactory
-    for key in TimeSeriesStatisticsFactory.registered_keys():
-        for backend in ('pandas', 'polars', 'spark'):
-            if TimeSeriesStatisticsFactory.is_registered(key, backend):
-                StatisticsRegistry.register('time_series.' + key, backend, TimeSeriesStatisticsFactory.get_class(key, backend))
 
-try:
+def _domain_names() -> list[str]:
+    """Every package under `lumen.statistics` that is a domain, not a helper."""
+    import lumen.statistics as package
+
+    return sorted(
+        module.name
+        for module in pkgutil.iter_modules(package.__path__)
+        if module.ispkg and module.name != "core"
+    )
+
+
+def _register_domain(domain: str) -> None:
+    module = importlib.import_module(f"lumen.statistics.{domain}.factory")
+
+    factory = next(
+        (
+            candidate
+            for name, candidate in vars(module).items()
+            if isinstance(candidate, type)
+            and issubclass(candidate, RegistryFactory)
+            and candidate is not RegistryFactory
+            and name.endswith("StatisticsFactory")
+        ),
+        None,
+    )
+    if factory is None:
+        raise AttributeError(f"{module.__name__} defines no *StatisticsFactory")
+
+    DOMAIN_FACTORIES[domain] = factory
+    for key in factory.registered_keys():
+        for backend in BACKENDS:
+            if factory.is_registered(key, backend):
+                StatisticsRegistry.register(
+                    f"{domain}.{key}", backend, factory.get_class(key, backend)
+                )
+
+
+def _register_all(force: bool = False) -> None:
+    """Load every domain that can be loaded. Idempotent."""
+    global _LOADED
+    if _LOADED and not force:
+        return
+
+    DOMAIN_FACTORIES.clear()
+    _UNAVAILABLE.clear()
+
+    for domain in _domain_names():
+        try:
+            _register_domain(domain)
+        except Exception as exc:  # noqa: BLE001 — one bad domain must not sink the rest
+            _UNAVAILABLE[domain] = f"{type(exc).__name__}: {exc}"
+
+    _LOADED = True
+
+
+def unavailable_domains() -> dict[str, str]:
+    """Domains that failed to load, mapped to why. Empty when everything loaded."""
     _register_all()
-except ModuleNotFoundError:
-    pass
+    return dict(_UNAVAILABLE)
+
+
+def available_domains() -> list[str]:
+    _register_all()
+    return sorted(DOMAIN_FACTORIES)
+
+
+# Populate on import so callers can use the registry without a setup step.
+_register_all()

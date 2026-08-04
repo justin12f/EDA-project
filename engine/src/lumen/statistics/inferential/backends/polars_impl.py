@@ -13,14 +13,14 @@ from typing import Any, Callable
 import polars as pl
 from scipy import stats
 
-from inferential.abstract.anova import AbstractANOVACalculator
-from inferential.abstract.bootstrap import AbstractBootstrapEstimator
-from inferential.abstract.chi_square import AbstractChiSquareCalculator
-from inferential.abstract.confidence_intervals import AbstractConfidenceIntervalCalculator
-from inferential.abstract.correlation_significance import AbstractCorrelationSignificanceCalculator
-from inferential.abstract.effect_size import AbstractEffectSizeCalculator
-from inferential.abstract.hypothesis_test import AbstractHypothesisTestSuite
-from inferential.abstract.power_analysis import AbstractPowerAnalysisCalculator
+from lumen.statistics.inferential.abstract.anova import AbstractANOVACalculator
+from lumen.statistics.inferential.abstract.bootstrap import AbstractBootstrapEstimator
+from lumen.statistics.inferential.abstract.chi_square import AbstractChiSquareCalculator
+from lumen.statistics.inferential.abstract.confidence_intervals import AbstractConfidenceIntervalCalculator
+from lumen.statistics.inferential.abstract.correlation_significance import AbstractCorrelationSignificanceCalculator
+from lumen.statistics.inferential.abstract.effect_size import AbstractEffectSizeCalculator
+from lumen.statistics.inferential.abstract.hypothesis_test import AbstractHypothesisTestSuite
+from lumen.statistics.inferential.abstract.power_analysis import AbstractPowerAnalysisCalculator
 
 def _eager(data: pl.DataFrame | pl.LazyFrame) -> pl.DataFrame:
     return data.collect() if isinstance(data, pl.LazyFrame) else data

@@ -9,9 +9,12 @@ class SegmentationStatisticsFactory(RegistryFactory):
 
 
 def _register() -> None:
-    from segmentation.backends import polars_impl as pl_impl
-    from segmentation.backends import spark_impl as sp_impl
-    from segmentation.backends import pandas_impl as pd_impl
+    from lumen.statistics.segmentation.backends import polars_impl as pl_impl
+    try:
+        from lumen.statistics.segmentation.backends import spark_impl as sp_impl
+    except ImportError:  # PySpark is the optional `spark` extra
+        sp_impl = None
+    from lumen.statistics.segmentation.backends import pandas_impl as pd_impl
 
     # --- Polars ---
     SegmentationStatisticsFactory.register("cohort_analysis_calculator", "polars", pl_impl.CohortAnalysisCalculatorPolars)
@@ -22,12 +25,18 @@ def _register() -> None:
     SegmentationStatisticsFactory.register("rfm_segmentation_calculator", "polars", pl_impl.RFMSegmentationCalculatorPolars)
 
     # --- Spark ---
-    SegmentationStatisticsFactory.register("cohort_analysis_calculator", "spark", sp_impl.CohortAnalysisCalculatorSpark)
-    SegmentationStatisticsFactory.register("dbscan_clusters_calculator", "spark", sp_impl.DBSCANClustersCalculatorSpark)
-    SegmentationStatisticsFactory.register("hierarchical_clusters_calculator", "spark", sp_impl.HierarchicalClustersCalculatorSpark)
-    SegmentationStatisticsFactory.register("kmeans_clusters_calculator", "spark", sp_impl.KMeansClustersCalculatorSpark)
-    SegmentationStatisticsFactory.register("population_splits_calculator", "spark", sp_impl.PopulationSplitsCalculatorSpark)
-    SegmentationStatisticsFactory.register("rfm_segmentation_calculator", "spark", sp_impl.RFMSegmentationCalculatorSpark)
+    if sp_impl is not None:
+        SegmentationStatisticsFactory.register("cohort_analysis_calculator", "spark", sp_impl.CohortAnalysisCalculatorSpark)
+    if sp_impl is not None:
+        SegmentationStatisticsFactory.register("dbscan_clusters_calculator", "spark", sp_impl.DBSCANClustersCalculatorSpark)
+    if sp_impl is not None:
+        SegmentationStatisticsFactory.register("hierarchical_clusters_calculator", "spark", sp_impl.HierarchicalClustersCalculatorSpark)
+    if sp_impl is not None:
+        SegmentationStatisticsFactory.register("kmeans_clusters_calculator", "spark", sp_impl.KMeansClustersCalculatorSpark)
+    if sp_impl is not None:
+        SegmentationStatisticsFactory.register("population_splits_calculator", "spark", sp_impl.PopulationSplitsCalculatorSpark)
+    if sp_impl is not None:
+        SegmentationStatisticsFactory.register("rfm_segmentation_calculator", "spark", sp_impl.RFMSegmentationCalculatorSpark)
 
     # --- Pandas ---
     SegmentationStatisticsFactory.register("cohort_analysis_calculator", "pandas", pd_impl.CohortAnalysisCalculatorPandas)

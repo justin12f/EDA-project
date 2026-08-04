@@ -4,18 +4,18 @@ from __future__ import annotations
 from typing import Any
 import pandas as pd
 
-from geospatial.abstract.geo_bounding_box import AbstractGeoBoundingBoxCalculator
-from geospatial.abstract.geo_clustering import AbstractGeoClusteringCalculator
-from geospatial.abstract.geo_distribution import AbstractGeoDistributionCalculator
-from geospatial.abstract.geo_heatmap import AbstractGeoHeatmapCalculator
-from geospatial.abstract.proximity_analysis import AbstractProximityAnalysisCalculator
+from lumen.statistics.geospatial.abstract.geo_bounding_box import AbstractGeoBoundingBoxCalculator
+from lumen.statistics.geospatial.abstract.geo_clustering import AbstractGeoClusteringCalculator
+from lumen.statistics.geospatial.abstract.geo_distribution import AbstractGeoDistributionCalculator
+from lumen.statistics.geospatial.abstract.geo_heatmap import AbstractGeoHeatmapCalculator
+from lumen.statistics.geospatial.abstract.proximity_analysis import AbstractProximityAnalysisCalculator
 
-from geospatial.geo_bounding_box import GeoBoundingBoxCalculator
-from geospatial.geo_clustering import GeoClusteringCalculator
-from geospatial.geo_distribution import GeoDistributionCalculator
-from geospatial.geo_heatmap import GeoHeatmapCalculator
-from geospatial.proximity_analysis import ProximityAnalysisCalculator
-from lumen.core.frame_extract import column_to_numpy
+from lumen.statistics.geospatial.geo_bounding_box import GeoBoundingBoxCalculator
+from lumen.statistics.geospatial.geo_clustering import GeoClusteringCalculator
+from lumen.statistics.geospatial.geo_distribution import GeoDistributionCalculator
+from lumen.statistics.geospatial.geo_heatmap import GeoHeatmapCalculator
+from lumen.statistics.geospatial.proximity_analysis import ProximityAnalysisCalculator
+from lumen.statistics.core.frame_extract import column_to_numpy
 
 
 class GeoBoundingBoxCalculatorPandas(AbstractGeoBoundingBoxCalculator):

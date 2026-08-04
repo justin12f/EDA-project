@@ -14,8 +14,11 @@ class DescriptiveStatisticsFactory(RegistryFactory):
 
 
 def _register() -> None:
-    from descriptive.backends import polars_impl as pl_impl
-    from descriptive.backends import spark_impl as sp_impl
+    from lumen.statistics.descriptive.backends import polars_impl as pl_impl
+    try:
+        from lumen.statistics.descriptive.backends import spark_impl as sp_impl
+    except ImportError:  # PySpark is the optional `spark` extra
+        sp_impl = None
 
     # --- Polars ---
     DescriptiveStatisticsFactory.register("central_tendency_calculator", "polars", pl_impl.CentralTendencyCalculatorPolars)
@@ -28,17 +31,25 @@ def _register() -> None:
     DescriptiveStatisticsFactory.register("value_counts_calculator",     "polars", pl_impl.ValueCountsCalculatorPolars)
 
     # --- Spark ---
-    DescriptiveStatisticsFactory.register("central_tendency_calculator", "spark", sp_impl.CentralTendencyCalculatorSpark)
-    DescriptiveStatisticsFactory.register("dispersion_calculator",       "spark", sp_impl.DispersionCalculatorSpark)
-    DescriptiveStatisticsFactory.register("distribution_classifier",     "spark", sp_impl.DistributionClassifierSpark)
-    DescriptiveStatisticsFactory.register("frequency_distribution_builder", "spark", sp_impl.FrequencyDistributionBuilderSpark)
-    DescriptiveStatisticsFactory.register("normality_test_suite",        "spark", sp_impl.NormalityTestSuiteSpark)
-    DescriptiveStatisticsFactory.register("percentiles_calculator",      "spark", sp_impl.PercentilesCalculatorSpark)
-    DescriptiveStatisticsFactory.register("skewness_kurtosis_calculator","spark", sp_impl.SkewnessKurtosisCalculatorSpark)
-    DescriptiveStatisticsFactory.register("value_counts_calculator",     "spark", sp_impl.ValueCountsCalculatorSpark)
+    if sp_impl is not None:
+        DescriptiveStatisticsFactory.register("central_tendency_calculator", "spark", sp_impl.CentralTendencyCalculatorSpark)
+    if sp_impl is not None:
+        DescriptiveStatisticsFactory.register("dispersion_calculator",       "spark", sp_impl.DispersionCalculatorSpark)
+    if sp_impl is not None:
+        DescriptiveStatisticsFactory.register("distribution_classifier",     "spark", sp_impl.DistributionClassifierSpark)
+    if sp_impl is not None:
+        DescriptiveStatisticsFactory.register("frequency_distribution_builder", "spark", sp_impl.FrequencyDistributionBuilderSpark)
+    if sp_impl is not None:
+        DescriptiveStatisticsFactory.register("normality_test_suite",        "spark", sp_impl.NormalityTestSuiteSpark)
+    if sp_impl is not None:
+        DescriptiveStatisticsFactory.register("percentiles_calculator",      "spark", sp_impl.PercentilesCalculatorSpark)
+    if sp_impl is not None:
+        DescriptiveStatisticsFactory.register("skewness_kurtosis_calculator","spark", sp_impl.SkewnessKurtosisCalculatorSpark)
+    if sp_impl is not None:
+        DescriptiveStatisticsFactory.register("value_counts_calculator",     "spark", sp_impl.ValueCountsCalculatorSpark)
 
     # --- Pandas (original implementations wrapped) ---
-    from descriptive.backends import pandas_impl as pd_impl  # noqa: PLC0415
+    from lumen.statistics.descriptive.backends import pandas_impl as pd_impl  # noqa: PLC0415
     DescriptiveStatisticsFactory.register("central_tendency_calculator", "pandas", pd_impl.CentralTendencyCalculatorPandas)
     DescriptiveStatisticsFactory.register("dispersion_calculator",       "pandas", pd_impl.DispersionCalculatorPandas)
     DescriptiveStatisticsFactory.register("distribution_classifier",     "pandas", pd_impl.DistributionClassifierPandas)

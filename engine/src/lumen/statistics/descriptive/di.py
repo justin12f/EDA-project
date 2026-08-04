@@ -2,7 +2,7 @@
 
 Usage
 -----
-    from descriptive.di import DescriptiveDependencyContainer
+    from lumen.statistics.descriptive.di import DescriptiveDependencyContainer
 
     # Select backend once at startup
     di = DescriptiveDependencyContainer(backend="polars")
@@ -15,15 +15,15 @@ from __future__ import annotations
 
 from typing import Literal
 
-from descriptive.abstract.central_tendency import AbstractCentralTendencyCalculator
-from descriptive.abstract.dispersion import AbstractDispersionCalculator
-from descriptive.abstract.distribution import AbstractDistributionClassifier
-from descriptive.abstract.frequency import AbstractFrequencyDistributionBuilder
-from descriptive.abstract.normality import AbstractNormalityTestSuite
-from descriptive.abstract.percentiles import AbstractPercentilesCalculator
-from descriptive.abstract.skewness_kurtosis import AbstractSkewnessKurtosisCalculator
-from descriptive.abstract.value_counts import AbstractValueCountsCalculator
-from descriptive.factory import DescriptiveStatisticsFactory
+from lumen.statistics.descriptive.abstract.central_tendency import AbstractCentralTendencyCalculator
+from lumen.statistics.descriptive.abstract.dispersion import AbstractDispersionCalculator
+from lumen.statistics.descriptive.abstract.distribution import AbstractDistributionClassifier
+from lumen.statistics.descriptive.abstract.frequency import AbstractFrequencyDistributionBuilder
+from lumen.statistics.descriptive.abstract.normality import AbstractNormalityTestSuite
+from lumen.statistics.descriptive.abstract.percentiles import AbstractPercentilesCalculator
+from lumen.statistics.descriptive.abstract.skewness_kurtosis import AbstractSkewnessKurtosisCalculator
+from lumen.statistics.descriptive.abstract.value_counts import AbstractValueCountsCalculator
+from lumen.statistics.descriptive.factory import DescriptiveStatisticsFactory
 
 Backend = Literal["polars", "spark", "pandas"]
 

@@ -58,8 +58,7 @@ def _jwks() -> PyJWKClient:
         httpx.get(url, timeout=5.0).raise_for_status()
     except httpx.HTTPError as exc:
         raise Misconfigured(
-            f"Cannot reach Supabase JWKS at {url}. Set SUPABASE_JWT_SECRET, "
-            "or check SUPABASE_URL."
+            f"Cannot reach Supabase JWKS at {url}. Set SUPABASE_JWT_SECRET, or check SUPABASE_URL."
         ) from exc
 
     _jwks_client = PyJWKClient(url, cache_keys=True)

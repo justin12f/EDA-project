@@ -11,7 +11,6 @@ import pytest
 from httpx import ASGITransport, AsyncClient
 
 from lumen_api.main import create_app
-from lumen_api.settings import Settings
 
 
 def client() -> AsyncClient:
@@ -55,26 +54,26 @@ async def test_config_never_echoes_a_secret():
 # ── Settings ────────────────────────────────────────────────────────────────
 
 
-def test_auto_resolves_to_mock_without_credentials():
-    settings = Settings(environment="test", anthropic_api_key=None, groq_api_key=None)
+def test_auto_resolves_to_mock_without_credentials(make_settings):
+    settings = make_settings(environment="test", anthropic_api_key=None, groq_api_key=None)
     assert settings.resolved_llm_mode == "mock"
     assert settings.has_anthropic is False
 
 
-def test_auto_resolves_to_anthropic_once_a_key_is_present():
-    settings = Settings(environment="test", anthropic_api_key="sk-ant-real-value")
+def test_auto_resolves_to_anthropic_once_a_key_is_present(make_settings):
+    settings = make_settings(environment="test", anthropic_api_key="sk-ant-real-value")
     assert settings.resolved_llm_mode == "anthropic"
     assert settings.has_anthropic is True
 
 
-def test_auto_falls_through_to_groq_when_only_that_is_configured():
-    settings = Settings(environment="test", anthropic_api_key=None, groq_api_key="gsk_real")
+def test_auto_falls_through_to_groq_when_only_that_is_configured(make_settings):
+    settings = make_settings(environment="test", anthropic_api_key=None, groq_api_key="gsk_real")
     assert settings.resolved_llm_mode == "groq"
 
 
-def test_a_placeholder_is_not_a_credential():
+def test_a_placeholder_is_not_a_credential(make_settings):
     """Copying .env.example and forgetting to fill it in must not read as configured."""
-    settings = Settings(
+    settings = make_settings(
         environment="test",
         supabase_url="https://YOUR-PROJECT-REF.supabase.co",
         anthropic_api_key="changeme",
@@ -83,9 +82,9 @@ def test_a_placeholder_is_not_a_credential():
     assert settings.resolved_llm_mode == "mock"
 
 
-def test_production_refuses_to_start_with_placeholders():
+def test_production_refuses_to_start_with_placeholders(make_settings):
     with pytest.raises(ValueError) as excinfo:
-        Settings(
+        make_settings(
             environment="prod",
             supabase_url="https://YOUR-PROJECT-REF.supabase.co",
             supabase_anon_key="",
@@ -99,9 +98,9 @@ def test_production_refuses_to_start_with_placeholders():
         assert expected in message
 
 
-def test_production_starts_when_supabase_is_configured_even_with_no_llm_key():
+def test_production_starts_when_supabase_is_configured_even_with_no_llm_key(make_settings):
     """No API key is not a misconfiguration — it selects the keyless provider."""
-    settings = Settings(
+    settings = make_settings(
         environment="prod",
         supabase_url="https://abcdefgh.supabase.co",
         supabase_anon_key="anon-real",
@@ -112,9 +111,9 @@ def test_production_starts_when_supabase_is_configured_even_with_no_llm_key():
     assert settings.resolved_llm_mode == "mock"
 
 
-def test_production_rejects_an_explicit_provider_without_its_key():
+def test_production_rejects_an_explicit_provider_without_its_key(make_settings):
     with pytest.raises(ValueError, match="ANTHROPIC_API_KEY"):
-        Settings(
+        make_settings(
             environment="prod",
             llm_mode="anthropic",
             supabase_url="https://abcdefgh.supabase.co",
@@ -125,8 +124,58 @@ def test_production_rejects_an_explicit_provider_without_its_key():
         )
 
 
-def test_sync_dsn_strips_the_async_driver():
-    settings = Settings(
+def test_a_trailing_comment_is_not_a_credential(make_settings):
+    """Regression: python-dotenv folds `KEY=   # note` into the value.
+
+    Before this check, copying .env.example and leaving the key blank reported
+    "anthropic key set", selected the Anthropic provider, and failed at the
+    first API call with a 401 — sending the operator to debug their Anthropic
+    account instead of their .env.
+    """
+    settings = make_settings(
+        environment="test",
+        anthropic_api_key="# console.anthropic.com → API keys (sk-ant-...)",
+        groq_api_key="# console.groq.com → API keys",
+    )
+    assert settings.has_anthropic is False
+    assert settings.has_groq is False
+    assert settings.resolved_llm_mode == "mock"
+
+
+def test_a_value_that_is_not_shaped_like_a_key_is_not_a_key(make_settings):
+    settings = make_settings(environment="test", anthropic_api_key="my-anthropic-key")
+    assert settings.has_anthropic is False
+
+    settings = make_settings(environment="test", groq_api_key="not-a-groq-key")
+    assert settings.has_groq is False
+
+
+def test_correctly_shaped_keys_are_accepted(make_settings):
+    settings = make_settings(
+        environment="test",
+        anthropic_api_key="sk-ant-api03-abcdef",
+        groq_api_key="gsk_abcdef",
+    )
+    assert settings.has_anthropic is True
+    assert settings.has_groq is True
+    assert settings.resolved_llm_mode == "anthropic"
+
+
+def test_the_shipped_env_example_reads_as_unconfigured(make_settings):
+    """Whatever the file says, a fresh copy must select the keyless path."""
+    from pathlib import Path
+
+    example = Path(__file__).resolve().parents[3] / ".env.example"
+    assert example.exists(), ".env.example must ship with the repository"
+
+    settings = make_settings(environment="test", _env_file=str(example))
+    assert settings.has_anthropic is False
+    assert settings.has_groq is False
+    assert settings.resolved_llm_mode == "mock"
+
+
+def test_sync_dsn_strips_the_async_driver(make_settings):
+    settings = make_settings(
         environment="test",
         database_url="postgresql+asyncpg://u:p@h:5432/db",
     )

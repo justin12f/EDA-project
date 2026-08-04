@@ -6,11 +6,11 @@ import math
 import polars as pl
 import numpy as np
 
-from geospatial.abstract.geo_bounding_box import AbstractGeoBoundingBoxCalculator
-from geospatial.abstract.geo_clustering import AbstractGeoClusteringCalculator
-from geospatial.abstract.geo_distribution import AbstractGeoDistributionCalculator
-from geospatial.abstract.geo_heatmap import AbstractGeoHeatmapCalculator
-from geospatial.abstract.proximity_analysis import AbstractProximityAnalysisCalculator
+from lumen.statistics.geospatial.abstract.geo_bounding_box import AbstractGeoBoundingBoxCalculator
+from lumen.statistics.geospatial.abstract.geo_clustering import AbstractGeoClusteringCalculator
+from lumen.statistics.geospatial.abstract.geo_distribution import AbstractGeoDistributionCalculator
+from lumen.statistics.geospatial.abstract.geo_heatmap import AbstractGeoHeatmapCalculator
+from lumen.statistics.geospatial.abstract.proximity_analysis import AbstractProximityAnalysisCalculator
 
 def _eager(data: pl.DataFrame | pl.LazyFrame) -> pl.DataFrame:
     return data.collect() if isinstance(data, pl.LazyFrame) else data

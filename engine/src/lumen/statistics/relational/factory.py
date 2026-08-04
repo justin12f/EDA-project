@@ -9,9 +9,12 @@ class RelationalStatisticsFactory(RegistryFactory):
 
 
 def _register() -> None:
-    from relational.backends import polars_impl as pl_impl
-    from relational.backends import spark_impl as sp_impl
-    from relational.backends import pandas_impl as pd_impl
+    from lumen.statistics.relational.backends import polars_impl as pl_impl
+    try:
+        from lumen.statistics.relational.backends import spark_impl as sp_impl
+    except ImportError:  # PySpark is the optional `spark` extra
+        sp_impl = None
+    from lumen.statistics.relational.backends import pandas_impl as pd_impl
 
     # --- Polars ---
     RelationalStatisticsFactory.register("contingency_analysis_calculator", "polars", pl_impl.ContingencyAnalysisCalculatorPolars)
@@ -24,14 +27,22 @@ def _register() -> None:
     RelationalStatisticsFactory.register("partial_correlation_calculator", "polars", pl_impl.PartialCorrelationCalculatorPolars)
 
     # --- Spark ---
-    RelationalStatisticsFactory.register("contingency_analysis_calculator", "spark", sp_impl.ContingencyAnalysisCalculatorSpark)
-    RelationalStatisticsFactory.register("correlation_matrix_calculator", "spark", sp_impl.CorrelationMatrixCalculatorSpark)
-    RelationalStatisticsFactory.register("cross_correlation_calculator", "spark", sp_impl.CrossCorrelationCalculatorSpark)
-    RelationalStatisticsFactory.register("granger_causality_calculator", "spark", sp_impl.GrangerCausalityCalculatorSpark)
-    RelationalStatisticsFactory.register("interaction_effects_calculator", "spark", sp_impl.InteractionEffectsCalculatorSpark)
-    RelationalStatisticsFactory.register("multicollinearity_calculator", "spark", sp_impl.MulticollinearityCalculatorSpark)
-    RelationalStatisticsFactory.register("mutual_information_calculator", "spark", sp_impl.MutualInformationCalculatorSpark)
-    RelationalStatisticsFactory.register("partial_correlation_calculator", "spark", sp_impl.PartialCorrelationCalculatorSpark)
+    if sp_impl is not None:
+        RelationalStatisticsFactory.register("contingency_analysis_calculator", "spark", sp_impl.ContingencyAnalysisCalculatorSpark)
+    if sp_impl is not None:
+        RelationalStatisticsFactory.register("correlation_matrix_calculator", "spark", sp_impl.CorrelationMatrixCalculatorSpark)
+    if sp_impl is not None:
+        RelationalStatisticsFactory.register("cross_correlation_calculator", "spark", sp_impl.CrossCorrelationCalculatorSpark)
+    if sp_impl is not None:
+        RelationalStatisticsFactory.register("granger_causality_calculator", "spark", sp_impl.GrangerCausalityCalculatorSpark)
+    if sp_impl is not None:
+        RelationalStatisticsFactory.register("interaction_effects_calculator", "spark", sp_impl.InteractionEffectsCalculatorSpark)
+    if sp_impl is not None:
+        RelationalStatisticsFactory.register("multicollinearity_calculator", "spark", sp_impl.MulticollinearityCalculatorSpark)
+    if sp_impl is not None:
+        RelationalStatisticsFactory.register("mutual_information_calculator", "spark", sp_impl.MutualInformationCalculatorSpark)
+    if sp_impl is not None:
+        RelationalStatisticsFactory.register("partial_correlation_calculator", "spark", sp_impl.PartialCorrelationCalculatorSpark)
 
     # --- Pandas ---
     RelationalStatisticsFactory.register("contingency_analysis_calculator", "pandas", pd_impl.ContingencyAnalysisCalculatorPandas)

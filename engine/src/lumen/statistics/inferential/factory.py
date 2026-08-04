@@ -9,9 +9,12 @@ class InferentialStatisticsFactory(RegistryFactory):
 
 
 def _register() -> None:
-    from inferential.backends import polars_impl as pl_impl
-    from inferential.backends import spark_impl as sp_impl
-    from inferential.backends import pandas_impl as pd_impl
+    from lumen.statistics.inferential.backends import polars_impl as pl_impl
+    try:
+        from lumen.statistics.inferential.backends import spark_impl as sp_impl
+    except ImportError:  # PySpark is the optional `spark` extra
+        sp_impl = None
+    from lumen.statistics.inferential.backends import pandas_impl as pd_impl
 
     # --- Polars ---
     InferentialStatisticsFactory.register("anova_calculator", "polars", pl_impl.ANOVACalculatorPolars)
@@ -24,14 +27,22 @@ def _register() -> None:
     InferentialStatisticsFactory.register("power_analysis_calculator", "polars", pl_impl.PowerAnalysisCalculatorPolars)
 
     # --- Spark ---
-    InferentialStatisticsFactory.register("anova_calculator", "spark", sp_impl.ANOVACalculatorSpark)
-    InferentialStatisticsFactory.register("bootstrap_estimator", "spark", sp_impl.BootstrapEstimatorSpark)
-    InferentialStatisticsFactory.register("chi_square_calculator", "spark", sp_impl.ChiSquareCalculatorSpark)
-    InferentialStatisticsFactory.register("confidence_interval_calculator", "spark", sp_impl.ConfidenceIntervalCalculatorSpark)
-    InferentialStatisticsFactory.register("correlation_significance_calculator", "spark", sp_impl.CorrelationSignificanceCalculatorSpark)
-    InferentialStatisticsFactory.register("effect_size_calculator", "spark", sp_impl.EffectSizeCalculatorSpark)
-    InferentialStatisticsFactory.register("hypothesis_test_suite", "spark", sp_impl.HypothesisTestSuiteSpark)
-    InferentialStatisticsFactory.register("power_analysis_calculator", "spark", sp_impl.PowerAnalysisCalculatorSpark)
+    if sp_impl is not None:
+        InferentialStatisticsFactory.register("anova_calculator", "spark", sp_impl.ANOVACalculatorSpark)
+    if sp_impl is not None:
+        InferentialStatisticsFactory.register("bootstrap_estimator", "spark", sp_impl.BootstrapEstimatorSpark)
+    if sp_impl is not None:
+        InferentialStatisticsFactory.register("chi_square_calculator", "spark", sp_impl.ChiSquareCalculatorSpark)
+    if sp_impl is not None:
+        InferentialStatisticsFactory.register("confidence_interval_calculator", "spark", sp_impl.ConfidenceIntervalCalculatorSpark)
+    if sp_impl is not None:
+        InferentialStatisticsFactory.register("correlation_significance_calculator", "spark", sp_impl.CorrelationSignificanceCalculatorSpark)
+    if sp_impl is not None:
+        InferentialStatisticsFactory.register("effect_size_calculator", "spark", sp_impl.EffectSizeCalculatorSpark)
+    if sp_impl is not None:
+        InferentialStatisticsFactory.register("hypothesis_test_suite", "spark", sp_impl.HypothesisTestSuiteSpark)
+    if sp_impl is not None:
+        InferentialStatisticsFactory.register("power_analysis_calculator", "spark", sp_impl.PowerAnalysisCalculatorSpark)
 
     # --- Pandas ---
     InferentialStatisticsFactory.register("anova_calculator", "pandas", pd_impl.ANOVACalculatorPandas)

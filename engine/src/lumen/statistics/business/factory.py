@@ -9,9 +9,12 @@ class BusinessStatisticsFactory(RegistryFactory):
 
 
 def _register() -> None:
-    from business.backends import polars_impl as pl_impl
-    from business.backends import spark_impl as sp_impl
-    from business.backends import pandas_impl as pd_impl
+    from lumen.statistics.business.backends import polars_impl as pl_impl
+    try:
+        from lumen.statistics.business.backends import spark_impl as sp_impl
+    except ImportError:  # PySpark is the optional `spark` extra
+        sp_impl = None
+    from lumen.statistics.business.backends import pandas_impl as pd_impl
 
     # --- Polars ---
     BusinessStatisticsFactory.register("churn_rate_calculator", "polars", pl_impl.ChurnRateCalculatorPolars)
@@ -24,14 +27,22 @@ def _register() -> None:
     BusinessStatisticsFactory.register("run_rate_calculator", "polars", pl_impl.RunRateCalculatorPolars)
 
     # --- Spark ---
-    BusinessStatisticsFactory.register("churn_rate_calculator", "spark", sp_impl.ChurnRateCalculatorSpark)
-    BusinessStatisticsFactory.register("conversion_funnel_calculator", "spark", sp_impl.ConversionFunnelCalculatorSpark)
-    BusinessStatisticsFactory.register("customer_lifetime_value_calculator", "spark", sp_impl.CustomerLifetimeValueCalculatorSpark)
-    BusinessStatisticsFactory.register("financial_ratios_calculator", "spark", sp_impl.FinancialRatiosCalculatorSpark)
-    BusinessStatisticsFactory.register("growth_rates_calculator", "spark", sp_impl.GrowthRatesCalculatorSpark)
-    BusinessStatisticsFactory.register("pareto_analysis_calculator", "spark", sp_impl.ParetoAnalysisCalculatorSpark)
-    BusinessStatisticsFactory.register("risk_metrics_calculator", "spark", sp_impl.RiskMetricsCalculatorSpark)
-    BusinessStatisticsFactory.register("run_rate_calculator", "spark", sp_impl.RunRateCalculatorSpark)
+    if sp_impl is not None:
+        BusinessStatisticsFactory.register("churn_rate_calculator", "spark", sp_impl.ChurnRateCalculatorSpark)
+    if sp_impl is not None:
+        BusinessStatisticsFactory.register("conversion_funnel_calculator", "spark", sp_impl.ConversionFunnelCalculatorSpark)
+    if sp_impl is not None:
+        BusinessStatisticsFactory.register("customer_lifetime_value_calculator", "spark", sp_impl.CustomerLifetimeValueCalculatorSpark)
+    if sp_impl is not None:
+        BusinessStatisticsFactory.register("financial_ratios_calculator", "spark", sp_impl.FinancialRatiosCalculatorSpark)
+    if sp_impl is not None:
+        BusinessStatisticsFactory.register("growth_rates_calculator", "spark", sp_impl.GrowthRatesCalculatorSpark)
+    if sp_impl is not None:
+        BusinessStatisticsFactory.register("pareto_analysis_calculator", "spark", sp_impl.ParetoAnalysisCalculatorSpark)
+    if sp_impl is not None:
+        BusinessStatisticsFactory.register("risk_metrics_calculator", "spark", sp_impl.RiskMetricsCalculatorSpark)
+    if sp_impl is not None:
+        BusinessStatisticsFactory.register("run_rate_calculator", "spark", sp_impl.RunRateCalculatorSpark)
 
     # --- Pandas ---
     BusinessStatisticsFactory.register("churn_rate_calculator", "pandas", pd_impl.ChurnRateCalculatorPandas)

@@ -5,24 +5,24 @@ from typing import Any
 import pandas as pd
 import numpy as np
 
-from inferential.abstract.anova import AbstractANOVACalculator
-from inferential.abstract.bootstrap import AbstractBootstrapEstimator
-from inferential.abstract.chi_square import AbstractChiSquareCalculator
-from inferential.abstract.confidence_intervals import AbstractConfidenceIntervalCalculator
-from inferential.abstract.correlation_significance import AbstractCorrelationSignificanceCalculator
-from inferential.abstract.effect_size import AbstractEffectSizeCalculator
-from inferential.abstract.hypothesis_test import AbstractHypothesisTestSuite
-from inferential.abstract.power_analysis import AbstractPowerAnalysisCalculator
+from lumen.statistics.inferential.abstract.anova import AbstractANOVACalculator
+from lumen.statistics.inferential.abstract.bootstrap import AbstractBootstrapEstimator
+from lumen.statistics.inferential.abstract.chi_square import AbstractChiSquareCalculator
+from lumen.statistics.inferential.abstract.confidence_intervals import AbstractConfidenceIntervalCalculator
+from lumen.statistics.inferential.abstract.correlation_significance import AbstractCorrelationSignificanceCalculator
+from lumen.statistics.inferential.abstract.effect_size import AbstractEffectSizeCalculator
+from lumen.statistics.inferential.abstract.hypothesis_test import AbstractHypothesisTestSuite
+from lumen.statistics.inferential.abstract.power_analysis import AbstractPowerAnalysisCalculator
 
-from inferential.anova import OneWayAnovaCalculator
-from inferential.bootstrap import BootstrapEstimator
-from inferential.chi_square import ChiSquareCalculator
-from inferential.confidence_intervals import ConfidenceIntervalCalculator
-from inferential.correlation import CorrelationCalculator
-from inferential.effect_size import EffectSizeCalculator
-from inferential.hypothesis_test import HypothesisTestSuite
-from inferential.power_analysis import PowerAnalysisCalculator
-from lumen.core.frame_extract import column_to_numpy
+from lumen.statistics.inferential.anova import OneWayAnovaCalculator
+from lumen.statistics.inferential.bootstrap import BootstrapEstimator
+from lumen.statistics.inferential.chi_square import ChiSquareCalculator
+from lumen.statistics.inferential.confidence_intervals import ConfidenceIntervalCalculator
+from lumen.statistics.inferential.correlation import CorrelationCalculator
+from lumen.statistics.inferential.effect_size import EffectSizeCalculator
+from lumen.statistics.inferential.hypothesis_test import HypothesisTestSuite
+from lumen.statistics.inferential.power_analysis import PowerAnalysisCalculator
+from lumen.statistics.core.frame_extract import column_to_numpy
 
 
 class ANOVACalculatorPandas(AbstractANOVACalculator):
