@@ -1,0 +1,384 @@
+@import "tailwindcss" source(none);
+@source "../src";
+@import "tw-animate-css";
+
+@custom-variant dark (&:is(.dark *));
+
+/* ───────────────────────────────────────────────────────────────────────────
+   Lumen design system — clean · minimal · pastel
+   Light is the default. Dark is a first-class variant, not an afterthought.
+   Every accent hue ships three stops:
+     tint  → pastel wash for backgrounds
+     soft  → pastel border / fill
+     ink   → the only stop allowed to carry text or a solid button (AA on canvas)
+   ─────────────────────────────────────────────────────────────────────────── */
+
+@theme inline {
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+  --radius-2xl: calc(var(--radius) + 8px);
+
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-surface: var(--surface);
+  --color-surface-2: var(--surface-2);
+
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-primary-tint: var(--primary-tint);
+  --color-primary-soft: var(--primary-soft);
+
+  --color-ai: var(--ai);
+  --color-ai-foreground: var(--ai-foreground);
+  --color-ai-tint: var(--ai-tint);
+  --color-ai-soft: var(--ai-soft);
+
+  --color-success: var(--success);
+  --color-success-foreground: var(--success-foreground);
+  --color-success-tint: var(--success-tint);
+  --color-success-soft: var(--success-soft);
+
+  --color-warning: var(--warning);
+  --color-warning-foreground: var(--warning-foreground);
+  --color-warning-tint: var(--warning-tint);
+  --color-warning-soft: var(--warning-soft);
+
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-destructive-tint: var(--destructive-tint);
+  --color-destructive-soft: var(--destructive-soft);
+
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+
+  --color-border: var(--border);
+  --color-border-strong: var(--border-strong);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+
+  --color-sidebar: var(--sidebar);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar-border: var(--sidebar-border);
+
+  --font-sans: "Inter", ui-sans-serif, system-ui, -apple-system, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+
+  --shadow-xs: var(--elevation-xs);
+  --shadow-sm: var(--elevation-sm);
+  --shadow-md: var(--elevation-md);
+  --shadow-lg: var(--elevation-lg);
+}
+
+:root {
+  --radius: 0.625rem; /* 10px — softer than the prototype's 6px */
+
+  /* Neutrals — cool, near-white, never pure grey */
+  --background: #fafafc;
+  --surface: #ffffff;
+  --surface-2: #f4f4f7;
+  --foreground: #17171c;
+
+  --card: #ffffff;
+  --card-foreground: #17171c;
+  --popover: #ffffff;
+  --popover-foreground: #17171c;
+
+  --secondary: #f4f4f7;
+  --secondary-foreground: #17171c;
+  --muted: #f4f4f7;
+  --muted-foreground: #6e6e7a;
+  --accent: #f4f4f7;
+  --accent-foreground: #17171c;
+
+  --border: #e8e8ee;
+  --border-strong: #d8d8e0;
+  --input: #ffffff;
+  --ring: #2563eb;
+
+  /* Blue — INTERACTIVE. Anything the person can act on. */
+  --primary: #2563eb;
+  --primary-foreground: #ffffff;
+  --primary-tint: #eef3ff;
+  --primary-soft: #c7d9fd;
+
+  /* Violet — AI. Anything the agent did, said, or proposes. */
+  --ai: #7c3aed;
+  --ai-foreground: #ffffff;
+  --ai-tint: #f4f0ff;
+  --ai-soft: #ddd0fb;
+
+  /* Mint — resolved, applied, healthy. Only after a human said yes. */
+  --success: #0f7a55;
+  --success-foreground: #ffffff;
+  --success-tint: #ecf8f2;
+  --success-soft: #b6e5cf;
+
+  /* Amber — attention, drift, degraded. */
+  --warning: #9a5b00;
+  --warning-foreground: #ffffff;
+  --warning-tint: #fff7ea;
+  --warning-soft: #f8dcae;
+
+  /* Rose — anomalies, destructive actions. */
+  --destructive: #c0334b;
+  --destructive-foreground: #ffffff;
+  --destructive-tint: #fff0f2;
+  --destructive-soft: #f7c6cf;
+
+  --sidebar: #f7f7fa;
+  --sidebar-foreground: #17171c;
+  --sidebar-border: #e8e8ee;
+
+  /* Elevation — barely there. Structure comes from borders, not shadow. */
+  --elevation-xs: 0 1px 2px 0 rgb(23 23 28 / 0.04);
+  --elevation-sm:
+    0 1px 2px 0 rgb(23 23 28 / 0.04), 0 1px 3px 0 rgb(23 23 28 / 0.03);
+  --elevation-md:
+    0 2px 4px -1px rgb(23 23 28 / 0.05), 0 8px 20px -8px rgb(23 23 28 / 0.08);
+  --elevation-lg:
+    0 4px 8px -2px rgb(23 23 28 / 0.06), 0 16px 40px -16px rgb(23 23 28 / 0.12);
+
+  --grid-dot: #e4e4ea;
+}
+
+.dark {
+  --background: #0e0e12;
+  --surface: #16161b;
+  --surface-2: #1d1d24;
+  --foreground: #f2f2f5;
+
+  --card: #16161b;
+  --card-foreground: #f2f2f5;
+  --popover: #16161b;
+  --popover-foreground: #f2f2f5;
+
+  --secondary: #1d1d24;
+  --secondary-foreground: #f2f2f5;
+  --muted: #1d1d24;
+  --muted-foreground: #9a9aa6;
+  --accent: #1d1d24;
+  --accent-foreground: #f2f2f5;
+
+  --border: #26262f;
+  --border-strong: #33333e;
+  --input: #16161b;
+  --ring: #8ab0fb;
+
+  --primary: #8ab0fb;
+  --primary-foreground: #0e0e12;
+  --primary-tint: #16203a;
+  --primary-soft: #2f4a80;
+
+  --ai: #bfa6fb;
+  --ai-foreground: #0e0e12;
+  --ai-tint: #201a38;
+  --ai-soft: #4a3a7d;
+
+  --success: #6ee7b7;
+  --success-foreground: #0e0e12;
+  --success-tint: #10261f;
+  --success-soft: #2b5c48;
+
+  --warning: #fcd34d;
+  --warning-foreground: #0e0e12;
+  --warning-tint: #2a2213;
+  --warning-soft: #6b5423;
+
+  --destructive: #fda4af;
+  --destructive-foreground: #0e0e12;
+  --destructive-tint: #2c1519;
+  --destructive-soft: #6d323d;
+
+  --sidebar: #121217;
+  --sidebar-foreground: #f2f2f5;
+  --sidebar-border: #26262f;
+
+  --elevation-xs: 0 1px 2px 0 rgb(0 0 0 / 0.4);
+  --elevation-sm: 0 1px 2px 0 rgb(0 0 0 / 0.4), 0 1px 3px 0 rgb(0 0 0 / 0.3);
+  --elevation-md:
+    0 2px 4px -1px rgb(0 0 0 / 0.4), 0 8px 20px -8px rgb(0 0 0 / 0.5);
+  --elevation-lg:
+    0 4px 8px -2px rgb(0 0 0 / 0.4), 0 16px 40px -16px rgb(0 0 0 / 0.6);
+
+  --grid-dot: #22222b;
+}
+
+@layer base {
+  * {
+    border-color: var(--color-border);
+  }
+
+  html,
+  body,
+  #root {
+    height: 100%;
+  }
+
+  body {
+    background-color: var(--color-background);
+    color: var(--color-foreground);
+    font-family: var(--font-sans);
+    font-feature-settings: "cv02", "cv03", "cv04", "cv11", "ss01";
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    letter-spacing: -0.006em;
+  }
+
+  ::selection {
+    background-color: var(--primary-soft);
+    color: var(--foreground);
+  }
+
+  :focus-visible {
+    outline: 2px solid var(--ring);
+    outline-offset: 2px;
+  }
+
+  ::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+  }
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  ::-webkit-scrollbar-thumb {
+    background: var(--border-strong);
+    border: 3px solid transparent;
+    background-clip: content-box;
+    border-radius: 999px;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    background: var(--muted-foreground);
+    background-clip: content-box;
+  }
+}
+
+@layer utilities {
+  /* Numbers never jitter while they animate. */
+  .num-tabular {
+    font-variant-numeric: tabular-nums;
+  }
+
+  /* Section labels — the app's quietest, most repeated element. */
+  .label-eyebrow {
+    font-size: 10.5px;
+    font-weight: 600;
+    line-height: 1;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--muted-foreground);
+  }
+
+  /* Composer / search focus. */
+  .input-focus:focus-within {
+    border-color: var(--primary);
+    box-shadow: 0 0 0 3px color-mix(in oklab, var(--primary) 14%, transparent);
+  }
+
+  /* Ambient "agent is working" halo — calm, never urgent. */
+  .ai-pulse {
+    animation: ai-pulse 2.6s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+  }
+  @keyframes ai-pulse {
+    0%,
+    100% {
+      opacity: 1;
+      box-shadow: 0 0 0 0 color-mix(in oklab, var(--ai) 45%, transparent);
+    }
+    50% {
+      opacity: 0.65;
+      box-shadow: 0 0 0 5px color-mix(in oklab, var(--ai) 0%, transparent);
+    }
+  }
+
+  /* A proposal waiting on a human. */
+  .ai-ring {
+    box-shadow:
+      0 0 0 1px var(--ai-soft),
+      var(--elevation-md);
+  }
+
+  /* One-shot wash over something the agent just changed. */
+  .ai-flash {
+    animation: ai-flash 1600ms cubic-bezier(0.16, 1, 0.3, 1) both;
+  }
+  @keyframes ai-flash {
+    0% {
+      background-color: var(--ai-tint);
+      box-shadow: 0 0 0 1px var(--ai-soft);
+    }
+    100% {
+      background-color: transparent;
+      box-shadow: 0 0 0 1px transparent;
+    }
+  }
+
+  /* Streaming token caret in agent messages. */
+  .stream-caret::after {
+    content: "";
+    display: inline-block;
+    width: 2px;
+    height: 1em;
+    margin-left: 2px;
+    vertical-align: text-bottom;
+    background: var(--ai);
+    animation: stream-caret 1s steps(2) infinite;
+  }
+  @keyframes stream-caret {
+    0%,
+    50% {
+      opacity: 1;
+    }
+    51%,
+    100% {
+      opacity: 0;
+    }
+  }
+
+  /* Canvas backdrop for the ERD and the pipeline graph. */
+  .canvas-dots {
+    background-image: radial-gradient(var(--grid-dot) 1px, transparent 1px);
+    background-size: 16px 16px;
+  }
+
+  /* Skeleton shimmer while data loads. */
+  .skeleton {
+    background: linear-gradient(
+      90deg,
+      var(--surface-2) 25%,
+      color-mix(in oklab, var(--surface-2) 60%, var(--surface)) 37%,
+      var(--surface-2) 63%
+    );
+    background-size: 400% 100%;
+    animation: skeleton 1.4s ease infinite;
+  }
+  @keyframes skeleton {
+    0% {
+      background-position: 100% 50%;
+    }
+    100% {
+      background-position: 0 50%;
+    }
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
