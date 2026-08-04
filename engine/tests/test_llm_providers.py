@@ -95,9 +95,10 @@ async def test_steps_are_derived_from_the_observed_null_rates():
     assert call.name == "propose_cleaning_pipeline"
     steps = call.arguments["steps"]
 
-    # Only buildable steps are proposed: every column-scoped step currently fails
-    # to construct, so the null finding is reported in the rationale rather than
-    # turned into a plan the worker could not run.
+    # country_code (3.2%) clears the 0.5% threshold; note (0.1%) and id (0%) do not.
+    assert {
+        "impute_categorical": {"columns": ["country_code"], "strategy": "mode"}
+    } in steps
     assert {"remove_duplicates_rows": {}} in steps
     assert not any("note" in json.dumps(step) for step in steps)
     # The rationale cites the number it actually saw.

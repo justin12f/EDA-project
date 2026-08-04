@@ -88,11 +88,7 @@ class ColumnScopedStep(AbstractColumnScopedStep[SparkDataFrame]):
         data_frame: SparkDataFrame,
         columns: List[str],
     ) -> None:
-        super().__init__(data_frame)
-        if not columns:
-            raise ValueError("columns must be a non-empty list.")
-        self._inner_step     = inner_step
-        self._scoped_columns = columns
+        super().__init__(inner_step, data_frame, columns)
 
     def process(self, data: SparkDataFrame) -> SparkDataFrame:
         available = [c for c in self._scoped_columns if c in data.columns]

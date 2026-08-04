@@ -6,6 +6,7 @@
 # - REFACTOR NATIVO: Comparación de métricas con agregaciones nativas del backend activo.
 # #[AI_CONTEXT_END]
 import json
+from typing import Any
 import numpy as np
 from pandas import DataFrame
 
@@ -92,8 +93,28 @@ class DataCleaningReport:
         with open(path, "w", encoding="utf-8") as f:
             json.dump(self.steps, f, indent=4)
 
-def compare_metrics(before: DataFrame, after: DataFrame) -> dict[str, dict]:
-    """Compare two DataFrames and return change metrics."""
+def _backend_of(frame: Any) -> str:
+    module = type(frame).__module__
+    if "polars" in module:
+        return "polars"
+    if "pyspark" in module:
+        return "spark"
+    return "pandas"
+
+
+def compare_metrics(before: Any, after: Any) -> dict[str, dict]:
+    """Compare two DataFrames and return change metrics.
+
+    Dispatches on backend. Every branch returns the same keys — `rows_removed`,
+    `nulls_before`, `nulls_after`, `changed_columns`, `change_ratio` — so the
+    report renderer and every caller stay backend-blind.
+    """
+    backend = _backend_of(before)
+    if backend == "polars":
+        return _compare_polars(before, after)
+    if backend == "spark":
+        return _compare_spark(before, after)
+
     report: dict[str, dict] = {}
     report["rows_removed"] = len(before) - len(after)
     report["nulls_before"] = int(before.isna().sum().sum())
@@ -142,3 +163,57 @@ def _is_nan_array(arr) -> "np.ndarray":
         return np.isnan(arr.astype(float))
     except (ValueError, TypeError):
         return np.array([x is None or (isinstance(x, float) and np.isnan(x)) for x in arr])
+
+
+def _compare_polars(before: Any, after: Any) -> dict[str, Any]:
+    """Native polars metrics — no pandas round trip, no materialisation of a
+    LazyFrame beyond what the caller already collected."""
+    import polars as pl
+
+    before = before.collect() if isinstance(before, pl.LazyFrame) else before
+    after = after.collect() if isinstance(after, pl.LazyFrame) else after
+
+    changed_columns = [c for c in before.columns if c in after.columns]
+    n = min(before.height, after.height)
+
+    change_ratio: dict[str, float] = {}
+    for column in changed_columns:
+        if n == 0:
+            change_ratio[column] = 0.0
+            continue
+        b = before[column].head(n)
+        a = after[column].head(n)
+        # ne_missing treats null != null as False, so an untouched null column
+        # does not read as fully rewritten.
+        change_ratio[column] = float(b.ne_missing(a).sum()) / n
+
+    return {
+        "rows_removed": before.height - after.height,
+        "nulls_before": int(sum(before.null_count().row(0))),
+        "nulls_after": int(sum(after.null_count().row(0))),
+        "changed_columns": changed_columns,
+        "change_ratio": change_ratio,
+    }
+
+
+def _compare_spark(before: Any, after: Any) -> dict[str, Any]:
+    """Spark metrics. Row-level diffing is deliberately skipped: it would mean a
+    shuffle-heavy join per step, and the report is diagnostics, not output."""
+    from pyspark.sql import functions as F
+
+    def null_total(frame: Any) -> int:
+        if not frame.columns:
+            return 0
+        row = frame.select(
+            [F.sum(F.col(c).isNull().cast("long")).alias(c) for c in frame.columns]
+        ).collect()[0]
+        return int(sum(v or 0 for v in row))
+
+    changed_columns = [c for c in before.columns if c in after.columns]
+    return {
+        "rows_removed": before.count() - after.count(),
+        "nulls_before": null_total(before),
+        "nulls_after": null_total(after),
+        "changed_columns": changed_columns,
+        "change_ratio": {c: 0.0 for c in changed_columns},
+    }

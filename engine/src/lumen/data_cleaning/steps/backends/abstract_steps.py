@@ -64,13 +64,17 @@ class AbstractColumnScopedStep(AbstractBaseStep[T], Generic[T]):
     specified columns, leaving all other columns unchanged.
     """
 
-    @abstractmethod
     def __init__(
         self,
         inner_step: AbstractBaseStep[T],
         data_frame: T,
         columns: List[str],
-    ) -> None: ...
+    ) -> None:
+        super().__init__(data_frame)
+        if not columns:
+            raise ValueError("columns must be a non-empty list.")
+        self._inner_step = inner_step
+        self._scoped_columns = list(columns)
 
     @abstractmethod
     def process(self, data: T) -> T: ...
@@ -93,13 +97,13 @@ class AbstractEnforceSchemaStep(AbstractBaseStep[T], Generic[T]):
     so the pipeline remains running.
     """
 
-    @abstractmethod
     def __init__(
         self,
         data_frame: T,
         required_columns: Optional[List[str]] = None,
         min_rows: int = 1,
-    ) -> None: ...
+    ) -> None:
+        super().__init__(data_frame)
 
     @abstractmethod
     def process(self, data: T) -> T: ...
@@ -112,12 +116,12 @@ class AbstractDropHighMissingColumnsStep(AbstractBaseStep[T], Generic[T]):
                    Default 0.8 (80%).
     """
 
-    @abstractmethod
     def __init__(
         self,
         data_frame: T,
         threshold: float = 0.8,
-    ) -> None: ...
+    ) -> None:
+        super().__init__(data_frame)
 
     @abstractmethod
     def process(self, data: T) -> T: ...
@@ -139,12 +143,12 @@ class AbstractHandleSentinelValuesStep(AbstractBaseStep[T], Generic[T]):
     -, $-, , invalid_date, undefined, #n/a}.
     """
 
-    @abstractmethod
     def __init__(
         self,
         data_frame: T,
         extra_sentinels: Optional[FrozenSet[str]] = None,
-    ) -> None: ...
+    ) -> None:
+        super().__init__(data_frame)
 
     @abstractmethod
     def process(self, data: T) -> T: ...
@@ -157,14 +161,14 @@ class AbstractImputeCategoricalStep(AbstractBaseStep[T], Generic[T]):
         'fixed' — fill with a constant string (fill_value).
     """
 
-    @abstractmethod
     def __init__(
         self,
         data_frame: T,
         columns: Optional[List[str]] = None,
         strategy: Any = None,   # CategoricalImputationStrategy enum
         fill_value: str = "unknown",
-    ) -> None: ...
+    ) -> None:
+        super().__init__(data_frame)
 
     @abstractmethod
     def process(self, data: T) -> T: ...
@@ -180,13 +184,13 @@ class AbstractSafeConversionStep(AbstractBaseStep[T], Generic[T]):
     Pure-text columns are auto-skipped via digit_threshold.
     """
 
-    @abstractmethod
     def __init__(
         self,
         data_frame: T,
         columns: Optional[List[str]] = None,
         digit_threshold: float = 0.3,
-    ) -> None: ...
+    ) -> None:
+        super().__init__(data_frame)
 
     @abstractmethod
     def process(self, data: T) -> T: ...
@@ -198,12 +202,12 @@ class AbstractFixDatesColumnsStep(AbstractBaseStep[T], Generic[T]):
     Out-of-range values are set to null/NaT.
     """
 
-    @abstractmethod
     def __init__(
         self,
         data_frame: T,
         columns: Optional[List[str]] = None,
-    ) -> None: ...
+    ) -> None:
+        super().__init__(data_frame)
 
     @abstractmethod
     def process(self, data: T) -> T: ...
@@ -214,12 +218,12 @@ class AbstractFixBoolsColumnsStep(AbstractBaseStep[T], Generic[T]):
     Boolean vocabulary: {y/n, yes/no, 1/0, true/false}.
     """
 
-    @abstractmethod
     def __init__(
         self,
         data_frame: T,
         columns: Optional[List[str]] = None,
-    ) -> None: ...
+    ) -> None:
+        super().__init__(data_frame)
 
     @abstractmethod
     def process(self, data: T) -> T: ...
@@ -227,14 +231,14 @@ class AbstractFixBoolsColumnsStep(AbstractBaseStep[T], Generic[T]):
 class AbstractFixColumnsTypesStep(AbstractBaseStep[T], Generic[T]):
     """Contract: Cast columns to their final target dtypes after all cleaning."""
 
-    @abstractmethod
     def __init__(
         self,
         data_frame: T,
         numeric_columns: Optional[List[str]] = None,
         bool_columns: Optional[List[str]] = None,
         date_columns: Optional[List[str]] = None,
-    ) -> None: ...
+    ) -> None:
+        super().__init__(data_frame)
 
     @abstractmethod
     def process(self, data: T) -> T: ...
@@ -249,13 +253,13 @@ class AbstractFixNumericColumnsStep(AbstractBaseStep[T], Generic[T]):
     Imputation strategies: mean | median | mode.
     """
 
-    @abstractmethod
     def __init__(
         self,
         data_frame: T,
         strategy: Any = None,   # ImputationStrategy enum
         columns: Optional[List[str]] = None,
-    ) -> None: ...
+    ) -> None:
+        super().__init__(data_frame)
 
     @abstractmethod
     def process(self, data: T) -> T: ...
@@ -270,12 +274,12 @@ class AbstractIQROutlierStep(AbstractBaseStep[T], Generic[T]):
     Values beyond the fence are CLIPPED (not removed) to preserve row count.
     """
 
-    @abstractmethod
     def __init__(
         self,
         data_frame: T,
         columns: Optional[List[str]] = None,
-    ) -> None: ...
+    ) -> None:
+        super().__init__(data_frame)
 
     @abstractmethod
     def process(self, data: T) -> T: ...
@@ -286,13 +290,13 @@ class AbstractZScoreOutlierStep(AbstractBaseStep[T], Generic[T]):
     Columns with σ = 0 are skipped. Requires ≥ 4 valid observations.
     """
 
-    @abstractmethod
     def __init__(
         self,
         data_frame: T,
         columns: Optional[List[str]] = None,
         z_threshold: float = 3.0,
-    ) -> None: ...
+    ) -> None:
+        super().__init__(data_frame)
 
     @abstractmethod
     def process(self, data: T) -> T: ...
@@ -300,14 +304,14 @@ class AbstractZScoreOutlierStep(AbstractBaseStep[T], Generic[T]):
 class AbstractCapOutliersStep(AbstractBaseStep[T], Generic[T]):
     """Contract: Winsorize outliers by capping at configurable percentile bounds."""
 
-    @abstractmethod
     def __init__(
         self,
         data_frame: T,
         columns: Optional[List[str]] = None,
         lower_percentile: float = 0.01,
         upper_percentile: float = 0.99,
-    ) -> None: ...
+    ) -> None:
+        super().__init__(data_frame)
 
     @abstractmethod
     def process(self, data: T) -> T: ...
@@ -323,12 +327,12 @@ class AbstractFixNotNumericColumnsStep(AbstractBaseStep[T], Generic[T]):
     Columns inferred as numeric are automatically skipped.
     """
 
-    @abstractmethod
     def __init__(
         self,
         data_frame: T,
         columns: Optional[List[str]] = None,
-    ) -> None: ...
+    ) -> None:
+        super().__init__(data_frame)
 
     @abstractmethod
     def process(self, data: T) -> T: ...
@@ -341,12 +345,12 @@ class AbstractNormalizeCategoriesStep(AbstractBaseStep[T], Generic[T]):
                   e.g. {'gender': {'m': 'male', 'f': 'female'}}
     """
 
-    @abstractmethod
     def __init__(
         self,
         data_frame: T,
         mappings: Optional[Dict[str, Dict[str, str]]] = None,
-    ) -> None: ...
+    ) -> None:
+        super().__init__(data_frame)
 
     @abstractmethod
     def process(self, data: T) -> T: ...
@@ -360,12 +364,12 @@ class AbstractTextStandardizationStep(AbstractBaseStep[T], Generic[T]):
         3. Collapse repeated whitespace and lowercase.
     """
 
-    @abstractmethod
     def __init__(
         self,
         data_frame: T,
         columns: Optional[List[str]] = None,
-    ) -> None: ...
+    ) -> None:
+        super().__init__(data_frame)
 
     @abstractmethod
     def process(self, data: T) -> T: ...
@@ -381,12 +385,12 @@ class AbstractValidateDomainRulesStep(AbstractBaseStep[T], Generic[T]):
         rules: dict[col_name, DomainBounds(lower, upper)]
     """
 
-    @abstractmethod
     def __init__(
         self,
         data_frame: T,
         rules: Optional[Dict[str, Any]] = None,   # Dict[str, DomainBounds]
-    ) -> None: ...
+    ) -> None:
+        super().__init__(data_frame)
 
     @abstractmethod
     def process(self, data: T) -> T: ...
@@ -398,12 +402,12 @@ class AbstractCrossColumnValidationStep(AbstractBaseStep[T], Generic[T]):
         rules: list[CrossColumnRule(if_col, equals, then_col, action)]
     """
 
-    @abstractmethod
     def __init__(
         self,
         data_frame: T,
         rules: Optional[List[Any]] = None,   # List[CrossColumnRule]
-    ) -> None: ...
+    ) -> None:
+        super().__init__(data_frame)
 
     @abstractmethod
     def process(self, data: T) -> T: ...
@@ -454,12 +458,12 @@ class AbstractStandardScalerStep(AbstractBaseStep[T], Generic[T]):
     process() = fit() + transform() on the same data (training convenience only).
     """
 
-    @abstractmethod
     def __init__(
         self,
         data_frame: T,
         columns: Optional[List[str]] = None,
-    ) -> None: ...
+    ) -> None:
+        super().__init__(data_frame)
 
     @abstractmethod
     def fit(self, data: T) -> "AbstractStandardScalerStep":

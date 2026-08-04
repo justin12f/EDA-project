@@ -165,8 +165,11 @@ async def test_a_valid_pipeline_validates_and_an_invented_step_does_not(person):
         "propose_cleaning_pipeline",
         {
             "rid": rid,
-            "steps": [{"remove_duplicates_rows": {}}],
-            "rationale": "1 duplicate email_hash",
+            "steps": [
+                {"impute_categorical": {"columns": ["country_code"], "strategy": "mode"}},
+                {"remove_duplicates_rows": {}},
+            ],
+            "rationale": "40.0% nulls in country_code; 1 duplicate email_hash",
         },
     )
     assert good["ok"] is True, good.get("error")
@@ -264,16 +267,12 @@ async def test_the_tool_description_lists_the_engine_s_real_vocabulary(person):
     assert "drop_nulls" not in spec.description, "a name the engine does not register"
 
 
-async def test_column_scoped_steps_do_not_build_yet(person):
-    """Open defect, pinned so it cannot regress silently.
+async def test_column_scoped_steps_build_from_a_proposal(person):
+    """Was a pinned failure; now the guard that it stays fixed.
 
-    PipelineBuilder pops `columns` and routes to create_scoped, but the scoped
-    wrapper's __init__ does not receive the frame and columns it declares as
-    required. Every column-scoped step is therefore unusable from a proposal,
-    which is most of the interesting ones.
-
-    Recorded as a failing expectation rather than a skip: when the factory is
-    fixed, this test fails and whoever fixed it updates it to assert success.
+    Column-scoped steps are most of the useful ones, and all 24 were unusable
+    from a proposal until the abstract constructors stopped shadowing
+    AbstractBaseStep.__init__.
     """
     org_id = await _org_of(person)
     source_id = await _seed_source(person, org_id)
@@ -289,5 +288,5 @@ async def test_column_scoped_steps_do_not_build_yet(person):
         },
     )
 
-    assert result["ok"] is False
-    assert "missing 2 required positional arguments" in result["error"]
+    assert result["ok"] is True, result.get("error")
+    assert result["data"]["steps"][0]["impute_categorical"]["columns"] == ["country_code"]

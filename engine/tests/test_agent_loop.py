@@ -230,8 +230,10 @@ async def test_the_mock_provider_drives_a_full_profile_to_proposal_run():
 
     assert result.stop_reason == "done"
     steps = proposed["steps"]
+    assert {
+        "impute_categorical": {"columns": ["country_code"], "strategy": "mode"}
+    } in steps
     assert {"remove_duplicates_rows": {}} in steps
-    # The 40% null finding still reaches the human, in the rationale.
     assert "40.0%" in proposed["rationale"]
     assert [kind for kind, _ in sink.events].count("tool_call") == 2
 

@@ -203,12 +203,17 @@ def _plan(profile: dict[str, Any], threshold: float) -> tuple[list[dict[str, Any
 
     # Step names come from the engine's registry, not from what a name *ought* to
     # be called. `drop_nulls` reads naturally and has never been registered.
-    # `impute_categorical` is the natural choice here and is registered, but every
-    # column-scoped step currently fails to build (see
-    # test_column_scoped_steps_do_not_build_yet). Proposing one would hand the user
-    # a plan the worker cannot run, so nulls are reported in the rationale and only
-    # buildable steps are proposed until that is fixed.
+    # Step names come from the engine's registry, never from what a name ought to
+    # be called: `drop_nulls` reads naturally and has never been registered.
     if offenders:
+        steps.append(
+            {
+                "impute_categorical": {
+                    "columns": [column for column, _ in offenders],
+                    "strategy": "mode",
+                }
+            }
+        )
         notes.append(
             ", ".join(f"{rate * 100:.1f}% nulls in {column}" for column, rate in offenders)
         )
