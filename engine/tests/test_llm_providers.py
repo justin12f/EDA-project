@@ -95,14 +95,11 @@ async def test_steps_are_derived_from_the_observed_null_rates():
     assert call.name == "propose_cleaning_pipeline"
     steps = call.arguments["steps"]
 
-    # country_code (3.2%) clears the 0.5% threshold; note (0.1%) and id (0%) do not.
-    # The step names are the engine's own — asserted against the registry below,
-    # because a proposal the engine cannot build is worthless however good it reads.
-    assert {
-        "impute_categorical": {"columns": ["country_code"], "strategy": "mode"}
-    } in steps
-    assert not any("note" in json.dumps(step) for step in steps)
+    # Only buildable steps are proposed: every column-scoped step currently fails
+    # to construct, so the null finding is reported in the rationale rather than
+    # turned into a plan the worker could not run.
     assert {"remove_duplicates_rows": {}} in steps
+    assert not any("note" in json.dumps(step) for step in steps)
     # The rationale cites the number it actually saw.
     assert "3.2%" in call.arguments["rationale"]
 

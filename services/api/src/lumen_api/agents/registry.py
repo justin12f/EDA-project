@@ -293,9 +293,7 @@ def _pipeline_tool_description(backend: str) -> str:
         "one key — the step name — mapped to its keyword arguments, e.g. "
         '[{"remove_duplicates_rows": {}}, '
         '{"impute_categorical": {"columns": ["country_code"], "strategy": "mode"}}]. '
-        "Executes nothing; it only checks the plan builds.
-
-"
+        "Executes nothing; it only checks the plan builds.\n\n"
         "The ONLY valid step names are: " + ", ".join(steps) + ". "
         "Do not invent others — an unknown name is rejected."
     )

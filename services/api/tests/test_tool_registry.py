@@ -165,8 +165,8 @@ async def test_a_valid_pipeline_validates_and_an_invented_step_does_not(person):
         "propose_cleaning_pipeline",
         {
             "rid": rid,
-            "steps": [{"drop_nulls": {"columns": ["country_code"]}}],
-            "rationale": "40.0% nulls in country_code",
+            "steps": [{"remove_duplicates_rows": {}}],
+            "rationale": "1 duplicate email_hash",
         },
     )
     assert good["ok"] is True, good.get("error")
@@ -189,7 +189,11 @@ async def test_validation_executes_nothing(person):
     before = (await HandleStore(org_id, person).resolve(rid)).collect().height
     await registry.invoke(
         "propose_cleaning_pipeline",
-        {"rid": rid, "steps": [{"drop_nulls": {"columns": ["country_code"]}}], "rationale": "r"},
+        {
+            "rid": rid,
+            "steps": [{"remove_duplicates_rows": {}}],
+            "rationale": "r",
+        },
     )
     after = (await HandleStore(org_id, person).resolve(rid)).collect().height
 
@@ -240,3 +244,50 @@ async def test_a_dataset_round_trips_through_storage(person):
     restored = (await store.resolve(handle.rid)).collect()
     assert restored.height == 2
     assert restored["b"].to_list() == ["x", "y"]
+
+
+async def test_the_tool_description_lists_the_engine_s_real_vocabulary(person):
+    """The fix for the defect this file caught: nobody has to guess a step name.
+
+    The description is generated from the factory, so an agent — or a person
+    reading the OpenAPI schema — sees exactly the names the engine will accept.
+    """
+    from lumen_api.agents.registry import registered_steps
+
+    registry = build_tool_registry(await _org_of(person), person)
+    spec = next(s for s in registry.specs() if s.name == "propose_cleaning_pipeline")
+
+    steps = registered_steps("polars")
+    assert steps, "the engine must register at least one cleaning step"
+    for name in steps:
+        assert name in spec.description, f"{name} missing from the tool description"
+    assert "drop_nulls" not in spec.description, "a name the engine does not register"
+
+
+async def test_column_scoped_steps_do_not_build_yet(person):
+    """Open defect, pinned so it cannot regress silently.
+
+    PipelineBuilder pops `columns` and routes to create_scoped, but the scoped
+    wrapper's __init__ does not receive the frame and columns it declares as
+    required. Every column-scoped step is therefore unusable from a proposal,
+    which is most of the interesting ones.
+
+    Recorded as a failing expectation rather than a skip: when the factory is
+    fixed, this test fails and whoever fixed it updates it to assert success.
+    """
+    org_id = await _org_of(person)
+    source_id = await _seed_source(person, org_id)
+    registry = build_tool_registry(org_id, person)
+    rid = (await registry.invoke("read_source", {"source_id": str(source_id)}))["data"]["rid"]
+
+    result = await registry.invoke(
+        "propose_cleaning_pipeline",
+        {
+            "rid": rid,
+            "steps": [{"impute_categorical": {"columns": ["country_code"], "strategy": "mode"}}],
+            "rationale": "40.0% nulls in country_code",
+        },
+    )
+
+    assert result["ok"] is False
+    assert "missing 2 required positional arguments" in result["error"]
