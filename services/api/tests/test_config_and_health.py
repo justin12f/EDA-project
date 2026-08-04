@@ -94,8 +94,11 @@ def test_production_refuses_to_start_with_placeholders(make_settings):
         )
 
     message = str(excinfo.value)
-    for expected in ("SUPABASE_URL", "SUPABASE_ANON_KEY", "SUPABASE_JWT_SECRET", "DATABASE_URL"):
+    for expected in ("SUPABASE_URL", "SUPABASE_ANON_KEY", "DATABASE_URL"):
         assert expected in message
+    # Not required: asymmetric projects have no shared secret, and verification
+    # falls back to the JWKS endpoint derived from SUPABASE_URL.
+    assert "SUPABASE_JWT_SECRET" not in message
 
 
 def test_production_starts_when_supabase_is_configured_even_with_no_llm_key(make_settings):
@@ -172,6 +175,32 @@ def test_the_shipped_env_example_reads_as_unconfigured(make_settings):
     assert settings.has_anthropic is False
     assert settings.has_groq is False
     assert settings.resolved_llm_mode == "mock"
+
+
+def test_an_absent_jwt_secret_selects_jwks_verification(make_settings):
+    """Asymmetric projects (ES256/RS256) have no shared secret to configure."""
+    settings = make_settings(supabase_url="https://abcdefgh.supabase.co")
+    assert settings.jwt_verification == "jwks"
+    assert settings.jwks_url == "https://abcdefgh.supabase.co/auth/v1/.well-known/jwks.json"
+
+
+def test_a_present_jwt_secret_selects_offline_verification(make_settings):
+    settings = make_settings(supabase_jwt_secret="a-real-shared-secret")
+    assert settings.jwt_verification == "shared_secret"
+
+
+def test_production_starts_without_a_jwt_secret(make_settings):
+    """Regression: requiring SUPABASE_JWT_SECRET refused to boot a correctly
+    configured project on asymmetric signing keys, where no such secret exists."""
+    settings = make_settings(
+        environment="prod",
+        supabase_url="https://abcdefgh.supabase.co",
+        supabase_anon_key="anon-real",
+        supabase_service_role_key="service-real",
+        supabase_jwt_secret="",
+        database_url="postgresql+asyncpg://postgres:realpass@db.abcdefgh.supabase.co:5432/postgres",
+    )
+    assert settings.jwt_verification == "jwks"
 
 
 def test_sync_dsn_strips_the_async_driver(make_settings):

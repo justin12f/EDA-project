@@ -50,8 +50,7 @@ def _jwks() -> PyJWKClient:
     if _jwks_client is not None and now - _jwks_fetched_at < _JWKS_CACHE_SECONDS:
         return _jwks_client
 
-    settings = get_settings()
-    url = f"{settings.supabase_url.rstrip('/')}/auth/v1/.well-known/jwks.json"
+    url = get_settings().jwks_url
     try:
         # PyJWKClient fetches lazily; probe once so a misconfigured URL fails
         # here with a clear message rather than inside token verification.
@@ -73,12 +72,11 @@ def verify_access_token(token: str) -> AuthenticatedUser:
     `Misconfigured` for anything only the operator can fix.
     """
     settings = get_settings()
-    secret = settings.supabase_jwt_secret.get_secret_value().strip()
-
     options = {"require": ["exp", "sub"], "verify_aud": True}
 
     try:
-        if secret:
+        if settings.jwt_verification == "shared_secret":
+            secret = settings.supabase_jwt_secret.get_secret_value().strip()
             claims: dict[str, Any] = jwt.decode(
                 token,
                 secret,

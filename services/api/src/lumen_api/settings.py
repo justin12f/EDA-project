@@ -71,6 +71,9 @@ class Settings(BaseSettings):
         validation_alias=AliasChoices("SUPABASE_ANON_KEY", "SUPABASE_KEY"),
     )
     supabase_service_role_key: SecretStr = SecretStr("")
+    # Empty is a valid, and increasingly the normal, configuration: projects using
+    # asymmetric JWT signing keys (ES256/RS256) publish a JWKS instead of sharing a
+    # secret, and there is no secret to paste. See `jwt_verification`.
     supabase_jwt_secret: SecretStr = SecretStr("")
     storage_bucket: str = "lumen"
 
@@ -132,6 +135,20 @@ class Settings(BaseSettings):
         return "mock"
 
     @property
+    def jwt_verification(self) -> Literal["shared_secret", "jwks"]:
+        """How access tokens get verified.
+
+        A shared secret is offline and cheapest, so it wins when present. Its
+        absence is not a misconfiguration — asymmetric projects have no secret
+        to configure, and the JWKS endpoint is derived from `supabase_url`.
+        """
+        return "shared_secret" if _is_real(self.supabase_jwt_secret) else "jwks"
+
+    @property
+    def jwks_url(self) -> str:
+        return f"{self.supabase_url.rstrip('/')}/auth/v1/.well-known/jwks.json"
+
+    @property
     def sync_database_url(self) -> str:
         """The same DSN for libraries that cannot speak asyncpg (polars, pandas)."""
         return self.database_url.replace("+asyncpg", "")
@@ -148,11 +165,15 @@ class Settings(BaseSettings):
             ("SUPABASE_URL", self.supabase_url),
             ("SUPABASE_ANON_KEY", self.supabase_anon_key),
             ("SUPABASE_SERVICE_ROLE_KEY", self.supabase_service_role_key),
-            ("SUPABASE_JWT_SECRET", self.supabase_jwt_secret),
             ("DATABASE_URL", self.database_url),
         ):
             if not _is_real(value):
                 missing.append(name)
+
+        # SUPABASE_JWT_SECRET is deliberately absent from that list. Projects on
+        # asymmetric signing keys have no secret, and demanding one would refuse
+        # to boot a correctly configured deployment. Verification falls back to
+        # the JWKS endpoint, which only needs SUPABASE_URL — already checked.
 
         if self.llm_mode == "anthropic" and not self.has_anthropic:
             missing.append("ANTHROPIC_API_KEY (required by LLM_MODE=anthropic)")
