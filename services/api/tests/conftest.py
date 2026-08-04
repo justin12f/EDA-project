@@ -10,6 +10,7 @@ from __future__ import annotations
 import os
 
 import pytest
+import pytest_asyncio
 
 from lumen_api.settings import Settings, get_settings
 
@@ -53,3 +54,17 @@ def make_settings():
         return Settings(_env_file=env_file, **overrides)
 
     return _factory
+
+
+@pytest_asyncio.fixture(autouse=True)
+async def _dispose_engines_between_tests():
+    """An asyncpg pool belongs to the loop that opened it.
+
+    pytest-asyncio gives each test a fresh loop, so a pool left over from the
+    previous one yields connections bound to a closed loop — the failure mode
+    where every test passes alone and half fail together.
+    """
+    from lumen_api.db.session import dispose_engines
+
+    yield
+    await dispose_engines()

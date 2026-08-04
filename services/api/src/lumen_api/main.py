@@ -35,9 +35,9 @@ async def lifespan(app: FastAPI):
 
     yield
 
-    from lumen_api.db.session import engine
+    from lumen_api.db.session import dispose_engines
 
-    await engine.dispose()
+    await dispose_engines()
 
 
 def create_app() -> FastAPI:

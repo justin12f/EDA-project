@@ -96,9 +96,13 @@ async def test_steps_are_derived_from_the_observed_null_rates():
     steps = call.arguments["steps"]
 
     # country_code (3.2%) clears the 0.5% threshold; note (0.1%) and id (0%) do not.
-    assert {"drop_nulls": {"columns": ["country_code"]}} in steps
+    # The step names are the engine's own — asserted against the registry below,
+    # because a proposal the engine cannot build is worthless however good it reads.
+    assert {
+        "impute_categorical": {"columns": ["country_code"], "strategy": "mode"}
+    } in steps
     assert not any("note" in json.dumps(step) for step in steps)
-    assert {"drop_duplicates": {"columns": ["email_hash"], "keep": "last"}} in steps
+    assert {"remove_duplicates_rows": {}} in steps
     # The rationale cites the number it actually saw.
     assert "3.2%" in call.arguments["rationale"]
 
@@ -324,3 +328,28 @@ async def test_anthropic_encodes_a_tool_result_as_a_user_block():
     assert sent[-1]["role"] == "user"
     assert sent[-1]["content"][0]["type"] == "tool_result"
     assert sent[-1]["content"][0]["tool_use_id"] == "tu_1"
+
+
+def test_every_step_the_mock_proposes_is_registered_in_the_engine():
+    """The guard against the defect this test file previously encoded.
+
+    MockProvider used to propose `drop_nulls` and `drop_duplicates` — names that
+    read naturally and that nothing has ever registered. The proposal validated
+    nowhere and failed at the tool boundary. Assert against the registry so the
+    two can never drift again.
+    """
+    from lumen.data_cleaning.step_factory import AbstractDataCleaningStepFactory as Factory
+    from lumen.llm.mock_provider import _plan
+
+    profile = {
+        "row_count": 1000,
+        "null_rate_by_column": {"a": 0.4, "b": 0.0},
+        "duplicate_counts": {"c": 3},
+    }
+    steps, _ = _plan(profile, 0.005)
+    assert steps, "a dirty profile must produce steps"
+
+    for step in steps:
+        (name,) = step.keys()
+        assert Factory.is_registered(name, "polars"), f"{name} is not a registered step"
+        assert Factory.is_registered(name, "pandas"), f"{name} is not registered for pandas"

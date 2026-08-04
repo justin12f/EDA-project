@@ -201,16 +201,30 @@ def _plan(profile: dict[str, Any], threshold: float) -> tuple[list[dict[str, Any
     steps: list[dict[str, Any]] = []
     notes: list[str] = []
 
+    # Step names come from the engine's registry, not from what a name *ought* to
+    # be called. `drop_nulls` reads naturally and has never been registered.
     if offenders:
-        steps.append({"drop_nulls": {"columns": [column for column, _ in offenders]}})
+        steps.append(
+            {
+                "impute_categorical": {
+                    "columns": [column for column, _ in offenders],
+                    "strategy": "mode",
+                }
+            }
+        )
         notes.append(
             ", ".join(f"{rate * 100:.1f}% nulls in {column}" for column, rate in offenders)
         )
 
-    for column, count in sorted(duplicates.items()):
-        if count and count > 0:
-            steps.append({"drop_duplicates": {"columns": [column], "keep": "last"}})
-            notes.append(f"{count} duplicate {column} values")
+    if any(count and count > 0 for count in duplicates.values()):
+        steps.append({"remove_duplicates_rows": {}})
+        notes.append(
+            ", ".join(
+                f"{count} duplicate {column} values"
+                for column, count in sorted(duplicates.items())
+                if count
+            )
+        )
 
     if not steps:
         rows = profile.get("row_count", "an unknown number of")
