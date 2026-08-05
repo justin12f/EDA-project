@@ -21,8 +21,22 @@ class DataCleaningPipeline:
 
     def run(self, data: Any) -> Any:
         data_frame = data
-        if hasattr(data, "copy"):
-            data_frame = data.copy()
+        # Every step's own `process(self, data: pl.DataFrame)` is typed against
+        # the eager frame — the polars backend's column-dtype checks and null
+        # inspection index it directly (`data[col]`), which `LazyFrame` does
+        # not support. A caller resolving a dataset handle gets a LazyFrame
+        # back (materialize.py reads Parquet lazily), so this is where that
+        # laziness is meant to end: once, before any step sees the frame,
+        # rather than each step guessing whether to collect first.
+        try:
+            import polars as pl
+
+            if isinstance(data_frame, pl.LazyFrame):
+                data_frame = data_frame.collect()
+        except ImportError:
+            pass
+        if hasattr(data_frame, "copy"):
+            data_frame = data_frame.copy()
         for step in self._step_list:
             data_frame = step.process(data_frame)
         return data_frame

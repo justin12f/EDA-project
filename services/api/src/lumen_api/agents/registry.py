@@ -16,6 +16,7 @@ Two rules make this layer safe:
 
 from __future__ import annotations
 
+import json
 import uuid
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
@@ -36,6 +37,7 @@ from lumen.prediction.timeseries import detect_season
 from lumen_api.context.store import ContextEntry, ContextStore, Kind, Scope
 from lumen_api.datasets.store import HandleStore
 from lumen_api.db.session import user_session
+from lumen_api.jsonable import jsonable
 
 Handler = Callable[..., Awaitable[dict[str, Any]]]
 
@@ -76,7 +78,12 @@ class ToolRegistry:
 
 
 def build_tool_registry(
-    org_id: uuid.UUID, user_id: uuid.UUID, backend: str = "polars"
+    org_id: uuid.UUID,
+    user_id: uuid.UUID,
+    backend: str = "polars",
+    *,
+    run_id: uuid.UUID | None = None,
+    thread_id: uuid.UUID | None = None,
 ) -> ToolRegistry:
     master = AgentMasterFactory(backend)
     store = HandleStore(org_id, user_id, backend)
@@ -205,20 +212,58 @@ def build_tool_registry(
     async def propose_cleaning_pipeline(
         rid: str, steps: list[dict[str, Any]], rationale: str
     ) -> dict[str, Any]:
-        """Validate the plan against the engine's factories. Nothing runs here."""
+        """Validate the plan against the engine's factories, then persist it.
+
+        Validation happens before anything is written: an invented step name
+        fails here, not as a row a human is asked to review. Once it passes, the
+        proposal is a real `proposals` row — awaiting_review — because a plan
+        that only ever lived inside the model's response is not something a
+        person can accept.
+        """
         frame = await store.resolve(rid)
         try:
             PipelineBuilder(frame).build(steps)
         except Exception as exc:  # noqa: BLE001
             return {"ok": False, "error": f"Invalid pipeline: {exc}"}
-        return {"ok": True, "data": {"rid": rid, "steps": steps, "rationale": rationale}}
+
+        proposal_id: uuid.UUID | None = None
+        if run_id is not None:
+            async with user_session(user_id) as db:
+                proposal_id = (
+                    await db.execute(
+                        text(
+                            "insert into public.proposals "
+                            "(org_id, run_id, thread_id, author_agent, kind, spec, rationale) "
+                            "values (:org, :run, :thread, 'analyst', 'cleaning_pipeline', "
+                            "        cast(:spec as jsonb), :rationale) "
+                            "returning id"
+                        ),
+                        {
+                            "org": org_id,
+                            "run": run_id,
+                            "thread": thread_id or run_id,
+                            "spec": json.dumps({"rid": rid, "steps": steps}),
+                            "rationale": rationale,
+                        },
+                    )
+                ).scalar_one()
+
+        return {
+            "ok": True,
+            "data": {
+                "rid": rid,
+                "steps": steps,
+                "rationale": rationale,
+                "proposal_id": str(proposal_id) if proposal_id else None,
+            },
+        }
 
     async def run_statistic(
         rid: str, domain: str, calculator: str, column: str | None = None
     ) -> dict[str, Any]:
         frame = await store.resolve(rid)
         value = master.statistics().run(domain, calculator, frame, column=column)
-        return {"ok": True, "data": {"value": _jsonable(value)}}
+        return {"ok": True, "data": {"value": jsonable(value)}}
 
     async def list_predictors(family: str | None = None) -> dict[str, Any]:
         rows = PredictorRegistry.describe()
@@ -609,11 +654,3 @@ def _predictor_catalogue_description() -> str:
     )
 
 
-def _jsonable(value: Any) -> Any:
-    if value is None or isinstance(value, (str, int, float, bool)):
-        return value
-    if isinstance(value, dict):
-        return {str(k): _jsonable(v) for k, v in value.items()}
-    if isinstance(value, (list, tuple)):
-        return [_jsonable(v) for v in value]
-    return str(value)

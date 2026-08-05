@@ -8,7 +8,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from lumen_api import health
+from lumen_api import health, me, proposals, runs, sources
 from lumen_api.errors import register_error_handlers
 from lumen_api.settings import get_settings
 
@@ -60,6 +60,10 @@ def create_app() -> FastAPI:
 
     register_error_handlers(app)
     app.include_router(health.router)
+    app.include_router(me.router)
+    app.include_router(sources.router)
+    app.include_router(runs.router)
+    app.include_router(proposals.router)
 
     return app
 

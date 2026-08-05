@@ -1,0 +1,33 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "api",
+      "runtimeExecutable": "uv",
+      "runtimeArgs": [
+        "run",
+        "--directory",
+        "C:/Users/justi/Desktop/EDA-project/services/api",
+        "uvicorn",
+        "lumen_api.main:app",
+        "--reload",
+        "--reload-dir",
+        "C:/Users/justi/Desktop/EDA-project/services/api/src",
+        "--port",
+        "8010"
+      ],
+      "port": 8010
+    },
+    {
+      "name": "web",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": [
+        "--prefix",
+        "C:/Users/justi/Desktop/EDA-project/apps/web",
+        "run",
+        "dev"
+      ],
+      "port": 3000
+    }
+  ]
+}
