@@ -105,6 +105,9 @@ async def test_the_registry_exposes_the_expected_tools(person):
         "run_statistic",
         "recall_context",
         "remember_decision",
+        "list_predictors",
+        "compare_predictors",
+        "forecast_series",
     }
 
 
@@ -340,3 +343,82 @@ async def test_a_recorded_decision_is_private_to_its_author(person):
         assert not any("worse than a null" in m["content"] for m in seen["data"]["matches"])
     finally:
         _delete_user(other)
+
+
+async def test_the_predictor_catalogue_names_only_registered_methods(person):
+    """Same guard as the cleaning vocabulary: a model that guesses a method name
+    eventually guesses one that never existed, and a human is asked to approve it."""
+    from lumen.prediction import PredictorRegistry
+
+    registry = build_tool_registry(await _org_of(person), person)
+    spec = next(s for s in registry.specs() if s.name == "list_predictors")
+
+    for name in PredictorRegistry.names():
+        assert name in spec.description, f"{name} missing from the tool description"
+    assert "drop_nulls" not in spec.description
+
+
+async def test_forecasting_chooses_its_method_by_backtest(person):
+    """No method given: every forecaster is scored on data it did not see."""
+    import numpy as np
+    import polars as pl
+
+    from lumen_api.datasets.store import HandleStore
+
+    org_id = await _org_of(person)
+    steps = np.arange(84, dtype=float)
+    series = 300 + 4.5 * steps + np.tile([0, 12, 25, 18, 9, -14, -22], 12)
+    handle = await HandleStore(org_id, person).put(
+        pl.DataFrame({"day": np.arange(84), "signups": series}), label="signups"
+    )
+
+    registry = build_tool_registry(org_id, person)
+    result = await registry.invoke(
+        "forecast_series",
+        {"rid": handle.rid, "column": "signups", "horizon": 7, "order_by": "day"},
+    )
+
+    assert result["ok"] is True, result.get("error")
+    data = result["data"]
+    assert data["chosen_by"] == "backtest"
+    assert len(data["values"]) == 7
+    # The naive baseline must be on the table, or nobody checks whether the
+    # chosen method earned its complexity.
+    assert any(row["predictor"] == "naive" for row in data["ranked"])
+
+    # Regression: the tool used to backtest at horizon//2 while forecasting at
+    # horizon, which selects for a different problem. On this trending seasonal
+    # series that picked `naive` and produced a forecast ~30 short of the truth.
+    assert data["backtested_at_horizon"] == 7
+
+    # The truth for the next 7 days, from the generating function. A method
+    # chosen honestly lands close; one that ignores the trend does not.
+    truth = [300 + 4.5 * s + p for s, p in
+             zip(range(84, 91), [0, 12, 25, 18, 9, -14, -22])]
+    error = max(abs(a - b) for a, b in zip(data["values"], truth))
+    assert error < 15, f"{data['method']} was off by {error:.1f} at worst"
+
+
+async def test_comparing_predictors_scores_on_a_holdout(person):
+    import numpy as np
+    import polars as pl
+
+    from lumen_api.datasets.store import HandleStore
+
+    org_id = await _org_of(person)
+    rng = np.random.default_rng(11)
+    x1, x2 = rng.uniform(0, 10, 150), rng.uniform(0, 5, 150)
+    frame = pl.DataFrame({"x1": x1, "x2": x2, "y": 3 * x1 - 2 * x2 + 5})
+    handle = await HandleStore(org_id, person).put(frame, label="linear")
+
+    registry = build_tool_registry(org_id, person)
+    result = await registry.invoke(
+        "compare_predictors",
+        {"rid": handle.rid, "target": "y", "candidates": ["ridge", "random_forest"]},
+    )
+
+    assert result["ok"] is True, result.get("error")
+    assert result["data"]["best"] in ("ridge", "random_forest")
+    assert "held-out" in result["data"]["scored_on"]
+    rmses = [row["rmse"] for row in result["data"]["ranked"] if row.get("rmse") is not None]
+    assert rmses == sorted(rmses), "lower RMSE ranks first"

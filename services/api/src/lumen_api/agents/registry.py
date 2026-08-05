@@ -28,6 +28,11 @@ from lumen.data_cleaning.data_cleaning_pipeline import PipelineBuilder
 from lumen.data_cleaning.step_factory import AbstractDataCleaningStepFactory
 from lumen.datasets.materialize import duplicate_counts, null_rates
 from lumen.llm.base import ToolSpec
+import numpy as np
+
+from lumen.prediction import PredictorRegistry, Task
+from lumen.prediction.extract import to_series
+from lumen.prediction.timeseries import detect_season
 from lumen_api.context.store import ContextEntry, ContextStore, Kind, Scope
 from lumen_api.datasets.store import HandleStore
 from lumen_api.db.session import user_session
@@ -215,6 +220,110 @@ def build_tool_registry(
         value = master.statistics().run(domain, calculator, frame, column=column)
         return {"ok": True, "data": {"value": _jsonable(value)}}
 
+    async def list_predictors(family: str | None = None) -> dict[str, Any]:
+        rows = PredictorRegistry.describe()
+        if family:
+            rows = [r for r in rows if r["family"] == family]
+        return {"ok": True, "data": {"predictors": rows}}
+
+    async def compare_predictors(
+        rid: str,
+        target: str,
+        features: list[str] | None = None,
+        task: str = "regression",
+        candidates: list[str] | None = None,
+    ) -> dict[str, Any]:
+        frame = await store.resolve(rid)
+        comparison = master.prediction().compare(
+            frame,
+            target=target,
+            features=features,
+            task=Task(task),
+            candidates=candidates,
+        )
+        best = comparison.best
+        return {
+            "ok": True,
+            "data": {
+                "ranked": comparison.summary(),
+                "best": best.predictor if best else None,
+                # Stated explicitly so the model reports a score measured on data
+                # it never saw, rather than a training-set number.
+                "scored_on": "a held-out split, not the training data",
+            },
+        }
+
+    async def forecast_series(
+        rid: str,
+        column: str,
+        horizon: int,
+        method: str | None = None,
+        order_by: str | None = None,
+        season_length: int | None = None,
+    ) -> dict[str, Any]:
+        frame = await store.resolve(rid)
+        prediction = master.prediction()
+
+        chosen = method
+        ranked: list[dict[str, Any]] = []
+        if chosen is None:
+            # Backtest at the horizon actually being forecast. Evaluating at a
+            # shorter one selects for a different problem: on a trending seasonal
+            # series, scoring at 3 steps picks `naive` and scoring at 7 picks
+            # Holt-Winters — and only the second is right for a 7-step forecast.
+            #
+            # Short series are handled by reducing folds, never the horizon.
+            # Each fold consumes `horizon` points, so a series with n points
+            # supports at most (n - 2) // horizon of them.
+            length = int(np.isfinite(to_series(frame, prediction.backend, column,
+                                               order_by=order_by)).sum())
+            folds = max(1, min(3, (length - 2) // max(1, horizon)))
+
+            comparison = prediction.compare_forecasters(
+                frame,
+                column,
+                folds=folds,
+                horizon=horizon,
+                order_by=order_by,
+            )
+            ranked = comparison.summary()
+            if comparison.best is None:
+                return {"ok": False, "error": "no forecaster could fit this series"}
+            chosen = comparison.best.predictor
+
+        params: dict[str, Any] = {}
+        detected = None
+        if chosen in ("exponential_smoothing", "seasonal_naive"):
+            if season_length is None:
+                # Detected rather than defaulted. Running a seasonal method with
+                # no season silently drops the seasonal component and lands
+                # wrong by roughly its amplitude, which reads as a mediocre
+                # forecast rather than as a missing argument.
+                detected = detect_season(
+                    to_series(frame, prediction.backend, column, order_by=order_by)
+                )
+                season_length = detected
+            if season_length:
+                params["season_length"] = season_length
+
+        forecast, report = prediction.forecast(
+            frame, chosen, column, horizon, order_by=order_by, **params
+        )
+        return {
+            "ok": True,
+            "data": {
+                "method": chosen,
+                "chosen_by": "backtest" if method is None else "the caller",
+                "backtested_at_horizon": horizon if method is None else None,
+                "season_length": season_length,
+                "season_detected": detected is not None,
+                "horizon": horizon,
+                "values": [round(v, 4) for v in forecast.as_list()],
+                "diagnostics": report.diagnostics,
+                "ranked": ranked,
+            },
+        }
+
     async def recall_context(query: str, limit: int = 5) -> dict[str, Any]:
         matches = await memory.search(query, limit=limit)
         return {
@@ -378,6 +487,79 @@ def build_tool_registry(
             ),
             remember_decision,
         ),
+        Tool(
+            ToolSpec(
+                name="list_predictors",
+                description=_predictor_catalogue_description(),
+                input_schema={
+                    "type": "object",
+                    "properties": {
+                        "family": {
+                            "type": "string",
+                            "enum": ["numerical", "timeseries", "ml"],
+                        }
+                    },
+                    "required": [],
+                },
+            ),
+            list_predictors,
+        ),
+        Tool(
+            ToolSpec(
+                name="compare_predictors",
+                description=(
+                    "Fit several predictors on a held-out split and rank them. Prefer this "
+                    "to picking one method and reporting its score: a number without a "
+                    "holdout is not evidence, and a model's training error says nothing "
+                    "about whether it will work. Returns every candidate with its metrics, "
+                    "best first."
+                ),
+                input_schema={
+                    "type": "object",
+                    "properties": {
+                        "rid": {"type": "string"},
+                        "target": {"type": "string", "description": "Column to predict."},
+                        "features": {"type": "array", "items": {"type": "string"}},
+                        "task": {
+                            "type": "string",
+                            "enum": ["regression", "classification"],
+                        },
+                        "candidates": {"type": "array", "items": {"type": "string"}},
+                    },
+                    "required": ["rid", "target"],
+                },
+            ),
+            compare_predictors,
+        ),
+        Tool(
+            ToolSpec(
+                name="forecast_series",
+                description=(
+                    "Forecast a column forward. Omit `method` and it is chosen by "
+                    "rolling-origin backtest across every forecaster including the naive "
+                    "baseline — the honest way to choose, because a forecast that cannot "
+                    "beat 'tomorrow equals today' has not earned its complexity. Pass "
+                    "`order_by` with the date column: every method treats row order as "
+                    "time order, and a parquet scan does not guarantee it."
+                ),
+                input_schema={
+                    "type": "object",
+                    "properties": {
+                        "rid": {"type": "string"},
+                        "column": {"type": "string", "description": "The series to forecast."},
+                        "horizon": {"type": "integer", "description": "Steps ahead."},
+                        "method": {"type": "string"},
+                        "order_by": {"type": "string", "description": "Date or index column."},
+                        "season_length": {
+                            "type": "integer",
+                            "description": "e.g. 7 for daily data with a weekly cycle.",
+                        },
+                    },
+                    "required": ["rid", "column", "horizon"],
+                },
+            ),
+            forecast_series,
+        ),
     ]
     return ToolRegistry(tools)
 
@@ -406,6 +588,24 @@ def _pipeline_tool_description(backend: str) -> str:
         "Executes nothing; it only checks the plan builds.\n\n"
         "The ONLY valid step names are: " + ", ".join(steps) + ". "
         "Do not invent others — an unknown name is rejected."
+    )
+
+
+def _predictor_catalogue_description() -> str:
+    """Generated from the registry, for the reason the cleaning vocabulary is:
+    a model that has to guess a method name eventually guesses one that has never
+    existed, and then a human is asked to approve it."""
+    by_family: dict[str, list[str]] = {}
+    for row in PredictorRegistry.describe():
+        by_family.setdefault(row["family"], []).append(row["name"])
+    families = "; ".join(
+        f"{family}: {', '.join(sorted(names))}"
+        for family, names in sorted(by_family.items())
+    )
+    return (
+        "List every available prediction method with its parameters and what it is "
+        "for. Call this before compare_predictors or forecast_series so you use a "
+        "method that exists.\n\nAvailable — " + families
     )
 
 

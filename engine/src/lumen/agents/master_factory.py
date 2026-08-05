@@ -7,6 +7,7 @@ from typing import TYPE_CHECKING
 from lumen.core.backend import Backend, DEFAULT_BACKEND, validate_backend
 
 if TYPE_CHECKING:
+    from lumen.prediction.inyeccion import PredictionInyeccionDependency
     from lumen.data_cleaning.inyeccion import DataCleaningInyeccionDependency
     from lumen.analyze_data.inyeccion import AnalyzeDataInyeccionDependency
     from lumen.evaluation.inyeccion import EvaluationInyeccionDependency
@@ -25,6 +26,7 @@ class AgentMasterFactory:
         self._cleaning: DataCleaningInyeccionDependency | None = None
         self._analyzers: AnalyzeDataInyeccionDependency | None = None
         self._statistics: StatisticsInyeccionDependency | None = None
+        self._prediction = None
         self._encoders: EncoderInyeccionDependency | None = None
         self._models: ModelsInyeccionDependency | None = None
         self._evaluation: EvaluationInyeccionDependency | None = None
@@ -60,6 +62,13 @@ class AgentMasterFactory:
 
             self._statistics = StatisticsInyeccionDependency(self._backend)
         return self._statistics
+
+    def prediction(self) -> "PredictionInyeccionDependency":
+        if self._prediction is None:
+            from lumen.prediction.inyeccion import PredictionInyeccionDependency
+
+            self._prediction = PredictionInyeccionDependency(self._backend)
+        return self._prediction
 
     def encoders(self) -> EncoderInyeccionDependency:
         if self._encoders is None:
