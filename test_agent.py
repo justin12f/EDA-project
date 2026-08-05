@@ -1,3 +1,6 @@
+from dotenv import load_dotenv
+load_dotenv()
+
 from agents.context_creator import ContextCreatorAgent
 import sys
 

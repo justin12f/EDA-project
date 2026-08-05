@@ -1,6 +1,11 @@
 .env
-
 .git
-.gitignore
-.dockerignore
-README.md
+__pycache__
+*.pyc
+*.pyo
+*.pyd
+.claude
+.DS_Store
+Thumbs.db
+docs
+tests

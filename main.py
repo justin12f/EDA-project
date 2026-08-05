@@ -1,3 +1,6 @@
+from dotenv import load_dotenv
+load_dotenv()
+
 from agents.context_creator import ContextCreatorAgent
 import polars as pl
 from model_tools.create_data_context import CreateContext
