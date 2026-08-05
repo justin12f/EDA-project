@@ -4,7 +4,7 @@ version = "0.1.0"
 description = "Lumen API — agentic data cleaning, pipelines and EDA."
 requires-python = ">=3.11"
 dependencies = [
-  "lumen-engine",
+  "lumen-engine[embeddings]",
   "fastapi>=0.115",
   "uvicorn[standard]>=0.32",
   "pydantic>=2.9",

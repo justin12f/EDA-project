@@ -28,6 +28,7 @@ from lumen.data_cleaning.data_cleaning_pipeline import PipelineBuilder
 from lumen.data_cleaning.step_factory import AbstractDataCleaningStepFactory
 from lumen.datasets.materialize import duplicate_counts, null_rates
 from lumen.llm.base import ToolSpec
+from lumen_api.context.store import ContextEntry, ContextStore, Kind, Scope
 from lumen_api.datasets.store import HandleStore
 from lumen_api.db.session import user_session
 
@@ -74,6 +75,7 @@ def build_tool_registry(
 ) -> ToolRegistry:
     master = AgentMasterFactory(backend)
     store = HandleStore(org_id, user_id, backend)
+    memory = ContextStore(org_id, user_id)
 
     async def list_data_sources() -> dict[str, Any]:
         async with user_session(user_id) as db:
@@ -156,6 +158,34 @@ def build_tool_registry(
         ]
         duplicates = duplicate_counts(frame, handle.backend, candidates) if candidates else {}
 
+        notable = {c: r for c, r in rates.items() if r > 0.005}
+        dupes = {k: v for k, v in duplicates.items() if v > 0}
+
+        # An org-scoped fact: measured once, useful to every member.
+        summary = (
+            f"{handle.row_count} rows, {len(handle.schema)} columns. "
+            + (
+                "Null rates above 0.5%: "
+                + ", ".join(f"{c} {r * 100:.1f}%" for c, r in sorted(notable.items()))
+                if notable
+                else "No column exceeds a 0.5% null rate."
+            )
+            + (
+                " Duplicates: " + ", ".join(f"{c} x{v}" for c, v in sorted(dupes.items()))
+                if dupes
+                else ""
+            )
+        )
+        await memory.remember(
+            ContextEntry(
+                kind=Kind.PROFILE,
+                title=f"Profile of {handle.label or rid}",
+                content=summary,
+                rid=rid,
+                metadata={"null_rates": rates, "duplicates": dupes},
+            )
+        )
+
         return {
             "ok": True,
             "data": {
@@ -163,7 +193,7 @@ def build_tool_registry(
                 "row_count": handle.row_count,
                 "columns": handle.schema,
                 "null_rate_by_column": rates,
-                "duplicate_counts": {k: v for k, v in duplicates.items() if v > 0},
+                "duplicate_counts": dupes,
             },
         }
 
@@ -184,6 +214,37 @@ def build_tool_registry(
         frame = await store.resolve(rid)
         value = master.statistics().run(domain, calculator, frame, column=column)
         return {"ok": True, "data": {"value": _jsonable(value)}}
+
+    async def recall_context(query: str, limit: int = 5) -> dict[str, Any]:
+        matches = await memory.search(query, limit=limit)
+        return {
+            "ok": True,
+            "data": {
+                "matches": [
+                    {
+                        "kind": str(m.kind),
+                        "scope": str(m.scope),
+                        "mine": m.is_mine,
+                        "title": m.title,
+                        "content": m.content,
+                        "similarity": round(m.similarity, 3),
+                    }
+                    for m in matches
+                ]
+            },
+        }
+
+    async def remember_decision(title: str, content: str, source_id: str | None = None) -> dict[str, Any]:
+        entry_id = await memory.remember(
+            ContextEntry(
+                kind=Kind.DECISION,
+                scope=Scope.USER,
+                title=title,
+                content=content,
+                source_id=uuid.UUID(source_id) if source_id else None,
+            )
+        )
+        return {"ok": True, "data": {"id": str(entry_id), "scope": "user"}}
 
     tools = [
         Tool(
@@ -267,6 +328,55 @@ def build_tool_registry(
                 },
             ),
             run_statistic,
+        ),
+        Tool(
+            ToolSpec(
+                name="recall_context",
+                description=(
+                    "Search what is already known about this workspace's data, and what "
+                    "this particular person decided before. Call it BEFORE profiling: a "
+                    "source someone already audited does not need auditing again, and a "
+                    "proposal this person rejected should not be proposed again unchanged. "
+                    "Results marked mine=true are this user's own history; the rest are "
+                    "shared facts about the data."
+                ),
+                input_schema={
+                    "type": "object",
+                    "properties": {
+                        "query": {
+                            "type": "string",
+                            "description": "What you want to remember, in natural language.",
+                        },
+                        "limit": {"type": "integer"},
+                    },
+                    "required": ["query"],
+                },
+            ),
+            recall_context,
+        ),
+        Tool(
+            ToolSpec(
+                name="remember_decision",
+                description=(
+                    "Record something this person decided or prefers, so future runs "
+                    "start from it. Private to them. Use it when they reject a proposal, "
+                    "correct you, or state a preference — not for facts about the data, "
+                    "which are recorded automatically and shared with their team."
+                ),
+                input_schema={
+                    "type": "object",
+                    "properties": {
+                        "title": {"type": "string"},
+                        "content": {
+                            "type": "string",
+                            "description": "What they decided and why, in their terms.",
+                        },
+                        "source_id": {"type": "string"},
+                    },
+                    "required": ["title", "content"],
+                },
+            ),
+            remember_decision,
         ),
     ]
     return ToolRegistry(tools)

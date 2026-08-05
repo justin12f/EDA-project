@@ -103,6 +103,8 @@ async def test_the_registry_exposes_the_expected_tools(person):
         "profile_source",
         "propose_cleaning_pipeline",
         "run_statistic",
+        "recall_context",
+        "remember_decision",
     }
 
 
@@ -290,3 +292,51 @@ async def test_column_scoped_steps_build_from_a_proposal(person):
 
     assert result["ok"] is True, result.get("error")
     assert result["data"]["steps"][0]["impute_categorical"]["columns"] == ["country_code"]
+
+
+async def test_profiling_records_a_shared_fact_the_next_run_can_recall(person):
+    """The agent stops re-deriving what it already measured."""
+    from lumen_api.context.store import ContextStore, Scope
+
+    org_id = await _org_of(person)
+    source_id = await _seed_source(person, org_id)
+    registry = build_tool_registry(org_id, person)
+
+    rid = (await registry.invoke("read_source", {"source_id": str(source_id)}))["data"]["rid"]
+    await registry.invoke("profile_source", {"rid": rid})
+
+    recalled = await registry.invoke(
+        "recall_context", {"query": "which column has missing values"}
+    )
+    assert recalled["ok"] is True
+    matches = recalled["data"]["matches"]
+    assert matches, "profiling should have left something to recall"
+    assert any("country_code" in m["content"] for m in matches)
+    # A measurement is a shared fact, not one person's opinion.
+    assert any(m["scope"] == str(Scope.ORG) for m in matches)
+
+
+async def test_a_recorded_decision_is_private_to_its_author(person):
+    org_id = await _org_of(person)
+    registry = build_tool_registry(org_id, person)
+
+    written = await registry.invoke(
+        "remember_decision",
+        {
+            "title": "Rejected imputation",
+            "content": "Do not impute country_code — a wrong country is worse than a null.",
+        },
+    )
+    assert written["ok"] is True
+    assert written["data"]["scope"] == "user"
+
+    mine = await registry.invoke("recall_context", {"query": "what did I decide about imputing"})
+    assert any(m["mine"] and "worse than a null" in m["content"] for m in mine["data"]["matches"])
+
+    other = _create_user()
+    try:
+        theirs = build_tool_registry(await _org_of(other), other)
+        seen = await theirs.invoke("recall_context", {"query": "imputing country_code"})
+        assert not any("worse than a null" in m["content"] for m in seen["data"]["matches"])
+    finally:
+        _delete_user(other)
