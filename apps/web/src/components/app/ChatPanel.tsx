@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 
 import { streamRun, type AgentEvent } from "../../lib/api/client";
 import type { Proposal, Source, TranscriptItem } from "../../lib/api/types";
+import { toTranscriptItem } from "../../lib/transcript";
 import { MessageBubble } from "./MessageBubble";
 import { ProposalCard } from "./ProposalCard";
 
@@ -13,13 +14,18 @@ export function ChatPanel({
   selectedSource,
   proposals,
   onProposalsChanged,
+  initialItems,
 }: {
   threadId: string;
   selectedSource: Source | null;
   proposals: Proposal[];
   onProposalsChanged: () => void;
+  /** A reopened thread's history, already converted — see lib/transcript.ts.
+   * The parent keys this component by threadId, so a thread switch remounts
+   * it with a fresh initial list rather than this prop changing under it. */
+  initialItems?: TranscriptItem[];
 }) {
-  const [items, setItems] = useState<TranscriptItem[]>([]);
+  const [items, setItems] = useState<TranscriptItem[]>(initialItems ?? []);
   const [draft, setDraft] = useState("");
   const [sending, setSending] = useState(false);
   const bottomRef = useRef<HTMLDivElement>(null);
@@ -122,40 +128,13 @@ function applyEvent(
   event: AgentEvent,
   setItems: React.Dispatch<React.SetStateAction<TranscriptItem[]>>,
 ): void {
-  switch (event.type) {
-    case "message": {
-      // The user's own turn is echoed back over the stream (so a reopened
-      // thread can replay it later) — already shown optimistically on send,
-      // so only a non-"user" message is a new assistant bubble here.
-      if (event.payload.role === "user") return;
-      const text = String(event.payload.text ?? "");
-      if (text) setItems((prev) => [...prev, { kind: "assistant", id: nextId(), text }]);
-      return;
-    }
-    case "tool_call": {
-      const name = String(event.payload.name ?? "tool");
-      const args = (event.payload.arguments as Record<string, unknown>) ?? {};
-      setItems((prev) => [...prev, { kind: "tool_call", id: nextId(), name, args }]);
-      return;
-    }
-    case "tool_result": {
-      const name = String(event.payload.name ?? "tool");
-      setItems((prev) => [
-        ...prev,
-        { kind: "tool_result", id: nextId(), name, ok: Boolean(event.payload.ok) },
-      ]);
-      return;
-    }
-    case "done": {
-      const error = event.payload.error;
-      if (error) {
-        setItems((prev) => [...prev, { kind: "error", id: nextId(), text: String(error) }]);
-      }
-      return;
-    }
-    default:
-      return;
-  }
+  // The user's own turn is echoed back over the stream too (so a reopened
+  // thread can replay it later) — already shown optimistically on send, so
+  // skip it here rather than show it twice. Everything else converts the
+  // same way live or replayed; see lib/transcript.ts.
+  if (event.type === "message" && event.payload.role === "user") return;
+  const item = toTranscriptItem(event);
+  if (item) setItems((prev) => [...prev, item]);
 }
 
 function EmptyState({

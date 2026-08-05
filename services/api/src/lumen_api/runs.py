@@ -85,7 +85,19 @@ async def thread_events(
                 {"thread": thread_id},
             )
         ).mappings().all()
-    return {"events": [dict(row) for row in rows]}
+        # The source this thread was about, if any — so reopening it can
+        # reselect the same source rather than dropping back to general chat.
+        source_id = (
+            await db.execute(
+                text(
+                    "select source_id from public.runs "
+                    "where thread_id = :thread and source_id is not null "
+                    "order by started_at limit 1"
+                ),
+                {"thread": thread_id},
+            )
+        ).scalar_one_or_none()
+    return {"events": [dict(row) for row in rows], "source_id": source_id}
 
 
 @router.get("/threads")

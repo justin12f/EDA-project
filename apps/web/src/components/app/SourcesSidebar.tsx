@@ -15,6 +15,7 @@ export function SourcesSidebar({
   selectedId,
   onSelect,
   onUpload,
+  onNewChat,
   uploading,
   uploadError,
   orgName,
@@ -25,6 +26,7 @@ export function SourcesSidebar({
   selectedId: string | null;
   onSelect: (id: string | null) => void;
   onUpload: (file: File) => void;
+  onNewChat: () => void;
   uploading: boolean;
   uploadError: string | null;
   orgName: string;
@@ -42,6 +44,15 @@ export function SourcesSidebar({
         <span className="truncate text-[13px] font-semibold text-sidebar-foreground">
           {orgName}
         </span>
+      </div>
+
+      <div className="px-3 pt-3">
+        <button
+          onClick={onNewChat}
+          className="flex h-9 w-full items-center justify-center gap-1.5 rounded-lg bg-primary text-[13px] font-medium text-primary-foreground transition hover:brightness-110"
+        >
+          + New chat
+        </button>
       </div>
 
       <div className="flex-1 overflow-y-auto px-3 py-4">
