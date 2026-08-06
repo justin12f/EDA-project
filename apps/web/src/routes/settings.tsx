@@ -2,8 +2,8 @@ import { useEffect, useState } from "react";
 import { createFileRoute, Link } from "@tanstack/react-router";
 
 import { ErrorBanner, FieldLabel, TextInput } from "../components/auth/AuthShell";
-import { apiDelete, apiGet, apiPost } from "../lib/api/client";
-import type { ApiKey, ApiKeyCreated } from "../lib/api/types";
+import { apiDelete, apiGet, apiPost, apiPut } from "../lib/api/client";
+import type { ApiKey, ApiKeyCreated, TrustPattern } from "../lib/api/types";
 import { useRequireSession } from "../lib/hooks/useSession";
 
 export const Route = createFileRoute("/settings")({ component: SettingsPage });
@@ -43,17 +43,26 @@ function SettingsShell() {
         <Link to="/app" className="text-[13px] font-medium text-muted-foreground hover:text-foreground">
           ← Back
         </Link>
-        <h1 className="text-[13px] font-semibold text-foreground">API keys</h1>
+        <h1 className="text-[13px] font-semibold text-foreground">Settings</h1>
         {me && <span className="text-[12px] text-muted-foreground">{me.org_name}</span>}
       </header>
 
-      <div className="mx-auto max-w-xl px-6 py-8">
+      <div className="mx-auto max-w-xl space-y-10 px-6 py-8">
         {me === null ? null : me.role !== "owner" ? (
           <p className="rounded-lg border border-border bg-card px-4 py-3 text-[13px] text-muted-foreground">
-            Only a workspace owner can manage API keys.
+            Only a workspace owner can manage these settings.
           </p>
         ) : (
-          <ApiKeyManager />
+          <>
+            <section>
+              <h2 className="label-eyebrow mb-3">API keys</h2>
+              <ApiKeyManager />
+            </section>
+            <section>
+              <h2 className="label-eyebrow mb-3">Trust patterns</h2>
+              <TrustPatternsManager />
+            </section>
+          </>
         )}
       </div>
     </div>
@@ -199,6 +208,95 @@ function ApiKeyManager() {
           </ul>
         )}
       </div>
+    </div>
+  );
+}
+
+function formatPattern(signature: string): string {
+  return signature.replace(/[_:]/g, " ").replace(/\+/g, " + ");
+}
+
+/**
+ * "Trust here is not a black box the org discovers by watching what
+ * happens — it is a setting they can inspect and override" (ADR-0011 §5).
+ * One row per structural pattern this workspace has decided on; the toggle
+ * is a hard override, independent of the score — even a perfect streak
+ * can be turned off here.
+ */
+function TrustPatternsManager() {
+  const [patterns, setPatterns] = useState<TrustPattern[] | null>(null);
+  const [minStreak, setMinStreak] = useState(20);
+  const [error, setError] = useState<string | null>(null);
+
+  async function refetch() {
+    const response = await apiGet<{ patterns: TrustPattern[]; min_streak: number }>(
+      "/v1/trust-patterns",
+    );
+    setPatterns(response.patterns);
+    setMinStreak(response.min_streak);
+  }
+
+  useEffect(() => {
+    refetch().catch(() => {});
+  }, []);
+
+  async function toggle(pattern: TrustPattern) {
+    setError(null);
+    try {
+      await apiPut(`/v1/trust-patterns/${pattern.id}/auto-apply`, {
+        enabled: !pattern.auto_apply_enabled,
+      });
+      await refetch();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not update this pattern");
+    }
+  }
+
+  return (
+    <div className="space-y-3">
+      <p className="text-[13px] text-muted-foreground">
+        What this workspace has taught the Sentinel to trust. A pattern needs {minStreak}{" "}
+        consecutive approvals with no rejection to auto-apply on its own — the toggle overrides
+        that regardless of score.
+      </p>
+      <ErrorBanner message={error} />
+      {patterns === null ? (
+        <p className="text-[13px] text-muted-foreground">Loading…</p>
+      ) : patterns.length === 0 ? (
+        <p className="text-[13px] text-muted-foreground">
+          No decisions recorded yet — this fills in as proposals get accepted or rejected.
+        </p>
+      ) : (
+        <ul className="space-y-2">
+          {patterns.map((pattern) => (
+            <li key={pattern.id} className="rounded-lg border border-border bg-card px-3 py-2.5">
+              <div className="mb-1 flex items-center justify-between gap-2">
+                <span className="truncate text-[13px] font-medium capitalize text-foreground">
+                  {formatPattern(pattern.pattern_signature)}
+                </span>
+                <label className="flex shrink-0 items-center gap-1.5 text-[11px] text-muted-foreground">
+                  <input
+                    type="checkbox"
+                    checked={pattern.auto_apply_enabled}
+                    onChange={() => toggle(pattern)}
+                    className="h-3 w-3 accent-ai"
+                  />
+                  Allow auto-apply
+                </label>
+              </div>
+              <p className="text-[11px] text-muted-foreground">
+                {pattern.approvals} approved · {pattern.rejections} rejected ·{" "}
+                {pattern.consecutive_approvals} in a row · score {Math.round(pattern.score * 100)}%
+                {pattern.eligible ? (
+                  <span className="ml-1.5 rounded-full bg-success-tint px-1.5 py-0.5 font-medium text-success">
+                    eligible now
+                  </span>
+                ) : null}
+              </p>
+            </li>
+          ))}
+        </ul>
+      )}
     </div>
   );
 }

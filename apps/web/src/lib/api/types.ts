@@ -126,6 +126,22 @@ export interface ApiKeyCreated extends ApiKey {
   key: string;
 }
 
+// ADR-0011: what this org has taught the app to trust, per structural
+// pattern — "eligible" is what the auto-apply gate would decide right now
+// (auto_apply_enabled AND consecutive_approvals >= min_streak), computed
+// server-side so nobody has to redo that arithmetic reading the raw counts.
+export interface TrustPattern {
+  id: string;
+  pattern_signature: string;
+  approvals: number;
+  rejections: number;
+  consecutive_approvals: number;
+  score: number;
+  auto_apply_enabled: boolean;
+  eligible: boolean;
+  last_decided_at: string | null;
+}
+
 // ADR-0009 §3: composed fresh from DriftEvent/Proposal state on every read,
 // never stored — see services/api/src/lumen_api/certification.py.
 export interface Certification {

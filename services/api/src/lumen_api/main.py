@@ -18,6 +18,7 @@ from lumen_api import (
     runs,
     schedules,
     sources,
+    trust,
     usage,
 )
 from lumen_api.errors import register_error_handlers
@@ -80,6 +81,7 @@ def create_app() -> FastAPI:
     app.include_router(certification.router)
     app.include_router(api_keys.router)
     app.include_router(public.router)
+    app.include_router(trust.router)
 
     return app
 

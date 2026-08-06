@@ -45,6 +45,7 @@ from lumen_api.impact import compute_impact_report
 from lumen_api.llm import provider
 from lumen_api.profiling import profile_and_remember
 from lumen_api.shadow_run import ShadowRunResult, shadow_run
+from lumen_api.trust import is_auto_apply_eligible, structural_shape
 from lumen_worker.glossary import detect_and_enqueue_clusters
 
 # The `cron` column is a small named interval, not crontab syntax — arq has no
@@ -441,8 +442,17 @@ async def diagnose_drift(
             proposal_id=proposal_id, source_id=event["source_id"], rid=handle.rid, steps=steps,
         )
 
+        # ADR-0011's second, independent gate: structural confidence alone
+        # is no longer sufficient. "Never decided on before" and "explicitly
+        # earned trust" must not be confused — a pattern with no row in
+        # pattern_trust_scores is exactly as ineligible as one with a row
+        # and too short a streak (is_auto_apply_eligible's own contract).
+        pattern = structural_shape("pipeline_patch", {"steps": steps})
+        async with user_session(user_uuid) as db:
+            trusted = await is_auto_apply_eligible(db, org_uuid, pattern)
+
         applied = False
-        if confidence == "high" and event["auto_apply_enabled"]:
+        if confidence == "high" and event["auto_apply_enabled"] and trusted:
             applied_outcome = await apply_cleaning_pipeline(
                 org_uuid,
                 user_uuid,

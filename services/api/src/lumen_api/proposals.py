@@ -27,6 +27,7 @@ from lumen_api.billing.stripe_client import checkout_url_for_plan_change
 from lumen_api.db.session import user_session
 from lumen_api.errors import BadRequest, Conflict, Forbidden, NotFound
 from lumen_api.lineage import record_entity_dependency
+from lumen_api.trust import TRUST_ELIGIBLE_ROLES, record_decision, structural_shape
 
 # Kinds only a workspace owner may decide — spending money or changing who can
 # do what is a stricter gate than "any member can review a cleaning step".
@@ -131,6 +132,8 @@ async def decide_proposal(
     if row["kind"] in _OWNER_ONLY_KINDS and identity.role != "owner":
         raise Forbidden(f"Only a workspace owner can decide a '{row['kind']}' proposal")
 
+    pattern = structural_shape(row["kind"], dict(row["spec"] or {}))
+
     if body.decision == "reject":
         async with user_session(identity.user_id) as db:
             await db.execute(
@@ -140,17 +143,32 @@ async def decide_proposal(
                 ),
                 {"user": identity.user_id, "id": proposal_id},
             )
+            if identity.role in TRUST_ELIGIBLE_ROLES:
+                await record_decision(db, identity.org_id, pattern, approved=False)
         return {"id": str(proposal_id), "status": "rejected"}
 
     if row["kind"] == "plan_change":
-        return await _apply_plan_change(proposal_id, row, identity)
-    if row["kind"] == "member_role_change":
-        return await _apply_member_role_change(proposal_id, row, identity)
-    if row["kind"] == "entity_mapping":
-        return await _apply_entity_mapping(proposal_id, row, identity)
-    if row["kind"] not in _PIPELINE_KINDS:
+        result = await _apply_plan_change(proposal_id, row, identity)
+    elif row["kind"] == "member_role_change":
+        result = await _apply_member_role_change(proposal_id, row, identity)
+    elif row["kind"] == "entity_mapping":
+        result = await _apply_entity_mapping(proposal_id, row, identity)
+    elif row["kind"] in _PIPELINE_KINDS:
+        result = await _apply_cleaning_pipeline(proposal_id, row, identity)
+    else:
         raise BadRequest(f"No apply handler for proposal kind '{row['kind']}'")
-    return await _apply_cleaning_pipeline(proposal_id, row, identity)
+
+    # Separate transaction from whichever _apply_* above just ran, not the
+    # same one — ADR-0011 §2 asks for "the same transaction as the
+    # decision," which would mean threading a shared session into four
+    # handlers with otherwise no reason to share one. If this write fails
+    # after a successful apply, the proposal is still correctly applied;
+    # only this org's trust score misses one data point, which is a
+    # low-severity, self-correcting gap, not a decision left half-made.
+    if identity.role in TRUST_ELIGIBLE_ROLES:
+        async with user_session(identity.user_id) as db:
+            await record_decision(db, identity.org_id, pattern, approved=True)
+    return result
 
 
 async def _apply_cleaning_pipeline(

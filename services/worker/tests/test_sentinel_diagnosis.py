@@ -197,6 +197,25 @@ async def _proposal(proposal_id: uuid.UUID, identity: Identity) -> dict:
     return dict(row)
 
 
+async def _earn_trust(identity: Identity, pattern: str, streak: int = 20) -> None:
+    """Pre-seed what `is_auto_apply_eligible` (ADR-0011) requires — a real
+    accept/reject cycle through `decide_proposal` is exercised elsewhere
+    (`test_trust_learning.py`); this file's job is the Sentinel's own
+    detect -> diagnose -> auto-apply pipeline, which needs trust already
+    earned as a *precondition*, not as the thing under test."""
+    async with user_session(identity.user_id) as db:
+        await db.execute(
+            text(
+                "insert into public.pattern_trust_scores "
+                "(org_id, pattern_signature, approvals, rejections, consecutive_approvals, score) "
+                "values (:org, :pattern, :streak, 0, :streak, 0.9) "
+                "on conflict (org_id, pattern_signature) do update set "
+                "  consecutive_approvals = :streak, auto_apply_enabled = true"
+            ),
+            {"org": identity.org_id, "pattern": pattern, "streak": streak},
+        )
+
+
 async def test_a_second_tick_with_no_change_reports_no_drift(identity):
     source_id, schedule_id, _path = await _seed_scheduled_source(identity, auto_apply=False)
     first = await _tick(schedule_id, identity, source_id)
@@ -206,8 +225,13 @@ async def test_a_second_tick_with_no_change_reports_no_drift(identity):
     assert second["status"] == "no_drift"
 
 
-async def test_additive_schema_drift_is_proposed_and_auto_applied_when_opted_in(identity):
+async def test_additive_schema_drift_is_proposed_and_auto_applied_when_opted_in_and_trusted(identity):
     source_id, schedule_id, path = await _seed_scheduled_source(identity, auto_apply=True)
+    # ADR-0011's second gate: structural confidence alone is not enough
+    # since this org's trust in the pattern this scenario produces
+    # (pipeline_patch:imputation — MockProvider's additive-schema branch
+    # always proposes impute_categorical) has to be earned first.
+    await _earn_trust(identity, "pipeline_patch:imputation")
     assert (await _tick(schedule_id, identity, source_id))["status"] == "baseline_recorded"
 
     await _upload_and_wait(path, ADDITIVE_CSV)
@@ -222,6 +246,28 @@ async def test_additive_schema_drift_is_proposed_and_auto_applied_when_opted_in(
     assert event["proposal_id"] is not None
     proposal = await _proposal(event["proposal_id"], identity)
     assert proposal == {"status": "applied", "kind": "pipeline_patch"}
+
+
+async def test_additive_schema_drift_awaits_review_when_the_pattern_is_not_yet_trusted(identity):
+    # Same structurally-high-confidence scenario as the test above, but
+    # *without* first earning trust in the pattern — the genuinely new
+    # behavior ADR-0011 introduces: structural confidence used to be
+    # sufficient on its own (ADR-0008); now it is necessary but not
+    # sufficient.
+    source_id, schedule_id, path = await _seed_scheduled_source(identity, auto_apply=True)
+    assert (await _tick(schedule_id, identity, source_id))["status"] == "baseline_recorded"
+
+    await _upload_and_wait(path, ADDITIVE_CSV)
+    second = await _tick(schedule_id, identity, source_id)
+    assert second["status"] == "drift_detected"
+
+    result = await diagnose_drift(_CTX, second["drift_event_id"], str(identity.org_id), str(identity.user_id))
+    assert result["status"] == "proposed"
+
+    event = await _drift_event_for(source_id)
+    assert event["status"] == "proposed"
+    proposal = await _proposal(event["proposal_id"], identity)
+    assert proposal["status"] == "awaiting_review"
 
 
 async def test_additive_schema_drift_awaits_review_without_auto_apply_opt_in(identity):
