@@ -35,12 +35,14 @@ from lumen.agents.master_factory import AgentMasterFactory
 from lumen.llm.base import ToolSpec
 from lumen.sentinel import detect_drift
 from lumen_api.agents.registry import Tool, ToolRegistry, registered_steps
-from lumen_api.agents.runner import StreamingSink, provider
+from lumen_api.agents.runner import StreamingSink
 from lumen_api.apply_pipeline import apply_cleaning_pipeline
 from lumen_api.billing.quota import Decision, QuotaGate
 from lumen_api.context.store import ContextStore
 from lumen_api.datasets.store import HandleStore, SupabaseStorage
 from lumen_api.db.session import service_session, user_session
+from lumen_api.impact import compute_impact_report
+from lumen_api.llm import provider
 from lumen_api.profiling import profile_and_remember
 from lumen_api.shadow_run import ShadowRunResult, shadow_run
 from lumen_worker.glossary import detect_and_enqueue_clusters
@@ -430,6 +432,15 @@ async def diagnose_drift(
                 {"proposal": proposal_id, "id": event_uuid},
             )
 
+        # Synchronous, on purpose (ADR-0010 §4's Option D): this is exactly
+        # the case that motivates it — a Sentinel patch appearing at 6am with
+        # nobody who remembers the pipeline's assumptions in the room, so the
+        # report has to already be there when a person finally opens it.
+        await compute_impact_report(
+            org_uuid, user_uuid,
+            proposal_id=proposal_id, source_id=event["source_id"], rid=handle.rid, steps=steps,
+        )
+
         applied = False
         if confidence == "high" and event["auto_apply_enabled"]:
             applied_outcome = await apply_cleaning_pipeline(
@@ -440,6 +451,7 @@ async def diagnose_drift(
                 steps=steps,
                 rationale=f"Auto-applied by the Data Sentinel (high confidence): {rationale}",
                 run_kind="sentinel_auto_apply",
+                proposal_id=proposal_id,
             )
             async with user_session(user_uuid) as db:
                 await db.execute(

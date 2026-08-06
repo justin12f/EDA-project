@@ -1,7 +1,7 @@
 import { useState } from "react";
 
 import { apiPost } from "../../lib/api/client";
-import type { Proposal, ProposalDecision } from "../../lib/api/types";
+import type { ImpactReport, Proposal, ProposalDecision } from "../../lib/api/types";
 
 const WORD_BREAK = /_/g;
 
@@ -70,6 +70,8 @@ export function ProposalCard({
       <ProposalBody proposal={proposal} />
 
       <p className="mb-3 text-[13px] text-muted-foreground">{proposal.rationale}</p>
+
+      {proposal.impact && <ImpactPanel impact={proposal.impact} />}
 
       {error && <p className="mb-3 text-[13px] text-destructive">{error}</p>}
 
@@ -166,6 +168,45 @@ function ProposalBody({ proposal }: { proposal: Proposal }) {
     );
   }
   return null;
+}
+
+function formatMetricValue(metric: string, value: number): string {
+  return metric === "match_rate" ? `${Math.round(value * 100)}%` : value.toFixed(2);
+}
+
+/**
+ * What else this change touches (ADR-0010) — already computed by the time
+ * this card renders, never fetched separately. Only `cleaning_pipeline` /
+ * `pipeline_patch` proposals ever have one; every other kind's
+ * `proposal.impact` is null and this never mounts.
+ */
+function ImpactPanel({ impact }: { impact: ImpactReport }) {
+  const truncated = impact.dependents_total > impact.dependents_checked;
+  const coverage = truncated
+    ? `${impact.dependents_checked} of ${impact.dependents_total} dependents checked`
+    : `${impact.dependents_checked} dependent${impact.dependents_checked === 1 ? "" : "s"} checked`;
+
+  return (
+    <div className="mb-3 rounded-lg bg-secondary px-3 py-2">
+      <p className="mb-1 text-[11px] font-medium text-muted-foreground">Impact — {coverage}</p>
+      <p className="text-[13px] text-foreground">{impact.summary}</p>
+      {impact.findings.length > 0 && (
+        <ul className="mt-1.5 space-y-1">
+          {impact.findings.map((finding, index) => (
+            <li key={index} className="text-[12px] text-muted-foreground">
+              <span className="capitalize">{humanize(finding.artifact_kind)}</span>{" "}
+              {humanize(finding.metric)}: {formatMetricValue(finding.metric, finding.before)} →{" "}
+              <span
+                className={`font-medium ${finding.delta_pct < 0 ? "text-destructive" : "text-success"}`}
+              >
+                {formatMetricValue(finding.metric, finding.after)}
+              </span>
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
 }
 
 function StatusPill({ status }: { status: Proposal["status"] }) {

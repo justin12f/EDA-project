@@ -26,6 +26,7 @@ from lumen_api.auth.dependencies import Identity, current_identity, require_role
 from lumen_api.billing.stripe_client import checkout_url_for_plan_change
 from lumen_api.db.session import user_session
 from lumen_api.errors import BadRequest, Conflict, Forbidden, NotFound
+from lumen_api.lineage import record_entity_dependency
 
 # Kinds only a workspace owner may decide — spending money or changing who can
 # do what is a stricter gate than "any member can review a cleaning step".
@@ -40,14 +41,40 @@ _PIPELINE_KINDS = frozenset({"cleaning_pipeline", "pipeline_patch"})
 router = APIRouter(prefix="/v1/proposals", tags=["proposals"])
 
 _SELECT = (
-    "select id, org_id, run_id, thread_id, author_agent, kind, status, spec, "
-    "       rationale, estimate, decided_by, decided_at, applied_run_id, created_at "
-    "from public.proposals"
+    "select p.id, p.org_id, p.run_id, p.thread_id, p.author_agent, p.kind, p.status, p.spec, "
+    "       p.rationale, p.estimate, p.decided_by, p.decided_at, p.applied_run_id, p.created_at, "
+    # Already attached, never fetched separately (ADR-0010 §4's Option D) —
+    # null for every kind that never gets one (plan_change,
+    # member_role_change, entity_mapping) or hasn't finished computing yet.
+    "       ir.dependents_checked as impact_dependents_checked, "
+    "       ir.dependents_total as impact_dependents_total, "
+    "       ir.findings as impact_findings, ir.summary as impact_summary, "
+    "       ir.computed_at as impact_computed_at "
+    "from public.proposals p "
+    "left join public.impact_reports ir on ir.proposal_id = p.id"
 )
 
 
 class DecisionRequest(BaseModel):
     decision: Literal["accept", "reject"]
+
+
+def _shape(row: Any) -> dict[str, Any]:
+    data = dict(row)
+    computed_at = data.pop("impact_computed_at")
+    impact = None
+    if computed_at is not None:
+        impact = {
+            "dependents_checked": data.pop("impact_dependents_checked"),
+            "dependents_total": data.pop("impact_dependents_total"),
+            "findings": data.pop("impact_findings"),
+            "summary": data.pop("impact_summary"),
+        }
+    else:
+        for key in ("impact_dependents_checked", "impact_dependents_total", "impact_findings", "impact_summary"):
+            data.pop(key, None)
+    data["impact"] = impact
+    return data
 
 
 @router.get("")
@@ -58,18 +85,18 @@ async def list_proposals(
 ) -> dict[str, Any]:
     clauses, params = [], {}
     if thread_id is not None:
-        clauses.append("thread_id = :thread")
+        clauses.append("p.thread_id = :thread")
         params["thread"] = thread_id
     if status is not None:
-        clauses.append("status = cast(:status as public.proposal_status)")
+        clauses.append("p.status = cast(:status as public.proposal_status)")
         params["status"] = status
     where = f" where {' and '.join(clauses)}" if clauses else ""
 
     async with user_session(identity.user_id) as db:
         rows = (
-            await db.execute(text(f"{_SELECT}{where} order by created_at desc"), params)
+            await db.execute(text(f"{_SELECT}{where} order by p.created_at desc"), params)
         ).mappings().all()
-    return {"proposals": [dict(row) for row in rows]}
+    return {"proposals": [_shape(row) for row in rows]}
 
 
 @router.get("/{proposal_id}")
@@ -79,11 +106,11 @@ async def get_proposal(
 ) -> dict[str, Any]:
     async with user_session(identity.user_id) as db:
         row = (
-            await db.execute(text(f"{_SELECT} where id = :id"), {"id": proposal_id})
+            await db.execute(text(f"{_SELECT} where p.id = :id"), {"id": proposal_id})
         ).mappings().first()
     if row is None:
         raise NotFound(f"No proposal with id {proposal_id}")
-    return dict(row)
+    return _shape(row)
 
 
 @router.post("/{proposal_id}/decide")
@@ -95,7 +122,7 @@ async def decide_proposal(
 ) -> dict[str, Any]:
     async with user_session(identity.user_id) as db:
         row = (
-            await db.execute(text(f"{_SELECT} where id = :id"), {"id": proposal_id})
+            await db.execute(text(f"{_SELECT} where p.id = :id"), {"id": proposal_id})
         ).mappings().first()
     if row is None:
         raise NotFound(f"No proposal with id {proposal_id}")
@@ -141,6 +168,7 @@ async def _apply_cleaning_pipeline(
         rid=rid,
         steps=steps,
         rationale=row["rationale"],
+        proposal_id=proposal_id,
     )
 
     async with user_session(identity.user_id) as db:
@@ -274,16 +302,16 @@ async def _apply_entity_mapping(proposal_id: uuid.UUID, row: Any, identity: Iden
             ).scalar_one()
 
             for member in members:
+                source_uuid = uuid.UUID(member["source_id"])
                 await db.execute(
                     text(
                         "insert into public.canonical_entity_members (entity_id, source_id, column_name) "
                         "values (:entity, :source, :column)"
                     ),
-                    {
-                        "entity": entity_id,
-                        "source": uuid.UUID(member["source_id"]),
-                        "column": member["column"],
-                    },
+                    {"entity": entity_id, "source": source_uuid, "column": member["column"]},
+                )
+                await record_entity_dependency(
+                    db, identity.org_id, entity_id, source_uuid, member["column"]
                 )
 
             await db.execute(

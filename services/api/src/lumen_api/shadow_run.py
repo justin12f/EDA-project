@@ -1,12 +1,14 @@
 """Replay a candidate cleaning pipeline against cached data, write nothing.
 
-ADR-0008's confidence signal: before a `pipeline_patch` proposal is shown to
-anyone, this runs it against the source's current dataset handle and reports
-what changed, without materialising a result. ADR-0010 already plans to
-extract this into shared infrastructure for simulating a proposal's impact on
-*other* artifacts, not just validating the proposal itself — built as its own
-module from the start for exactly that reason, not bundled into the Sentinel
-agent that happens to be its first caller.
+Two callers now read different things out of the same replay: ADR-0008's
+confidence signal (`shadow_run`, aggregate stats only — row counts, null
+rates) and ADR-0010's dependent-impact simulation (`replay_frame`, the
+actual cleaned frame — a cross-source match-rate delta needs real values, a
+count of them does not say anything). `shadow_run` is left untouched rather
+than rebuilt on top of `replay_frame`: it already has its own, deliberately
+different error handling (a bad rid and an invalid pipeline are two
+different findings to a Sentinel deciding confidence), and there is no
+reason to risk that already-shipped behavior to save one small function.
 """
 
 from __future__ import annotations
@@ -75,3 +77,16 @@ async def shadow_run(store: HandleStore, rid: str, steps: list[dict[str, Any]]) 
         null_rates_after=null_rates(cleaned, handle.backend),
         schema_after=frame_schema(cleaned, handle.backend),
     )
+
+
+async def replay_frame(store: HandleStore, rid: str, steps: list[dict[str, Any]]) -> tuple[Any, Any]:
+    """Build and run `steps` against `rid`'s current data, in memory, and
+    return `(original_frame, cleaned_frame)` — no `store.put()`, no stats
+    wrapper. The caller already knows the pipeline validates (it came from
+    an already-created proposal), so this raises rather than swallowing an
+    error into a result shape — a genuine bug here, unlike in `shadow_run`,
+    is not the everyday "not confident" signal.
+    """
+    frame = await store.resolve(rid)
+    cleaned = PipelineBuilder(frame).build(steps).run(frame)
+    return frame, cleaned

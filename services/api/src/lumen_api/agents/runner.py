@@ -23,12 +23,12 @@ from sqlalchemy import text
 
 from lumen.agents.loop import AgentLoop
 from lumen.llm.base import TokenUsage
-from lumen.llm.registry import ModelTiers, Tier, get_provider
 from lumen_api.agents.registry import build_tool_registry
 from lumen_api.auth.dependencies import Identity
 from lumen_api.billing.quota import Decision, QuotaGate
 from lumen_api.context.store import ContextStore
 from lumen_api.db.session import user_session
+from lumen_api.llm import provider
 from lumen_api.settings import get_settings
 
 # The queue is closed by pushing this. `None` would be ambiguous with a dropped
@@ -63,24 +63,6 @@ Rules:
   giving up, but do not repeat the same failing call.
 - When you are done, answer in plain prose. No JSON, no tool syntax.
 """
-
-
-def provider(tier: Tier = "reasoning"):
-    settings = get_settings()
-    return get_provider(
-        tier,
-        anthropic_key=(
-            settings.anthropic_api_key.get_secret_value() if settings.has_anthropic else None
-        ),
-        groq_key=(settings.groq_api_key.get_secret_value() if settings.has_groq else None),
-        tiers=ModelTiers(
-            reasoning=settings.model_reasoning,
-            specialist=settings.model_specialist,
-            fast=settings.model_fast,
-        ),
-        mode=settings.llm_mode,
-        bridge_inbox=settings.llm_bridge_inbox,
-    )
 
 
 class StreamingSink:

@@ -140,6 +140,29 @@ def null_rates(frame: Any, backend: Backend | str) -> dict[str, float]:
     return {c: float(row[c] or 0) / total for c in frame.columns}
 
 
+def column_values(frame: Any, backend: Backend | str, column: str) -> set[str]:
+    """Distinct non-null values of one column, as strings — the raw material
+    for a cross-source match-rate comparison (ADR-0010's impact simulation).
+
+    Read wholesale rather than sampled: this product's dataset sizes make an
+    exact set affordable today, and a match rate computed from a sample
+    would swing on which rows happened to be drawn — a worse kind of wrong
+    than "slow." Revisit with a sampling strategy once a source is large
+    enough that this is measurably the bottleneck, not before.
+    """
+    backend = validate_backend(str(backend))
+
+    if backend == "pandas":
+        return {str(v) for v in frame[column].dropna().unique()}
+
+    if backend == "polars":
+        materialised = frame.collect() if hasattr(frame, "collect") else frame
+        return {str(v) for v in materialised[column].drop_nulls().unique().to_list()}
+
+    rows = frame.select(column).dropna().distinct().collect()
+    return {str(row[column]) for row in rows}
+
+
 def duplicate_counts(frame: Any, backend: Backend | str, columns: list[str]) -> dict[str, int]:
     """Rows beyond the first for each repeated value, per column.
 

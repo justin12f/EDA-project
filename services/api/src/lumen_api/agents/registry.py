@@ -37,6 +37,7 @@ from lumen_api.billing.quota import Decision, QuotaGate
 from lumen_api.context.store import ContextEntry, ContextStore, Kind, Scope
 from lumen_api.datasets.store import HandleStore
 from lumen_api.db.session import user_session
+from lumen_api.impact import compute_impact_report
 from lumen_api.jsonable import jsonable
 from lumen_api.profiling import profile_and_remember
 
@@ -217,6 +218,16 @@ def build_tool_registry(
                         },
                     )
                 ).scalar_one()
+
+            # Synchronous, on purpose (ADR-0010 §4's Option D): computed now
+            # so the report is already attached by the time anyone opens the
+            # review screen, never while they wait on it.
+            handle = await store.get(rid)
+            if handle.source_id is not None:
+                await compute_impact_report(
+                    org_id, user_id,
+                    proposal_id=proposal_id, source_id=handle.source_id, rid=rid, steps=steps,
+                )
 
         return {
             "ok": True,

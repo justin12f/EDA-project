@@ -30,6 +30,27 @@ export interface Proposal {
   rationale: string;
   applied_run_id: string | null;
   created_at: string;
+  // ADR-0010: already computed by the time this proposal is fetched (never
+  // a separate round trip) — null for every kind that never gets one
+  // (entity_mapping has no "before vs after data" to diff; plan_change and
+  // member_role_change touch no source at all).
+  impact: ImpactReport | null;
+}
+
+export interface ImpactFinding {
+  artifact_kind: "pipeline" | "canonical_entity" | "analysis_widget" | (string & {});
+  artifact_id: string;
+  metric: string;
+  before: number;
+  after: number;
+  delta_pct: number;
+}
+
+export interface ImpactReport {
+  dependents_checked: number;
+  dependents_total: number;
+  findings: ImpactFinding[];
+  summary: string;
 }
 
 // ADR-0008: a source's scheduled drift scan, and what it has found.

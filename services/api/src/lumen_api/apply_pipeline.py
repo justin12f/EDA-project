@@ -19,6 +19,7 @@ from lumen_api.context.store import ContextEntry, ContextStore, Kind
 from lumen_api.datasets.store import HandleStore
 from lumen_api.db.session import user_session
 from lumen_api.jsonable import jsonable
+from lumen_api.lineage import replace_pipeline_dependency, touched_columns
 
 
 async def apply_cleaning_pipeline(
@@ -30,12 +31,19 @@ async def apply_cleaning_pipeline(
     steps: list[dict[str, Any]],
     rationale: str,
     run_kind: str = "apply_pipeline",
+    proposal_id: uuid.UUID | None = None,
 ) -> dict[str, Any]:
     """Runs `steps` against `rid`, writes the cleaned frame as a new handle,
     records a `runs` row, and remembers the outcome as an org-scoped fact.
     Returns the new handle's facts and a human-readable report — everything a
     caller needs to close out whatever proposal asked for this, without this
     function knowing what a proposal is.
+
+    Also registers this as the source's current `ArtifactDependency`
+    (ADR-0010) — `proposal_id` is what a later impact report calls this
+    pipeline's `artifact_id`; falls back to the new run's own id when there
+    is no proposal (there always is one today, but this function should not
+    assume that of every future caller).
     """
     store = HandleStore(org_id, user_id)
     handle = await store.get(rid)
@@ -70,6 +78,15 @@ async def apply_cleaning_pipeline(
                 },
             )
         ).scalar_one()
+
+        if handle.source_id is not None:
+            await replace_pipeline_dependency(
+                db,
+                org_id,
+                handle.source_id,
+                proposal_id or new_run_id,
+                touched_columns(steps, handle.schema),
+            )
 
     summary = _report_summary(pipeline.report)
     try:

@@ -23,7 +23,8 @@ from sqlalchemy import text
 from lumen.agents.loop import AgentLoop
 from lumen.llm.base import ToolSpec
 from lumen_api.agents.registry import Tool, ToolRegistry
-from lumen_api.agents.runner import StreamingSink, provider
+from lumen_api.agents.runner import StreamingSink
+from lumen_api.llm import provider
 from lumen_api.billing.quota import Decision, QuotaGate
 from lumen_api.context.store import ContextStore, Kind, Scope
 from lumen_api.datasets.store import DatasetHandle
