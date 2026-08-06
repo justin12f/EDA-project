@@ -34,10 +34,19 @@ import numpy as np
 from lumen.prediction import PredictorRegistry, Task
 from lumen.prediction.extract import to_series
 from lumen.prediction.timeseries import detect_season
+from lumen_api.billing.quota import Decision, QuotaGate
 from lumen_api.context.store import ContextEntry, ContextStore, Kind, Scope
 from lumen_api.datasets.store import HandleStore
 from lumen_api.db.session import user_session
 from lumen_api.jsonable import jsonable
+
+# Read-mostly account tools (ADR-0004's AdminAgent). Kept in the same flat
+# registry as the data tools rather than a second orchestrator: the current
+# system is one agent with a tool registry, not a supervisor of named
+# specialist agents, and "AdminAgent" is a scope of tools, not a separate
+# process to stand up.
+PLAN_ORDER = ("free", "pro", "team", "ent")
+QUOTA_METRICS = ("llm_input_tokens", "llm_output_tokens", "agent_run")
 
 Handler = Callable[..., Awaitable[dict[str, Any]]]
 
@@ -400,6 +409,214 @@ def build_tool_registry(
         )
         return {"ok": True, "data": {"id": str(entry_id), "scope": "user"}}
 
+    # ── account tools (ADR-0004) ──────────────────────────────────────────
+
+    gate = QuotaGate(org_id, user_id)
+
+    async def get_usage() -> dict[str, Any]:
+        statuses = [await gate.status(m) for m in QUOTA_METRICS]
+        return {"ok": True, "data": {"period": "current_month", "usage": [s.as_dict() for s in statuses]}}
+
+    async def get_quota_status() -> dict[str, Any]:
+        statuses = [await gate.status(m) for m in QUOTA_METRICS]
+        return {
+            "ok": True,
+            "data": {
+                "statuses": [s.as_dict() for s in statuses],
+                "blocked": [s.metric for s in statuses if s.decision == Decision.DENY],
+                "warned": [s.metric for s in statuses if s.decision == Decision.WARN],
+            },
+        }
+
+    async def explain_cost(run_id_arg: str) -> dict[str, Any]:
+        async with user_session(user_id) as db:
+            rows = (
+                await db.execute(
+                    text(
+                        "select metric, quantity, cost_micros, agent, occurred_at "
+                        "from public.usage_records where run_id = :run and org_id = :org "
+                        "order by occurred_at"
+                    ),
+                    {"run": uuid.UUID(run_id_arg), "org": org_id},
+                )
+            ).mappings().all()
+        if not rows:
+            return {"ok": False, "error": f"No usage recorded for run '{run_id_arg}'."}
+        return {"ok": True, "data": {"run_id": run_id_arg, "records": jsonable([dict(r) for r in rows])}}
+
+    async def list_members() -> dict[str, Any]:
+        async with user_session(user_id) as db:
+            rows = (
+                await db.execute(
+                    text(
+                        "select m.user_id, p.email, p.display_name, m.role, m.created_at "
+                        "from public.memberships m join public.profiles p on p.id = m.user_id "
+                        "where m.org_id = :org order by m.created_at"
+                    ),
+                    {"org": org_id},
+                )
+            ).mappings().all()
+        return {"ok": True, "data": {"members": jsonable([dict(r) for r in rows])}}
+
+    async def recommend_plan() -> dict[str, Any]:
+        async with user_session(user_id) as db:
+            current = (
+                await db.execute(
+                    text("select plan_code from public.organizations where id = :org"), {"org": org_id}
+                )
+            ).scalar_one()
+        statuses = [await gate.status(m) for m in QUOTA_METRICS]
+        pressured = [s.metric for s in statuses if s.decision != Decision.ALLOW]
+        if not pressured:
+            return {
+                "ok": True,
+                "data": {
+                    "current_plan": current,
+                    "recommendation": current,
+                    "reason": "usage is comfortably within the current plan this period",
+                },
+            }
+        index = PLAN_ORDER.index(current) if current in PLAN_ORDER else 0
+        next_plan = PLAN_ORDER[min(index + 1, len(PLAN_ORDER) - 1)]
+        return {
+            "ok": True,
+            "data": {
+                "current_plan": current,
+                "recommendation": next_plan,
+                "reason": (
+                    f"{', '.join(m.replace('_', ' ') for m in pressured)} at or above 80% of the "
+                    f"'{current}' plan's limit this period"
+                ),
+            },
+        }
+
+    async def suggest_cost_optimisation() -> dict[str, Any]:
+        async with user_session(user_id) as db:
+            rows = (
+                await db.execute(
+                    text(
+                        "select metric, sum(quantity) as total, count(distinct run_id) as run_count "
+                        "from public.usage_records "
+                        "where org_id = :org and occurred_at >= date_trunc('month', now()) "
+                        "group by metric order by total desc limit 3"
+                    ),
+                    {"org": org_id},
+                )
+            ).mappings().all()
+        if not rows:
+            return {"ok": True, "data": {"suggestions": [], "note": "No usage recorded yet this period."}}
+        top = rows[0]
+        suggestion = (
+            f"{top['metric'].replace('_', ' ')} is the largest cost driver this period — "
+            f"{int(top['total'])} across {top['run_count']} run(s)."
+        )
+        return {
+            "ok": True,
+            "data": {"top_metric": jsonable(dict(top)), "suggestions": [suggestion]},
+        }
+
+    async def propose_plan_change(plan_code: str, rationale: str) -> dict[str, Any]:
+        async with user_session(user_id) as db:
+            plan = (
+                await db.execute(
+                    text("select code, price_cents from public.plans where code = :code"),
+                    {"code": plan_code},
+                )
+            ).mappings().first()
+            if plan is None:
+                return {
+                    "ok": False,
+                    "error": f"Unknown plan '{plan_code}'. Available: {', '.join(PLAN_ORDER)}.",
+                }
+            current = (
+                await db.execute(
+                    text("select plan_code from public.organizations where id = :org"), {"org": org_id}
+                )
+            ).scalar_one()
+            if current == plan_code:
+                return {"ok": False, "error": f"This workspace is already on the '{plan_code}' plan."}
+
+        proposal_id: uuid.UUID | None = None
+        if run_id is not None:
+            async with user_session(user_id) as db:
+                proposal_id = (
+                    await db.execute(
+                        text(
+                            "insert into public.proposals "
+                            "(org_id, run_id, thread_id, author_agent, kind, spec, rationale) "
+                            "values (:org, :run, :thread, 'admin', 'plan_change', "
+                            "        cast(:spec as jsonb), :rationale) returning id"
+                        ),
+                        {
+                            "org": org_id,
+                            "run": run_id,
+                            "thread": thread_id or run_id,
+                            "spec": json.dumps({"plan_code": plan_code, "price_cents": plan["price_cents"]}),
+                            "rationale": rationale,
+                        },
+                    )
+                ).scalar_one()
+        return {
+            "ok": True,
+            "data": {
+                "plan_code": plan_code,
+                "proposal_id": str(proposal_id) if proposal_id else None,
+            },
+        }
+
+    async def propose_member_role_change(target_user_id: str, role: str) -> dict[str, Any]:
+        valid_roles = {"owner", "admin", "member", "viewer"}
+        if role not in valid_roles:
+            return {"ok": False, "error": f"'{role}' is not a role. Use one of: {', '.join(sorted(valid_roles))}."}
+
+        async with user_session(user_id) as db:
+            member = (
+                await db.execute(
+                    text(
+                        "select p.display_name, m.role from public.memberships m "
+                        "join public.profiles p on p.id = m.user_id "
+                        "where m.org_id = :org and m.user_id = :target"
+                    ),
+                    {"org": org_id, "target": uuid.UUID(target_user_id)},
+                )
+            ).mappings().first()
+        if member is None:
+            return {"ok": False, "error": "No member with that user id in this workspace."}
+        if str(member["role"]) == role:
+            return {"ok": False, "error": f"{member['display_name']} already has the '{role}' role."}
+
+        proposal_id: uuid.UUID | None = None
+        if run_id is not None:
+            async with user_session(user_id) as db:
+                proposal_id = (
+                    await db.execute(
+                        text(
+                            "insert into public.proposals "
+                            "(org_id, run_id, thread_id, author_agent, kind, spec, rationale) "
+                            "values (:org, :run, :thread, 'admin', 'member_role_change', "
+                            "        cast(:spec as jsonb), :rationale) returning id"
+                        ),
+                        {
+                            "org": org_id,
+                            "run": run_id,
+                            "thread": thread_id or run_id,
+                            "spec": json.dumps(
+                                {"user_id": target_user_id, "role": role, "previous_role": str(member["role"])}
+                            ),
+                            "rationale": f"Change {member['display_name']}'s role from "
+                            f"{member['role']} to {role}.",
+                        },
+                    )
+                ).scalar_one()
+        return {
+            "ok": True,
+            "data": {
+                "user_id": target_user_id,
+                "role": role,
+                "proposal_id": str(proposal_id) if proposal_id else None,
+            },
+        }
+
     tools = [
         Tool(
             ToolSpec(
@@ -604,6 +821,103 @@ def build_tool_registry(
                 },
             ),
             forecast_series,
+        ),
+        Tool(
+            ToolSpec(
+                name="get_usage",
+                description=(
+                    "This workspace's usage against its plan limits for the current calendar "
+                    "month: LLM input/output tokens and agent runs."
+                ),
+                input_schema={"type": "object", "properties": {}, "required": []},
+            ),
+            get_usage,
+        ),
+        Tool(
+            ToolSpec(
+                name="get_quota_status",
+                description=(
+                    "Whether any metric is at or near its limit right now — call this before "
+                    "telling someone a run failed or was refused, to say why."
+                ),
+                input_schema={"type": "object", "properties": {}, "required": []},
+            ),
+            get_quota_status,
+        ),
+        Tool(
+            ToolSpec(
+                name="explain_cost",
+                description="Itemized usage records for one run, to answer 'why did this cost what it cost'.",
+                input_schema={
+                    "type": "object",
+                    "properties": {"run_id_arg": {"type": "string", "description": "The run's id."}},
+                    "required": ["run_id_arg"],
+                },
+            ),
+            explain_cost,
+        ),
+        Tool(
+            ToolSpec(
+                name="list_members",
+                description="Everyone in this workspace and their role.",
+                input_schema={"type": "object", "properties": {}, "required": []},
+            ),
+            list_members,
+        ),
+        Tool(
+            ToolSpec(
+                name="recommend_plan",
+                description=(
+                    "Whether this workspace's current usage suggests upgrading, based on how "
+                    "close it is to its plan's limits this period."
+                ),
+                input_schema={"type": "object", "properties": {}, "required": []},
+            ),
+            recommend_plan,
+        ),
+        Tool(
+            ToolSpec(
+                name="suggest_cost_optimisation",
+                description="The largest cost driver this period, as a starting point for reducing it.",
+                input_schema={"type": "object", "properties": {}, "required": []},
+            ),
+            suggest_cost_optimisation,
+        ),
+        Tool(
+            ToolSpec(
+                name="propose_plan_change",
+                description=(
+                    "Propose changing this workspace's plan. A person with the owner role must "
+                    "accept it — this never changes billing on its own."
+                ),
+                input_schema={
+                    "type": "object",
+                    "properties": {
+                        "plan_code": {"type": "string", "enum": list(PLAN_ORDER)},
+                        "rationale": {"type": "string"},
+                    },
+                    "required": ["plan_code", "rationale"],
+                },
+            ),
+            propose_plan_change,
+        ),
+        Tool(
+            ToolSpec(
+                name="propose_member_role_change",
+                description=(
+                    "Propose changing a member's role. A person with the owner role must accept "
+                    "it — this never changes a permission on its own."
+                ),
+                input_schema={
+                    "type": "object",
+                    "properties": {
+                        "target_user_id": {"type": "string"},
+                        "role": {"type": "string", "enum": ["owner", "admin", "member", "viewer"]},
+                    },
+                    "required": ["target_user_id", "role"],
+                },
+            ),
+            propose_member_role_change,
         ),
     ]
     return ToolRegistry(tools)

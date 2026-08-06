@@ -97,6 +97,21 @@ class Settings(BaseSettings):
     agent_deadline_seconds: float = 180.0
     agent_max_total_tokens: int = 120_000
 
+    # ── Billing (ADR-0004) ──────────────────────────────────────────────────
+    #
+    # Absent by default, same posture as the LLM keys: a plan-change proposal
+    # still validates and records a decision with no key configured, it just
+    # cannot hand back a real Checkout URL — the accept path says so plainly
+    # rather than failing or pretending to redirect somewhere real.
+    stripe_secret_key: SecretStr | None = None
+    stripe_webhook_secret: SecretStr | None = None
+    app_base_url: str = "http://localhost:3000"
+
+    @property
+    def has_stripe(self) -> bool:
+        raw = _raw(self.stripe_secret_key)
+        return bool(raw) and _is_real(raw) and raw.startswith("sk_")
+
     # ── Embeddings ──────────────────────────────────────────────────────────
     embedding_provider: EmbeddingProviderName = "fastembed"
     embedding_model: str = "BAAI/bge-small-en-v1.5"

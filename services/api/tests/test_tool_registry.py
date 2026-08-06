@@ -108,6 +108,16 @@ async def test_the_registry_exposes_the_expected_tools(person):
         "list_predictors",
         "compare_predictors",
         "forecast_series",
+        # ADR-0004's account tools — read-mostly, plus two proposal kinds
+        # only a workspace owner may decide (see test_billing.py).
+        "get_usage",
+        "get_quota_status",
+        "explain_cost",
+        "list_members",
+        "recommend_plan",
+        "suggest_cost_optimisation",
+        "propose_plan_change",
+        "propose_member_role_change",
     }
 
 

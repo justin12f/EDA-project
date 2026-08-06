@@ -4,7 +4,7 @@ import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { ChatPanel } from "../components/app/ChatPanel";
 import { SourcesSidebar } from "../components/app/SourcesSidebar";
 import { apiGet, apiUpload } from "../lib/api/client";
-import type { Proposal, Source, TranscriptItem } from "../lib/api/types";
+import type { Proposal, Source, TranscriptItem, UsageSummary } from "../lib/api/types";
 import { useRequireSession } from "../lib/hooks/useSession";
 import { signOut } from "../lib/supabase/auth";
 import { replayTranscript } from "../lib/transcript";
@@ -55,6 +55,7 @@ function AppShell({ fallbackEmail, urlThread }: { fallbackEmail: string; urlThre
   const [sources, setSources] = useState<Source[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [proposals, setProposals] = useState<Proposal[]>([]);
+  const [usage, setUsage] = useState<UsageSummary | null>(null);
   const [uploading, setUploading] = useState(false);
   const [uploadError, setUploadError] = useState<string | null>(null);
   // Undefined while a reopened thread's history is still loading, so
@@ -76,10 +77,23 @@ function AppShell({ fallbackEmail, urlThread }: { fallbackEmail: string; urlThre
     setProposals(response.proposals);
   }, [threadId]);
 
+  const refetchUsage = useCallback(async () => {
+    setUsage(await apiGet<UsageSummary>("/v1/usage"));
+  }, []);
+
+  // Every chat turn and every proposal decision can spend quota — refresh
+  // both together rather than adding a second callback to thread through
+  // ChatPanel and ProposalCard for what is, from their point of view, the
+  // same "something happened, re-read my state" moment.
+  const refetchProposalsAndUsage = useCallback(async () => {
+    await Promise.all([refetchProposals(), refetchUsage()]);
+  }, [refetchProposals, refetchUsage]);
+
   useEffect(() => {
     apiGet<Me>("/v1/me").then(setMe).catch(() => {});
     refetchSources().catch(() => {});
-  }, [refetchSources]);
+    refetchUsage().catch(() => {});
+  }, [refetchSources, refetchUsage]);
 
   useEffect(() => {
     if (!urlThread) {
@@ -142,6 +156,7 @@ function AppShell({ fallbackEmail, urlThread }: { fallbackEmail: string; urlThre
         orgName={me?.org_name ?? "Workspace"}
         email={me?.email ?? fallbackEmail}
         onSignOut={() => void signOut()}
+        usage={usage}
       />
       {initialItems === undefined ? (
         <div className="flex flex-1 items-center justify-center">
@@ -152,7 +167,7 @@ function AppShell({ fallbackEmail, urlThread }: { fallbackEmail: string; urlThre
           threadId={threadId}
           selectedSource={selectedSource}
           proposals={proposals}
-          onProposalsChanged={refetchProposals}
+          onProposalsChanged={refetchProposalsAndUsage}
           initialItems={initialItems}
         />
       )}

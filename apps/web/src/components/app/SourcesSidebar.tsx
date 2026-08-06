@@ -1,7 +1,8 @@
 import { useRef } from "react";
 
 import { cn } from "../../lib/cn";
-import type { Source } from "../../lib/api/types";
+import type { Source, UsageSummary } from "../../lib/api/types";
+import { UsagePanel } from "./UsagePanel";
 
 const STATUS_DOT: Record<Source["status"], string> = {
   idle: "bg-muted-foreground",
@@ -21,6 +22,7 @@ export function SourcesSidebar({
   orgName,
   email,
   onSignOut,
+  usage,
 }: {
   sources: Source[];
   selectedId: string | null;
@@ -32,6 +34,7 @@ export function SourcesSidebar({
   orgName: string;
   email: string;
   onSignOut: () => void;
+  usage: UsageSummary | null;
 }) {
   const fileInput = useRef<HTMLInputElement>(null);
 
@@ -122,6 +125,8 @@ export function SourcesSidebar({
           ))}
         </ul>
       </div>
+
+      <UsagePanel usage={usage} />
 
       <div className="flex items-center justify-between border-t border-sidebar-border px-4 py-3">
         <span className="truncate text-[12px] text-muted-foreground">{email}</span>

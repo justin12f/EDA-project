@@ -21,11 +21,16 @@ from sqlalchemy import text
 
 from lumen.data_cleaning.data_cleaning_pipeline import PipelineBuilder
 from lumen_api.auth.dependencies import Identity, current_identity, require_role
+from lumen_api.billing.stripe_client import checkout_url_for_plan_change
 from lumen_api.context.store import ContextEntry, ContextStore, Kind
 from lumen_api.datasets.store import HandleStore
 from lumen_api.db.session import user_session
-from lumen_api.errors import BadRequest, Conflict, NotFound
+from lumen_api.errors import BadRequest, Conflict, Forbidden, NotFound
 from lumen_api.jsonable import jsonable
+
+# Kinds only a workspace owner may decide — spending money or changing who can
+# do what is a stricter gate than "any member can review a cleaning step".
+_OWNER_ONLY_KINDS = frozenset({"plan_change", "member_role_change"})
 
 router = APIRouter(prefix="/v1/proposals", tags=["proposals"])
 
@@ -91,6 +96,8 @@ async def decide_proposal(
         raise NotFound(f"No proposal with id {proposal_id}")
     if row["status"] != "awaiting_review":
         raise Conflict(f"Proposal is already '{row['status']}', not awaiting review")
+    if row["kind"] in _OWNER_ONLY_KINDS and identity.role != "owner":
+        raise Forbidden(f"Only a workspace owner can decide a '{row['kind']}' proposal")
 
     if body.decision == "reject":
         async with user_session(identity.user_id) as db:
@@ -103,6 +110,18 @@ async def decide_proposal(
             )
         return {"id": str(proposal_id), "status": "rejected"}
 
+    if row["kind"] == "plan_change":
+        return await _apply_plan_change(proposal_id, row, identity)
+    if row["kind"] == "member_role_change":
+        return await _apply_member_role_change(proposal_id, row, identity)
+    if row["kind"] != "cleaning_pipeline":
+        raise BadRequest(f"No apply handler for proposal kind '{row['kind']}'")
+    return await _apply_cleaning_pipeline(proposal_id, row, identity)
+
+
+async def _apply_cleaning_pipeline(
+    proposal_id: uuid.UUID, row: Any, identity: Identity
+) -> dict[str, Any]:
     spec = dict(row["spec"] or {})
     rid, steps = spec.get("rid"), spec.get("steps")
     if not rid or not steps:
@@ -185,3 +204,77 @@ def _report_summary(report: Any) -> str:
             )
         lines.append(f"- {step['name']}: {'; '.join(parts) or 'no measurable change'}")
     return "\n".join(lines) if lines else "No steps recorded."
+
+
+async def _apply_plan_change(proposal_id: uuid.UUID, row: Any, identity: Identity) -> dict[str, Any]:
+    spec = dict(row["spec"] or {})
+    plan_code = spec.get("plan_code")
+    if not plan_code:
+        raise BadRequest("This proposal's spec is missing 'plan_code'")
+
+    async with user_session(identity.user_id) as db:
+        # Both copies, in the same transaction: organizations.plan_code is the
+        # fast-read denormalized value current_identity() serves;
+        # subscriptions is the billing-detail record. They must never disagree.
+        await db.execute(
+            text("update public.organizations set plan_code = :plan where id = :org"),
+            {"plan": plan_code, "org": identity.org_id},
+        )
+        await db.execute(
+            text(
+                "update public.subscriptions set plan_code = :plan, updated_at = now() "
+                "where org_id = :org"
+            ),
+            {"plan": plan_code, "org": identity.org_id},
+        )
+        await db.execute(
+            text(
+                "update public.proposals set status = 'applied', decided_by = :user, "
+                "       decided_at = now() where id = :id"
+            ),
+            {"user": identity.user_id, "id": proposal_id},
+        )
+
+    checkout_url = checkout_url_for_plan_change(
+        identity.org_id, plan_code, int(spec.get("price_cents") or 0)
+    )
+    return {
+        "id": str(proposal_id),
+        "status": "applied",
+        "plan_code": plan_code,
+        "checkout_url": checkout_url,
+        "note": (
+            None
+            if checkout_url
+            else "Stripe is not configured — the plan changed in the app; no payment was collected."
+        ),
+    }
+
+
+async def _apply_member_role_change(
+    proposal_id: uuid.UUID, row: Any, identity: Identity
+) -> dict[str, Any]:
+    spec = dict(row["spec"] or {})
+    target_user_id, role = spec.get("user_id"), spec.get("role")
+    if not target_user_id or not role:
+        raise BadRequest("This proposal's spec is missing 'user_id' or 'role'")
+
+    async with user_session(identity.user_id) as db:
+        result = await db.execute(
+            text(
+                "update public.memberships set role = cast(:role as public.org_role) "
+                "where org_id = :org and user_id = :target"
+            ),
+            {"role": role, "org": identity.org_id, "target": uuid.UUID(target_user_id)},
+        )
+        if result.rowcount == 0:
+            raise NotFound("That member is no longer part of this workspace.")
+        await db.execute(
+            text(
+                "update public.proposals set status = 'applied', decided_by = :user, "
+                "       decided_at = now() where id = :id"
+            ),
+            {"user": identity.user_id, "id": proposal_id},
+        )
+
+    return {"id": str(proposal_id), "status": "applied", "user_id": target_user_id, "role": role}

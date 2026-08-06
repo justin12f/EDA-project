@@ -26,6 +26,7 @@ from lumen.llm.base import TokenUsage
 from lumen.llm.registry import ModelTiers, get_provider
 from lumen_api.agents.registry import build_tool_registry
 from lumen_api.auth.dependencies import Identity
+from lumen_api.billing.quota import Decision, QuotaGate
 from lumen_api.context.store import ContextStore
 from lumen_api.db.session import user_session
 from lumen_api.settings import get_settings
@@ -48,8 +49,16 @@ How to work:
    question is about what happens next.
 5. `remember_decision` when you learn something worth having next time.
 
+You can also answer questions about the account itself — usage, quota, cost,
+members, plan — with `get_usage`, `get_quota_status`, `explain_cost`,
+`list_members`, `recommend_plan` and `suggest_cost_optimisation`. These are
+read-only. `propose_plan_change` and `propose_member_role_change` create a
+proposal the same way a cleaning pipeline does; only a workspace owner can
+accept one, and neither changes anything on its own.
+
 Rules:
-- You propose; a person accepts. You never apply a pipeline yourself.
+- You propose; a person accepts. You never apply a pipeline yourself, never
+  change a plan yourself, never change a member's role yourself.
 - A tool that fails returns an error you can read. Try another route rather than
   giving up, but do not repeat the same failing call.
 - When you are done, answer in plain prose. No JSON, no tool syntax.
@@ -87,7 +96,12 @@ class StreamingSink:
         self._user_id = user_id
         self._run_id = run_id
         self.queue: asyncio.Queue[Any] = asyncio.Queue()
-        self.tokens = 0
+        self.input_tokens = 0
+        self.output_tokens = 0
+
+    @property
+    def tokens(self) -> int:
+        return self.input_tokens + self.output_tokens
 
     async def emit(self, type_: str, payload: dict[str, Any]) -> None:
         async with user_session(self._user_id) as db:
@@ -111,7 +125,8 @@ class StreamingSink:
         )
 
     async def record_usage(self, usage: TokenUsage) -> None:
-        self.tokens += usage.total
+        self.input_tokens += usage.input_tokens
+        self.output_tokens += usage.output_tokens
 
 
 async def stream_run(
@@ -131,6 +146,37 @@ async def stream_run(
     """
     settings = get_settings()
     thread = thread_id or uuid.uuid4()
+    gate = QuotaGate(identity.org_id, identity.user_id)
+
+    # Admission, before anything is created: a run this org cannot afford to
+    # start should never produce a `runs` row at all, let alone spend a token.
+    run_quota, input_quota, output_quota = (
+        await gate.status("agent_run"),
+        await gate.status("llm_input_tokens"),
+        await gate.status("llm_output_tokens"),
+    )
+    if Decision.DENY in (run_quota.decision, input_quota.decision, output_quota.decision):
+        blocking = next(
+            s for s in (run_quota, input_quota, output_quota) if s.decision == Decision.DENY
+        )
+        yield {
+            "type": "done",
+            "payload": {
+                "run_id": None,
+                "text": None,
+                "stop_reason": "quota_exceeded",
+                "tokens": 0,
+                "error": (
+                    f"Monthly {blocking.metric.replace('_', ' ')} quota reached "
+                    f"({int(blocking.used)}/{int(blocking.limit)}). Upgrade your plan to continue."
+                ),
+            },
+        }
+        return
+    quota_warning = next(
+        (s.metric for s in (run_quota, input_quota, output_quota) if s.decision == Decision.WARN),
+        None,
+    )
 
     async with user_session(identity.user_id) as db:
         run_id = (
@@ -150,8 +196,20 @@ async def stream_run(
                 },
             )
         ).scalar_one()
+        # Metered at admission, in the same transaction as the run it belongs
+        # to: an attempted run costs quota whether or not it goes on to
+        # succeed, and this is the row that makes "started but never billed"
+        # impossible rather than merely unlikely.
+        await gate.record(db, metric="agent_run", quantity=1, agent="analyst", run_id=run_id)
 
-    yield {"type": "run_started", "payload": {"run_id": str(run_id), "thread_id": str(thread)}}
+    yield {
+        "type": "run_started",
+        "payload": {
+            "run_id": str(run_id),
+            "thread_id": str(thread),
+            "quota_warning": quota_warning,
+        },
+    }
 
     sink = StreamingSink(identity.org_id, identity.user_id, run_id)
     # `agent_events.type` has no "user_message" value — the enum's "message" is
@@ -161,6 +219,17 @@ async def stream_run(
     registry = build_tool_registry(
         identity.org_id, identity.user_id, backend, run_id=run_id, thread_id=thread
     )
+
+    # The remaining token budget becomes this run's ceiling: a plan-aware bound
+    # the engine's own loop already knows how to stop cleanly at (`stop_reason
+    # == "budget"`), rather than a second, separate enforcement mechanism.
+    remaining_input = await gate.remaining("llm_input_tokens")
+    remaining_output = await gate.remaining("llm_output_tokens")
+    token_ceiling = settings.agent_max_total_tokens
+    if remaining_input is not None or remaining_output is not None:
+        remaining_total = (remaining_input or 0) + (remaining_output or 0)
+        token_ceiling = max(1, min(token_ceiling, int(remaining_total)))
+
     loop = AgentLoop(
         _provider(),
         registry,
@@ -168,7 +237,7 @@ async def stream_run(
         sink=sink,
         max_iterations=settings.agent_max_iterations,
         deadline_seconds=settings.agent_deadline_seconds,
-        max_total_tokens=settings.agent_max_total_tokens,
+        max_total_tokens=token_ceiling,
     )
 
     briefing = await _briefing(identity, source_id)
@@ -200,6 +269,18 @@ async def stream_run(
                 "id": run_id,
             },
         )
+        # Same transaction as the status update that closes the run out —
+        # actual spend, not the admission-time estimate.
+        if sink.input_tokens:
+            await gate.record(
+                db, metric="llm_input_tokens", quantity=sink.input_tokens,
+                agent="analyst", run_id=run_id,
+            )
+        if sink.output_tokens:
+            await gate.record(
+                db, metric="llm_output_tokens", quantity=sink.output_tokens,
+                agent="analyst", run_id=run_id,
+            )
 
     done_payload = {
         "run_id": str(run_id),
