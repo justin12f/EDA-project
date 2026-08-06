@@ -1,7 +1,8 @@
 import { useRef } from "react";
+import { Link } from "@tanstack/react-router";
 
 import { cn } from "../../lib/cn";
-import type { Source, UsageSummary } from "../../lib/api/types";
+import type { Certification, Source, UsageSummary } from "../../lib/api/types";
 import { UsagePanel } from "./UsagePanel";
 
 const STATUS_DOT: Record<Source["status"], string> = {
@@ -13,6 +14,7 @@ const STATUS_DOT: Record<Source["status"], string> = {
 
 export function SourcesSidebar({
   sources,
+  certifications,
   selectedId,
   onSelect,
   onUpload,
@@ -25,6 +27,9 @@ export function SourcesSidebar({
   usage,
 }: {
   sources: Source[];
+  /** Keyed by source id — a source missing here just shows no badge (not
+   * yet checked, or the certification fetch failed). */
+  certifications: Record<string, Certification>;
   selectedId: string | null;
   onSelect: (id: string | null) => void;
   onUpload: (file: File) => void;
@@ -102,27 +107,40 @@ export function SourcesSidebar({
         )}
 
         <ul className="space-y-0.5">
-          {sources.map((source) => (
-            <li key={source.id}>
-              <button
-                onClick={() => onSelect(source.id)}
-                className={cn(
-                  "flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left transition",
-                  selectedId === source.id
-                    ? "bg-primary-tint text-primary"
-                    : "text-sidebar-foreground hover:bg-secondary",
-                )}
-              >
-                <span className={cn("h-1.5 w-1.5 shrink-0 rounded-full", STATUS_DOT[source.status])} />
-                <span className="min-w-0 flex-1">
-                  <span className="block truncate text-[13px]">{source.name}</span>
-                  <span className="block truncate text-[11px] text-muted-foreground">
-                    {source.kind} · {source.row_count?.toLocaleString() ?? "—"} rows
+          {sources.map((source) => {
+            const certified = certifications[source.id]?.certified ?? false;
+            return (
+              <li key={source.id}>
+                <button
+                  onClick={() => onSelect(source.id)}
+                  className={cn(
+                    "flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left transition",
+                    selectedId === source.id
+                      ? "bg-primary-tint text-primary"
+                      : "text-sidebar-foreground hover:bg-secondary",
+                  )}
+                >
+                  <span className={cn("h-1.5 w-1.5 shrink-0 rounded-full", STATUS_DOT[source.status])} />
+                  <span className="min-w-0 flex-1">
+                    <span className="flex items-center gap-1.5">
+                      <span className="block truncate text-[13px]">{source.name}</span>
+                      {certified && (
+                        <span
+                          title="Certified: no open drift, pipeline reviewed, mapped columns resolve cleanly"
+                          className="shrink-0 rounded-full bg-success-tint px-1.5 py-0.5 text-[10px] font-medium text-success"
+                        >
+                          ✓ certified
+                        </span>
+                      )}
+                    </span>
+                    <span className="block truncate text-[11px] text-muted-foreground">
+                      {source.kind} · {source.row_count?.toLocaleString() ?? "—"} rows
+                    </span>
                   </span>
-                </span>
-              </button>
-            </li>
-          ))}
+                </button>
+              </li>
+            );
+          })}
         </ul>
       </div>
 
@@ -130,12 +148,20 @@ export function SourcesSidebar({
 
       <div className="flex items-center justify-between border-t border-sidebar-border px-4 py-3">
         <span className="truncate text-[12px] text-muted-foreground">{email}</span>
-        <button
-          onClick={onSignOut}
-          className="shrink-0 text-[12px] font-medium text-muted-foreground hover:text-foreground"
-        >
-          Sign out
-        </button>
+        <div className="flex shrink-0 items-center gap-3">
+          <Link
+            to="/settings"
+            className="text-[12px] font-medium text-muted-foreground hover:text-foreground"
+          >
+            API keys
+          </Link>
+          <button
+            onClick={onSignOut}
+            className="text-[12px] font-medium text-muted-foreground hover:text-foreground"
+          >
+            Sign out
+          </button>
+        </div>
       </div>
     </aside>
   );

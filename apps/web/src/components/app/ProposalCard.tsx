@@ -19,6 +19,7 @@ const KIND_LABEL: Record<string, string> = {
   pipeline_patch: "Sentinel proposed a fix",
   plan_change: "Plan change proposed",
   member_role_change: "Role change proposed",
+  entity_mapping: "Glossary entry proposed",
 };
 
 /**
@@ -142,6 +143,26 @@ function ProposalBody({ proposal }: { proposal: Proposal }) {
         Change role from <span className="font-medium capitalize">{previous}</span> to{" "}
         <span className="font-medium capitalize">{role}</span>.
       </p>
+    );
+  }
+  if (proposal.kind === "entity_mapping") {
+    const name = String(proposal.spec.canonical_name ?? "");
+    const members =
+      (proposal.spec.members as Array<{ source_id: string; column: string }> | undefined) ?? [];
+    return (
+      <div className="mb-3">
+        <p className="mb-1.5 text-[13px] text-foreground">
+          These columns are the same concept: <span className="font-medium">{name}</span>
+        </p>
+        <ul className="space-y-1">
+          {members.map((member, index) => (
+            <li key={index} className="flex items-center gap-2 text-[13px] text-foreground">
+              <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-ai" />
+              <span className="font-mono text-[12px]">{member.column}</span>
+            </li>
+          ))}
+        </ul>
+      </div>
     );
   }
   return null;

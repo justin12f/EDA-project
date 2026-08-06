@@ -70,6 +70,15 @@ export async function apiPut<T>(path: string, body: unknown): Promise<T> {
   return response.json();
 }
 
+export async function apiDelete<T>(path: string): Promise<T> {
+  const response = await fetch(`${API_URL}${path}`, {
+    method: "DELETE",
+    headers: await authHeaders(),
+  });
+  if (!response.ok) return throwOnError(response);
+  return response.json();
+}
+
 export async function apiUpload<T>(path: string, file: File): Promise<T> {
   const form = new FormData();
   form.append("file", file);

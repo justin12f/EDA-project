@@ -65,6 +65,14 @@ class QuotaExceeded(AppError):
     title = "Quota exceeded"
 
 
+class TooManyRequests(AppError):
+    """Distinct from `QuotaExceeded`: a rate limit is about request pace
+    (ADR-0009's trust API, per key), not a plan's monthly usage allowance."""
+
+    status_code = status.HTTP_429_TOO_MANY_REQUESTS
+    title = "Rate limit exceeded"
+
+
 class Misconfigured(AppError):
     """A credential or setting the operator must fix — never the caller's fault."""
 

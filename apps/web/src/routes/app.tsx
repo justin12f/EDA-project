@@ -4,7 +4,7 @@ import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { ChatPanel } from "../components/app/ChatPanel";
 import { SourcesSidebar } from "../components/app/SourcesSidebar";
 import { apiGet, apiUpload } from "../lib/api/client";
-import type { Proposal, Source, TranscriptItem, UsageSummary } from "../lib/api/types";
+import type { Certification, Proposal, Source, TranscriptItem, UsageSummary } from "../lib/api/types";
 import { useRequireSession } from "../lib/hooks/useSession";
 import { signOut } from "../lib/supabase/auth";
 import { replayTranscript } from "../lib/transcript";
@@ -53,6 +53,7 @@ function AppShell({ fallbackEmail, urlThread }: { fallbackEmail: string; urlThre
   const [threadId] = useState(() => urlThread ?? crypto.randomUUID());
   const [me, setMe] = useState<Me | null>(null);
   const [sources, setSources] = useState<Source[]>([]);
+  const [certifications, setCertifications] = useState<Record<string, Certification>>({});
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [proposals, setProposals] = useState<Proposal[]>([]);
   const [usage, setUsage] = useState<UsageSummary | null>(null);
@@ -68,13 +69,40 @@ function AppShell({ fallbackEmail, urlThread }: { fallbackEmail: string; urlThre
   const refetchSources = useCallback(async () => {
     const response = await apiGet<{ sources: Source[] }>("/v1/sources");
     setSources(response.sources);
+    // One request per source, in parallel — fine at the source counts an
+    // early workspace actually has. A source whose certification fails to
+    // load just shows no badge rather than blocking the sidebar on it.
+    const entries = await Promise.all(
+      response.sources.map(async (source) => {
+        try {
+          return [source.id, await apiGet<Certification>(`/v1/sources/${source.id}/certification`)] as const;
+        } catch {
+          return null;
+        }
+      }),
+    );
+    setCertifications(Object.fromEntries(entries.filter((entry) => entry !== null)));
   }, []);
 
   const refetchProposals = useCallback(async () => {
-    const response = await apiGet<{ proposals: Proposal[] }>(
-      `/v1/proposals?thread_id=${threadId}`,
+    // Worker-generated proposals (pipeline_patch, entity_mapping — ADR-0008
+    // and ADR-0009) carry a synthetic thread_id: nobody was chatting when
+    // the Sentinel or Glossary agent created them, so no real thread_id ever
+    // matches this conversation's. Fetched org-wide by status instead and
+    // merged in — a human-initiated cleaning_pipeline proposal from a
+    // *different* thread is deliberately excluded here; it stays scoped to
+    // the conversation that asked for it.
+    const [thread, pending] = await Promise.all([
+      apiGet<{ proposals: Proposal[] }>(`/v1/proposals?thread_id=${threadId}`),
+      apiGet<{ proposals: Proposal[] }>(`/v1/proposals?status=awaiting_review`),
+    ]);
+    const workerGenerated = pending.proposals.filter(
+      (proposal) => proposal.kind === "pipeline_patch" || proposal.kind === "entity_mapping",
     );
-    setProposals(response.proposals);
+    const byId = new Map(
+      [...thread.proposals, ...workerGenerated].map((proposal) => [proposal.id, proposal]),
+    );
+    setProposals([...byId.values()]);
   }, [threadId]);
 
   const refetchUsage = useCallback(async () => {
@@ -147,6 +175,7 @@ function AppShell({ fallbackEmail, urlThread }: { fallbackEmail: string; urlThre
     <div className="flex h-screen overflow-hidden bg-background">
       <SourcesSidebar
         sources={sources}
+        certifications={certifications}
         selectedId={selectedId}
         onSelect={setSelectedId}
         onUpload={handleUpload}

@@ -43,6 +43,7 @@ from lumen_api.datasets.store import HandleStore, SupabaseStorage
 from lumen_api.db.session import service_session, user_session
 from lumen_api.profiling import profile_and_remember
 from lumen_api.shadow_run import ShadowRunResult, shadow_run
+from lumen_worker.glossary import detect_and_enqueue_clusters
 
 # The `cron` column is a small named interval, not crontab syntax — arq has no
 # use for a stored crontab string (its own schedule is fixed at import time),
@@ -157,15 +158,35 @@ async def process_schedule(
 
     await _mark_run(schedule_uuid, cron)
 
-    if baseline is None or "schema" not in baseline:
+    cold_start = baseline is None or "schema" not in baseline
+    result = None if cold_start else detect_drift(
+        baseline["schema"], handle.schema, baseline.get("null_rates", {}), profiled.null_rates
+    )
+
+    # ADR-0009: whatever is new or changed about this schema is also what the
+    # glossary's column clustering cares about — a cold start means every
+    # column is new; otherwise only what detect_drift's own schema diff
+    # already found (added/renamed/type_changed — a removed column has
+    # nothing new to embed).
+    changed_columns = (
+        list(handle.schema)
+        if cold_start
+        else [
+            change.column
+            for change in (result.schema_changes if result else [])
+            if change.kind in ("added", "renamed", "type_changed")
+        ]
+    )
+    if changed_columns:
+        await detect_and_enqueue_clusters(
+            ctx, memory, handle, org_uuid, source_uuid, acting_user_id, changed_columns
+        )
+
+    if cold_start:
         # First scan of this source — nothing to diff against yet. Not
         # drift; a cold start. The profile just written above is what the
         # *next* tick will read back as `baseline`.
         return {"status": "baseline_recorded"}
-
-    result = detect_drift(
-        baseline["schema"], handle.schema, baseline.get("null_rates", {}), profiled.null_rates
-    )
     if result is None:
         return {"status": "no_drift"}
 
@@ -327,10 +348,16 @@ async def diagnose_drift(
         )
         await db.execute(
             text(
-                "insert into public.runs (id, org_id, thread_id, kind, status, backend, created_by) "
-                "values (:id, :org, :id, 'sentinel_diagnose', 'running', :backend, :user)"
+                "insert into public.runs (id, org_id, source_id, thread_id, kind, status, backend, created_by) "
+                "values (:id, :org, :source, :id, 'sentinel_diagnose', 'running', :backend, :user)"
             ),
-            {"id": run_id, "org": org_uuid, "backend": handle.backend, "user": user_uuid},
+            {
+                "id": run_id,
+                "org": org_uuid,
+                "source": event["source_id"],
+                "backend": handle.backend,
+                "user": user_uuid,
+            },
         )
         await gate.record(db, metric="agent_run", quantity=1, agent="sentinel", run_id=run_id)
 

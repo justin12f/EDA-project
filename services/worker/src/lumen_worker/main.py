@@ -13,6 +13,7 @@ from arq import cron
 from arq.connections import RedisSettings
 
 from lumen_api.settings import get_settings
+from lumen_worker.glossary import propose_entity_mapping
 from lumen_worker.sentinel import diagnose_drift, dispatch_due_schedules, process_schedule
 
 
@@ -23,7 +24,7 @@ async def shutdown(ctx: dict) -> None:
 
 
 class WorkerSettings:
-    functions = [process_schedule, diagnose_drift]
+    functions = [process_schedule, diagnose_drift, propose_entity_mapping]
     cron_jobs = [
         # Ticks every 15 minutes and enqueues whatever `data_source_schedules`
         # are due — see sentinel.py's module docstring for why this dispatch

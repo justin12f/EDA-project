@@ -51,13 +51,18 @@ async def apply_cleaning_pipeline(
         new_run_id = (
             await db.execute(
                 text(
-                    "insert into public.runs (org_id, thread_id, kind, status, backend, "
+                    "insert into public.runs (org_id, source_id, thread_id, kind, status, backend, "
                     "                         created_by, finished_at) "
-                    "values (:org, :thread, :kind, 'succeeded', :backend, :user, now()) "
+                    "values (:org, :source, :thread, :kind, 'succeeded', :backend, :user, now()) "
                     "returning id"
                 ),
                 {
                     "org": org_id,
+                    # The *original* rid's source — a certification check
+                    # (ADR-0009) needs "the currently accepted pipeline run
+                    # for source X" to be findable by source_id, whichever
+                    # path applied it.
+                    "source": handle.source_id,
                     "thread": thread_id,
                     "kind": run_kind,
                     "backend": handle.backend,

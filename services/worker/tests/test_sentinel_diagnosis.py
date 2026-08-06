@@ -58,10 +58,18 @@ async def _upload_and_wait(path: str, content: bytes) -> None:
 
     storage = SupabaseStorage()
     await storage.upload(path, content, "text/csv")
-    for _ in range(20):
+    # Measured directly against this project's Storage/CDN (Cloudflare in
+    # front of it): convergence is sometimes immediate and sometimes well
+    # past 30s, varying by which edge node a fresh connection lands on —
+    # `SupabaseStorage` opens a new client per call, same as production code,
+    # so this polls the exact path a real tick would if it ever raced this
+    # (it never does — the next tick is an hour or more later). Budgeted
+    # generously because this loop only ever costs real time, never
+    # correctness.
+    for _ in range(150):
         if await storage.download(path) == content:
             return
-        await asyncio.sleep(0.5)
+        await asyncio.sleep(1)
     raise TimeoutError(f"Storage never converged on the new content at {path}")
 
 

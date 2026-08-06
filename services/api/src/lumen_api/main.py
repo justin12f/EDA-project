@@ -8,7 +8,18 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from lumen_api import health, me, proposals, runs, schedules, sources, usage
+from lumen_api import (
+    api_keys,
+    certification,
+    health,
+    me,
+    proposals,
+    public,
+    runs,
+    schedules,
+    sources,
+    usage,
+)
 from lumen_api.errors import register_error_handlers
 from lumen_api.settings import get_settings
 
@@ -66,6 +77,9 @@ def create_app() -> FastAPI:
     app.include_router(runs.router)
     app.include_router(proposals.router)
     app.include_router(schedules.router)
+    app.include_router(certification.router)
+    app.include_router(api_keys.router)
+    app.include_router(public.router)
 
     return app
 

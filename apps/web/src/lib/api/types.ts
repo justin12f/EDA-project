@@ -10,14 +10,21 @@ export interface Source {
 
 // `spec` varies by kind: {rid, steps} for cleaning_pipeline and pipeline_patch
 // (the Sentinel's own revision of one — ADR-0008), {plan_code, price_cents}
-// for plan_change, {user_id, role, previous_role} for member_role_change.
-// Narrow it at the read site, not here.
+// for plan_change, {user_id, role, previous_role} for member_role_change,
+// {canonical_name, canonical_type, members, reconciliation_rule} for
+// entity_mapping (ADR-0009). Narrow it at the read site, not here.
 export interface Proposal {
   id: string;
   run_id: string;
   thread_id: string;
   author_agent: string;
-  kind: "cleaning_pipeline" | "pipeline_patch" | "plan_change" | "member_role_change" | (string & {});
+  kind:
+    | "cleaning_pipeline"
+    | "pipeline_patch"
+    | "plan_change"
+    | "member_role_change"
+    | "entity_mapping"
+    | (string & {});
   status: "draft" | "awaiting_review" | "accepted" | "rejected" | "applied" | "failed";
   spec: Record<string, unknown>;
   rationale: string;
@@ -73,6 +80,40 @@ export interface ProposalDecision {
   // member_role_change
   user_id?: string;
   role?: string;
+  // entity_mapping
+  entity?: {
+    id: string;
+    name: string;
+    entity_type: string;
+    members: Array<{ source_id: string; column: string }>;
+  };
+}
+
+// ADR-0009: the read-only trust API's credential. `key` only ever appears in
+// the response to the create call that minted it — every other read of this
+// type (list) omits it entirely.
+export interface ApiKey {
+  id: string;
+  name: string;
+  key_prefix: string;
+  scope: "read:glossary" | "read:certification";
+  created_at: string;
+  revoked_at: string | null;
+}
+
+export interface ApiKeyCreated extends ApiKey {
+  key: string;
+}
+
+// ADR-0009 §3: composed fresh from DriftEvent/Proposal state on every read,
+// never stored — see services/api/src/lumen_api/certification.py.
+export interface Certification {
+  certified: boolean;
+  open_drift_count: number;
+  pending_pipeline_review: boolean;
+  unresolved_entity_columns: string[];
+  last_checked_at: string | null;
+  checked_by: "scheduled_tick" | "manual_profile" | null;
 }
 
 export interface UsageStatus {

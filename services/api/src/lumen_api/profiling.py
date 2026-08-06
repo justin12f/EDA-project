@@ -8,6 +8,7 @@ shape or the diff is comparing things that were never really the same measure.
 
 from __future__ import annotations
 
+import uuid
 from dataclasses import dataclass
 from typing import Any
 
@@ -73,3 +74,42 @@ async def profile_and_remember(
     )
 
     return ProfileResult(null_rates=rates, duplicates=dupes, summary=summary)
+
+
+async def remember_columns(
+    memory: ContextStore, handle: DatasetHandle, columns: list[str]
+) -> list[tuple[uuid.UUID, str, str]]:
+    """Write one org-scoped, embedded fact per column in `columns` — not the
+    whole schema, just what's new or changed since the last tick. Returns
+    `(entry_id, column, embedded_content)` triples so a caller doing a
+    follow-up similarity search (ADR-0009's clustering) reuses the exact
+    string that was embedded, instead of reconstructing it and risking the
+    two drifting apart.
+
+    `Kind.SCHEMA` was reserved in the `context_kind` enum from ADR-0006 but
+    never used until now: it is exactly "a fact about one column," which is
+    what ADR-0009's entity-resolution clustering searches across sources for.
+    Scoping to changed columns only, rather than re-embedding a source's
+    whole schema every tick, is what keeps "piggyback on the existing worker
+    tick at no new cost" (the ADR's own framing) actually true.
+    """
+    contents = [
+        f"{humanize_column(column)} ({handle.schema.get(column, 'unknown')})" for column in columns
+    ]
+    entries = [
+        ContextEntry(
+            kind=Kind.SCHEMA,
+            title=f"{handle.label or handle.rid}.{column}",
+            content=content,
+            source_id=handle.source_id,
+            rid=handle.rid,
+            metadata={"column": column, "dtype": handle.schema.get(column)},
+        )
+        for column, content in zip(columns, contents, strict=True)
+    ]
+    ids = await memory.remember_many(entries)
+    return list(zip(ids, columns, contents, strict=True))
+
+
+def humanize_column(column: str) -> str:
+    return column.replace("_", " ").replace("-", " ").strip() or column

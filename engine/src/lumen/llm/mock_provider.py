@@ -29,6 +29,11 @@ UUID_RE = re.compile(
     r"[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}", re.IGNORECASE
 )
 RID_RE = re.compile(r"\bdataset ([0-9a-f]{8,32})\b", re.IGNORECASE)
+SEED_RE = re.compile(r"Seed column: source_id=(\S+) source_name=(\S+) column=(\S+)")
+CANDIDATE_RE = re.compile(
+    r"- source_id=(?P<source_id>\S+) source_name=(?P<source_name>\S+) "
+    r"column=(?P<column>\S+) dtype=(?P<dtype>\S+) similarity=(?P<similarity>[\d.]+)"
+)
 MAX_CONSECUTIVE_FAILURES = 3
 
 
@@ -60,6 +65,11 @@ class MockProvider(LLMProvider):
         # the analyst's — so this is checked before, not chained off, tool results.
         if "propose_patch" in available and "cannot_diagnose" in available and not results:
             return self._diagnose_drift(messages, prompt)
+
+        # The Glossary agent's registry (ADR-0009): same single-shot shape as
+        # the Sentinel's, over a candidate-cluster briefing instead of drift.
+        if "propose_entity_mapping" in available and "not_the_same_entity" in available and not results:
+            return self._propose_entity_mapping(messages, prompt)
 
         # A proposal already validated — summarise and stop.
         proposal = _latest_ok(results, lambda data: "steps" in data)
@@ -168,6 +178,43 @@ class MockProvider(LLMProvider):
             messages, "cannot_diagnose", {"reason": "No actionable drift signal in the briefing."}
         )
 
+    def _propose_entity_mapping(self, messages: list[ChatMessage], prompt: str) -> LLMResponse:
+        """Mirrors `lumen_worker.glossary.GLOSSARY_SYSTEM_PROMPT`'s own rule:
+        merge the seed with whatever candidates clear a confident similarity
+        bar; decline if none do."""
+        seed = SEED_RE.search(prompt)
+        if seed is None:
+            return self._call(messages, "not_the_same_entity", {"reason": "could not parse the briefing"})
+        seed_source_id, seed_source_name, seed_column = seed.groups()
+
+        members = [{"source_id": seed_source_id, "column": seed_column}]
+        for line in prompt.splitlines():
+            match = CANDIDATE_RE.match(line)
+            if match and float(match.group("similarity")) >= 0.5:
+                members.append({"source_id": match.group("source_id"), "column": match.group("column")})
+
+        if len(members) < 2:
+            return self._call(
+                messages,
+                "not_the_same_entity",
+                {"reason": "no candidate cleared a confident similarity bar"},
+            )
+
+        return self._call(
+            messages,
+            "propose_entity_mapping",
+            {
+                "canonical_name": _humanize(seed_column).title() or seed_column,
+                "canonical_type": "identifier",
+                "members": members,
+                "reconciliation_rule": {},
+                "rationale": (
+                    f"'{seed_source_name}.{seed_column}' and {len(members) - 1} other column(s) "
+                    "share a similarity score above threshold and plausibly name the same concept."
+                ),
+            },
+        )
+
     def _answer(self, messages: list[ChatMessage], text: str) -> LLMResponse:
         return LLMResponse(
             text=text,
@@ -228,6 +275,10 @@ def _source_id_from(prompt: str) -> str | None:
 def _rid_from(messages: list[ChatMessage]) -> str | None:
     match = RID_RE.search(_first_user_text(messages))
     return match.group(1) if match else None
+
+
+def _humanize(column: str) -> str:
+    return column.replace("_", " ").replace("-", " ").strip() or column
 
 
 def _quoted_names(lines: list[str]) -> list[str]:

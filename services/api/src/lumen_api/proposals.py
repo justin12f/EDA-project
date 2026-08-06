@@ -12,12 +12,14 @@ itself mean every synchronous thing should move onto it.
 
 from __future__ import annotations
 
+import json
 import uuid
 from typing import Annotated, Any, Literal
 
 from fastapi import APIRouter, Depends
 from pydantic import BaseModel
 from sqlalchemy import text
+from sqlalchemy.exc import IntegrityError
 
 from lumen_api.apply_pipeline import apply_cleaning_pipeline
 from lumen_api.auth.dependencies import Identity, current_identity, require_role
@@ -117,6 +119,8 @@ async def decide_proposal(
         return await _apply_plan_change(proposal_id, row, identity)
     if row["kind"] == "member_role_change":
         return await _apply_member_role_change(proposal_id, row, identity)
+    if row["kind"] == "entity_mapping":
+        return await _apply_entity_mapping(proposal_id, row, identity)
     if row["kind"] not in _PIPELINE_KINDS:
         raise BadRequest(f"No apply handler for proposal kind '{row['kind']}'")
     return await _apply_cleaning_pipeline(proposal_id, row, identity)
@@ -229,3 +233,82 @@ async def _apply_member_role_change(
         )
 
     return {"id": str(proposal_id), "status": "applied", "user_id": target_user_id, "role": role}
+
+
+async def _apply_entity_mapping(proposal_id: uuid.UUID, row: Any, identity: Identity) -> dict[str, Any]:
+    """No pipeline runs here — accepting just writes the `CanonicalEntity` a
+    person already reviewed. `status='approved'` directly: the enum's
+    'proposed' value describes the state the `Proposal` itself already held,
+    not a second pending state this row ever passes through (ADR-0009 §2).
+    """
+    spec = dict(row["spec"] or {})
+    name = spec.get("canonical_name")
+    entity_type = spec.get("canonical_type")
+    members = spec.get("members") or []
+    reconciliation_rule = spec.get("reconciliation_rule") or {}
+    if not name or not entity_type or len(members) < 2:
+        raise BadRequest(
+            "This proposal's spec is missing 'canonical_name', 'canonical_type', "
+            "or at least two 'members'"
+        )
+
+    try:
+        async with user_session(identity.user_id) as db:
+            entity_id = (
+                await db.execute(
+                    text(
+                        "insert into public.canonical_entities "
+                        "(org_id, name, entity_type, reconciliation_rule, status, proposal_id, created_by) "
+                        "values (:org, :name, :type, cast(:rule as jsonb), 'approved', :proposal, :user) "
+                        "returning id"
+                    ),
+                    {
+                        "org": identity.org_id,
+                        "name": name,
+                        "type": entity_type,
+                        "rule": json.dumps(reconciliation_rule),
+                        "proposal": proposal_id,
+                        "user": identity.user_id,
+                    },
+                )
+            ).scalar_one()
+
+            for member in members:
+                await db.execute(
+                    text(
+                        "insert into public.canonical_entity_members (entity_id, source_id, column_name) "
+                        "values (:entity, :source, :column)"
+                    ),
+                    {
+                        "entity": entity_id,
+                        "source": uuid.UUID(member["source_id"]),
+                        "column": member["column"],
+                    },
+                )
+
+            await db.execute(
+                text(
+                    "update public.proposals set status = 'applied', decided_by = :user, "
+                    "       decided_at = now() where id = :id"
+                ),
+                {"user": identity.user_id, "id": proposal_id},
+            )
+    except IntegrityError as exc:
+        # Either the name or a member column is already claimed by an entity
+        # accepted from a different proposal since this one was created — a
+        # real conflict for a person to resolve, not a 500.
+        raise Conflict(
+            "This entity's name or one of its member columns is already mapped "
+            "to a different canonical entity."
+        ) from exc
+
+    return {
+        "id": str(proposal_id),
+        "status": "applied",
+        "entity": {
+            "id": str(entity_id),
+            "name": name,
+            "entity_type": entity_type,
+            "members": members,
+        },
+    }
