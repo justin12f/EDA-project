@@ -23,7 +23,7 @@ from sqlalchemy import text
 
 from lumen.agents.loop import AgentLoop
 from lumen.llm.base import TokenUsage
-from lumen.llm.registry import ModelTiers, get_provider
+from lumen.llm.registry import ModelTiers, Tier, get_provider
 from lumen_api.agents.registry import build_tool_registry
 from lumen_api.auth.dependencies import Identity
 from lumen_api.billing.quota import Decision, QuotaGate
@@ -65,10 +65,10 @@ Rules:
 """
 
 
-def _provider():
+def provider(tier: Tier = "reasoning"):
     settings = get_settings()
     return get_provider(
-        "reasoning",
+        tier,
         anthropic_key=(
             settings.anthropic_api_key.get_secret_value() if settings.has_anthropic else None
         ),
@@ -231,7 +231,7 @@ async def stream_run(
         token_ceiling = max(1, min(token_ceiling, int(remaining_total)))
 
     loop = AgentLoop(
-        _provider(),
+        provider(),
         registry,
         agent_name="analyst",
         sink=sink,

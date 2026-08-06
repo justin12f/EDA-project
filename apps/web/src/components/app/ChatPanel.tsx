@@ -5,6 +5,7 @@ import type { Proposal, Source, TranscriptItem } from "../../lib/api/types";
 import { toTranscriptItem } from "../../lib/transcript";
 import { MessageBubble } from "./MessageBubble";
 import { ProposalCard } from "./ProposalCard";
+import { SentinelPanel } from "./SentinelPanel";
 
 let counter = 0;
 const nextId = () => `item-${++counter}`;
@@ -68,6 +69,8 @@ export function ChatPanel({
           {selectedSource ? selectedSource.name : "General chat"}
         </h2>
       </header>
+
+      {selectedSource && <SentinelPanel sourceId={selectedSource.id} />}
 
       <div className="flex-1 overflow-y-auto px-6 py-6">
         <div className="mx-auto flex max-w-2xl flex-col gap-3">

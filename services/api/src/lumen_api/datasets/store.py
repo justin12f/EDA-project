@@ -42,6 +42,7 @@ class DatasetHandle:
     row_count: int
     byte_size: int
     label: str = ""
+    source_id: uuid.UUID | None = None
 
 
 class SupabaseStorage:
@@ -161,6 +162,7 @@ class HandleStore:
             row_count=meta.row_count,
             byte_size=meta.byte_size,
             label=label,
+            source_id=source_id,
         )
 
     async def get(self, rid: str) -> DatasetHandle:
@@ -168,8 +170,8 @@ class HandleStore:
             row = (
                 await db.execute(
                     text(
-                        "select rid, org_id, object_path, backend, schema, row_count, "
-                        "       byte_size, label "
+                        "select rid, org_id, source_id, object_path, backend, schema, "
+                        "       row_count, byte_size, label "
                         "from public.dataset_handles where rid = :rid"
                     ),
                     {"rid": rid},
@@ -191,6 +193,39 @@ class HandleStore:
             row_count=row["row_count"],
             byte_size=row["byte_size"],
             label=row["label"],
+            source_id=row["source_id"],
+        )
+
+    async def latest_for_source(self, source_id: uuid.UUID) -> DatasetHandle | None:
+        """The most recent handle materialised for this source, or None if it
+        has never been read. `process_schedule` calls `put()` every tick, so
+        this is what "the source's current data" means to anything — the
+        Sentinel included — that runs after a tick rather than inside one.
+        """
+        async with user_session(self._user_id) as db:
+            row = (
+                await db.execute(
+                    text(
+                        "select rid, org_id, source_id, object_path, backend, schema, "
+                        "       row_count, byte_size, label "
+                        "from public.dataset_handles where source_id = :source "
+                        "order by created_at desc limit 1"
+                    ),
+                    {"source": source_id},
+                )
+            ).mappings().first()
+        if row is None:
+            return None
+        return DatasetHandle(
+            rid=row["rid"],
+            org_id=row["org_id"],
+            object_path=row["object_path"],
+            backend=row["backend"],
+            schema=dict(row["schema"] or {}),
+            row_count=row["row_count"],
+            byte_size=row["byte_size"],
+            label=row["label"],
+            source_id=row["source_id"],
         )
 
     async def resolve(self, rid: str) -> Any:

@@ -82,6 +82,22 @@ def read_parquet(path: str, backend: Backend | str) -> Any:
     return SparkSession.builder.getOrCreate().read.parquet(path)
 
 
+def row_count(frame: Any, backend: Backend | str) -> int:
+    """How many rows, without writing anything — a shadow run (ADR-0008) reads
+    this before and after a candidate pipeline to size its effect, and must
+    not materialise a handle just to answer "how many rows now"."""
+    backend = validate_backend(str(backend))
+
+    if backend == "pandas":
+        return len(frame)
+
+    if backend == "polars":
+        materialised = frame.collect() if hasattr(frame, "collect") else frame
+        return materialised.height
+
+    return frame.count()
+
+
 def null_rates(frame: Any, backend: Backend | str) -> dict[str, float]:
     """Fraction of nulls per column, in one pass.
 

@@ -27,7 +27,6 @@ from sqlalchemy import text
 from lumen.agents.master_factory import AgentMasterFactory
 from lumen.data_cleaning.data_cleaning_pipeline import PipelineBuilder
 from lumen.data_cleaning.step_factory import AbstractDataCleaningStepFactory
-from lumen.datasets.materialize import duplicate_counts, null_rates
 from lumen.llm.base import ToolSpec
 import numpy as np
 
@@ -39,6 +38,7 @@ from lumen_api.context.store import ContextEntry, ContextStore, Kind, Scope
 from lumen_api.datasets.store import HandleStore
 from lumen_api.db.session import user_session
 from lumen_api.jsonable import jsonable
+from lumen_api.profiling import profile_and_remember
 
 # Read-mostly account tools (ADR-0004's AdminAgent). Kept in the same flat
 # registry as the data tools rather than a second orchestrator: the current
@@ -49,10 +49,6 @@ PLAN_ORDER = ("free", "pro", "team", "ent")
 QUOTA_METRICS = ("llm_input_tokens", "llm_output_tokens", "agent_run")
 
 Handler = Callable[..., Awaitable[dict[str, Any]]]
-
-# Columns worth checking for duplicates: an id-like or hash-like name. Checking
-# every column on a wide frame costs more than it tells you.
-DUPLICATE_HINTS = ("id", "hash", "email", "key", "code", "uuid")
 
 
 @dataclass(frozen=True)
@@ -170,42 +166,7 @@ def build_tool_registry(
     async def profile_source(rid: str) -> dict[str, Any]:
         handle = await store.get(rid)
         frame = await store.resolve(rid)
-
-        rates = null_rates(frame, handle.backend)
-        candidates = [
-            column
-            for column in handle.schema
-            if any(hint in column.lower() for hint in DUPLICATE_HINTS)
-        ]
-        duplicates = duplicate_counts(frame, handle.backend, candidates) if candidates else {}
-
-        notable = {c: r for c, r in rates.items() if r > 0.005}
-        dupes = {k: v for k, v in duplicates.items() if v > 0}
-
-        # An org-scoped fact: measured once, useful to every member.
-        summary = (
-            f"{handle.row_count} rows, {len(handle.schema)} columns. "
-            + (
-                "Null rates above 0.5%: "
-                + ", ".join(f"{c} {r * 100:.1f}%" for c, r in sorted(notable.items()))
-                if notable
-                else "No column exceeds a 0.5% null rate."
-            )
-            + (
-                " Duplicates: " + ", ".join(f"{c} x{v}" for c, v in sorted(dupes.items()))
-                if dupes
-                else ""
-            )
-        )
-        await memory.remember(
-            ContextEntry(
-                kind=Kind.PROFILE,
-                title=f"Profile of {handle.label or rid}",
-                content=summary,
-                rid=rid,
-                metadata={"null_rates": rates, "duplicates": dupes},
-            )
-        )
+        result = await profile_and_remember(memory, handle, frame, rid)
 
         return {
             "ok": True,
@@ -213,8 +174,8 @@ def build_tool_registry(
                 "rid": rid,
                 "row_count": handle.row_count,
                 "columns": handle.schema,
-                "null_rate_by_column": rates,
-                "duplicate_counts": dupes,
+                "null_rate_by_column": result.null_rates,
+                "duplicate_counts": result.duplicates,
             },
         }
 

@@ -229,6 +229,29 @@ class ContextStore:
             for row in rows
         ]
 
+    async def latest_profile(self, source_id: uuid.UUID) -> dict[str, Any] | None:
+        """The most recent org-scoped `profile_source` metadata for a source —
+        `{"schema": ..., "null_rates": ..., "duplicates": ...}` — or `None` if
+        this source has never been profiled. The Sentinel's scheduled tick
+        (ADR-0008) diffs against exactly this: the baseline of "what normal
+        looks like" that `profile_source` already wrote for an unrelated
+        reason (so a human doesn't have to re-audit an already-audited
+        source), read back for a second one.
+        """
+        async with user_session(self._user_id) as db:
+            row = (
+                await db.execute(
+                    text(
+                        "select metadata from public.data_contexts "
+                        "where org_id = :org and source_id = :source "
+                        "  and kind = 'profile' and scope = 'org' "
+                        "order by created_at desc limit 1"
+                    ),
+                    {"org": self._org_id, "source": source_id},
+                )
+            ).mappings().first()
+        return dict(row["metadata"]) if row and row["metadata"] else None
+
     async def briefing(self, source_id: uuid.UUID, max_personal: int = 10) -> str:
         """What the agent should know before it starts, as prompt-ready markdown.
 

@@ -1,13 +1,13 @@
 """Proposals: what the agent asked to change, and the person's answer.
 
-Accepting runs the pipeline synchronously, in this request. There is no arq
-worker yet — `services/worker` is still empty — so this is the honest
-implementation for what exists today rather than a stub waiting for one: a
-cleaning pipeline over the dataset sizes this product handles runs in well
-under the request timeout. Moving it behind a queue is a matter of swapping
-this function's body for `enqueue_job(...)` once a run is large enough that a
-person shouldn't wait on it — not a redesign of the schema, which already has
-`runs.status` and `agent_events` built for exactly that.
+A human accepting a proposal here still runs the pipeline synchronously, in
+this request — a cleaning pipeline over the dataset sizes this product
+handles today runs in well under the request timeout, and moving it behind a
+queue is a matter of swapping this function's body for `enqueue_job(...)`
+once a run is large enough that a person shouldn't wait on it, not a redesign
+of the schema. `services/worker` exists now (ADR-0008), but its first job is
+the Sentinel's scheduled tick, not this path — a worker existing does not by
+itself mean every synchronous thing should move onto it.
 """
 
 from __future__ import annotations
@@ -19,18 +19,21 @@ from fastapi import APIRouter, Depends
 from pydantic import BaseModel
 from sqlalchemy import text
 
-from lumen.data_cleaning.data_cleaning_pipeline import PipelineBuilder
+from lumen_api.apply_pipeline import apply_cleaning_pipeline
 from lumen_api.auth.dependencies import Identity, current_identity, require_role
 from lumen_api.billing.stripe_client import checkout_url_for_plan_change
-from lumen_api.context.store import ContextEntry, ContextStore, Kind
-from lumen_api.datasets.store import HandleStore
 from lumen_api.db.session import user_session
 from lumen_api.errors import BadRequest, Conflict, Forbidden, NotFound
-from lumen_api.jsonable import jsonable
 
 # Kinds only a workspace owner may decide — spending money or changing who can
 # do what is a stricter gate than "any member can review a cleaning step".
 _OWNER_ONLY_KINDS = frozenset({"plan_change", "member_role_change"})
+
+# cleaning_pipeline (a human or CleaningAgent proposed it from scratch) and
+# pipeline_patch (the Sentinel proposed a revision — ADR-0008) apply the same
+# way: both specs are {rid, steps}, and "how a pipeline gets run" does not
+# depend on who or what decided it should change.
+_PIPELINE_KINDS = frozenset({"cleaning_pipeline", "pipeline_patch"})
 
 router = APIRouter(prefix="/v1/proposals", tags=["proposals"])
 
@@ -114,7 +117,7 @@ async def decide_proposal(
         return await _apply_plan_change(proposal_id, row, identity)
     if row["kind"] == "member_role_change":
         return await _apply_member_role_change(proposal_id, row, identity)
-    if row["kind"] != "cleaning_pipeline":
+    if row["kind"] not in _PIPELINE_KINDS:
         raise BadRequest(f"No apply handler for proposal kind '{row['kind']}'")
     return await _apply_cleaning_pipeline(proposal_id, row, identity)
 
@@ -127,83 +130,31 @@ async def _apply_cleaning_pipeline(
     if not rid or not steps:
         raise BadRequest("This proposal's spec is missing 'rid' or 'steps'")
 
-    store = HandleStore(identity.org_id, identity.user_id)
-    handle = await store.get(rid)
-    frame = await store.resolve(rid)
-
-    pipeline = PipelineBuilder(frame).build(steps)
-    cleaned = pipeline.run(frame)
-    new_handle = await store.put(
-        cleaned, backend=handle.backend, label=f"cleaned: {handle.label or rid}"
+    outcome = await apply_cleaning_pipeline(
+        identity.org_id,
+        identity.user_id,
+        thread_id=row["thread_id"],
+        rid=rid,
+        steps=steps,
+        rationale=row["rationale"],
     )
 
     async with user_session(identity.user_id) as db:
-        new_run_id = (
-            await db.execute(
-                text(
-                    "insert into public.runs (org_id, thread_id, kind, status, backend, "
-                    "                         created_by, finished_at) "
-                    "values (:org, :thread, 'apply_pipeline', 'succeeded', :backend, "
-                    "        :user, now()) returning id"
-                ),
-                {
-                    "org": identity.org_id,
-                    "thread": row["thread_id"],
-                    "backend": handle.backend,
-                    "user": identity.user_id,
-                },
-            )
-        ).scalar_one()
-
         await db.execute(
             text(
                 "update public.proposals set status = 'applied', decided_by = :user, "
                 "       decided_at = now(), applied_run_id = :run where id = :id"
             ),
-            {"user": identity.user_id, "run": new_run_id, "id": proposal_id},
+            {"user": identity.user_id, "run": outcome["applied_run_id"], "id": proposal_id},
         )
-
-    summary = _report_summary(pipeline.report)
-    try:
-        await ContextStore(identity.org_id, identity.user_id).remember(
-            ContextEntry(
-                kind=Kind.RATIONALE,
-                title=f"Cleaning applied to {handle.label or rid}",
-                content=f"{row['rationale']}\n\n{summary}",
-                rid=new_handle.rid,
-                run_id=new_run_id,
-                metadata={"steps": jsonable(pipeline.report.steps)},
-            )
-        )
-    except Exception:  # noqa: BLE001 — the pipeline already ran; memory is best-effort
-        pass
 
     return {
         "id": str(proposal_id),
         "status": "applied",
-        "applied_run_id": str(new_run_id),
-        "result": {
-            "rid": new_handle.rid,
-            "row_count": new_handle.row_count,
-            "schema": new_handle.schema,
-        },
-        "report": summary,
+        "applied_run_id": str(outcome["applied_run_id"]),
+        "result": outcome["result"],
+        "report": outcome["report"],
     }
-
-
-def _report_summary(report: Any) -> str:
-    lines: list[str] = []
-    for step in report.steps:
-        metrics = step.get("metrics", {})
-        removed = metrics.get("rows_removed", 0)
-        changed = {c: r for c, r in metrics.get("change_ratio", {}).items() if r > 0}
-        parts = [f"{removed} rows removed"] if removed else []
-        if changed:
-            parts.append(
-                "changed " + ", ".join(f"{c} {r * 100:.1f}%" for c, r in sorted(changed.items()))
-            )
-        lines.append(f"- {step['name']}: {'; '.join(parts) or 'no measurable change'}")
-    return "\n".join(lines) if lines else "No steps recorded."
 
 
 async def _apply_plan_change(proposal_id: uuid.UUID, row: Any, identity: Identity) -> dict[str, Any]:

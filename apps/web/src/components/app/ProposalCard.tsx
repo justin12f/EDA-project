@@ -16,6 +16,7 @@ function stepName(step: Record<string, unknown>): string {
 
 const KIND_LABEL: Record<string, string> = {
   cleaning_pipeline: "Cleaning pipeline proposed",
+  pipeline_patch: "Sentinel proposed a fix",
   plan_change: "Plan change proposed",
   member_role_change: "Role change proposed",
 };
@@ -112,7 +113,7 @@ export function ProposalCard({
 }
 
 function ProposalBody({ proposal }: { proposal: Proposal }) {
-  if (proposal.kind === "cleaning_pipeline") {
+  if (proposal.kind === "cleaning_pipeline" || proposal.kind === "pipeline_patch") {
     const steps = (proposal.spec.steps as Array<Record<string, unknown>> | undefined) ?? [];
     return (
       <ul className="mb-3 space-y-1">

@@ -1,0 +1,37 @@
+[project]
+name = "lumen-worker"
+version = "0.1.0"
+description = "Lumen worker — scheduled jobs off the request path: drift detection today."
+requires-python = ">=3.11"
+dependencies = [
+  "lumen-api",
+  "arq>=0.26",
+]
+
+[project.optional-dependencies]
+dev = [
+  "pytest>=8",
+  "pytest-asyncio>=0.24",
+  "ruff>=0.8",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/lumen_worker"]
+
+[tool.uv.sources]
+lumen-api = { path = "../api", editable = true }
+
+[tool.pytest.ini_options]
+pythonpath = ["src"]
+testpaths = ["tests"]
+asyncio_mode = "auto"
+markers = ["integration: requires a live Supabase project and Redis"]
+addopts = "-m 'not integration'"
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"

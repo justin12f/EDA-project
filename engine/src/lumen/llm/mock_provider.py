@@ -55,6 +55,12 @@ class MockProvider(LLMProvider):
                 f"I could not complete this: every tool call failed. Last error: {last_error}",
             )
 
+        # The Sentinel's registry (ADR-0008): a single-shot decision over a drift
+        # briefing already in the first user turn, never a multi-step chain like
+        # the analyst's — so this is checked before, not chained off, tool results.
+        if "propose_patch" in available and "cannot_diagnose" in available and not results:
+            return self._diagnose_drift(messages, prompt)
+
         # A proposal already validated — summarise and stop.
         proposal = _latest_ok(results, lambda data: "steps" in data)
         if proposal is not None:
@@ -117,6 +123,51 @@ class MockProvider(LLMProvider):
             stop_reason="tool_use",
         )
 
+    def _diagnose_drift(self, messages: list[ChatMessage], prompt: str) -> LLMResponse:
+        """Mirrors `lumen_worker.sentinel.SENTINEL_SYSTEM_PROMPT`'s own rule: an
+        additive schema change or a null-rate shift gets a same-treatment-as-
+        siblings imputation patch; anything else (removed, renamed, retyped —
+        a real change to the data, not a mechanical one) is not guessed at.
+        """
+        schema_lines = [line for line in prompt.splitlines() if line.startswith("- schema:")]
+        null_lines = [line for line in prompt.splitlines() if line.startswith("- nulls:")]
+
+        if schema_lines:
+            non_additive = [line for line in schema_lines if "new column" not in line]
+            if non_additive:
+                return self._call(
+                    messages,
+                    "cannot_diagnose",
+                    {"reason": f"Not a mechanical fix: {non_additive[0].split('- schema: ', 1)[-1]}"},
+                )
+            columns = _quoted_names(schema_lines)
+            return self._call(
+                messages,
+                "propose_patch",
+                {
+                    "steps": [{"impute_categorical": {"columns": columns, "strategy": "mode"}}],
+                    "rationale": (
+                        f"New column(s) {', '.join(columns)} should get the same "
+                        "null-handling as their siblings."
+                    ),
+                },
+            )
+
+        if null_lines:
+            columns = _quoted_names(null_lines)
+            return self._call(
+                messages,
+                "propose_patch",
+                {
+                    "steps": [{"impute_categorical": {"columns": columns, "strategy": "mode"}}],
+                    "rationale": f"Null rate moved materially on {', '.join(columns)}.",
+                },
+            )
+
+        return self._call(
+            messages, "cannot_diagnose", {"reason": "No actionable drift signal in the briefing."}
+        )
+
     def _answer(self, messages: list[ChatMessage], text: str) -> LLMResponse:
         return LLMResponse(
             text=text,
@@ -177,6 +228,18 @@ def _source_id_from(prompt: str) -> str | None:
 def _rid_from(messages: list[ChatMessage]) -> str | None:
     match = RID_RE.search(_first_user_text(messages))
     return match.group(1) if match else None
+
+
+def _quoted_names(lines: list[str]) -> list[str]:
+    """The first '...'-quoted token per line — every drift-briefing bullet
+    (added/removed/renamed/type-changed/null-shift) leads with the column
+    name it is about, quoted, regardless of what follows."""
+    names: list[str] = []
+    for line in lines:
+        match = re.search(r"'([^']+)'", line)
+        if match and match.group(1) not in names:
+            names.append(match.group(1))
+    return names
 
 
 # ── planning ────────────────────────────────────────────────────────────────
