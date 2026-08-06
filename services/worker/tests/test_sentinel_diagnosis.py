@@ -24,6 +24,7 @@ from sqlalchemy import text
 from lumen_api.auth.dependencies import Identity
 from lumen_api.datasets.store import SupabaseStorage
 from lumen_api.db.session import service_session, user_session
+from lumen_api.global_patterns import lookup
 from lumen_api.settings import get_settings
 from lumen_worker.sentinel import diagnose_drift, process_schedule
 
@@ -297,6 +298,65 @@ async def test_a_removed_column_is_left_for_manual_review_not_guessed_at(identit
     event = await _drift_event_for(source_id)
     assert event["status"] == "dismissed"
     assert event["proposal_id"] is None
+
+
+async def _set_contribution(identity: Identity, enabled: bool) -> None:
+    async with user_session(identity.user_id) as db:
+        await db.execute(
+            text("update public.organizations set pattern_contribution_enabled = :enabled where id = :org"),
+            {"enabled": enabled, "org": identity.org_id},
+        )
+
+
+async def test_a_real_diagnosis_contributes_an_occurrence_when_opted_in(identity):
+    # ADR-0012, exercised through the real detect -> diagnose pipeline this
+    # file is for, not a hand-constructed DriftEvent: proves drift_signature()
+    # is fed the shape a live drift_events row actually has, and that
+    # propose_patch's record_occurrence call fires on a real proposal.
+    await _set_contribution(identity, True)
+    source_id, schedule_id, path = await _seed_scheduled_source(identity, auto_apply=False)
+    assert (await _tick(schedule_id, identity, source_id))["status"] == "baseline_recorded"
+
+    await _upload_and_wait(path, ADDITIVE_CSV)
+    second = await _tick(schedule_id, identity, source_id)
+    assert second["status"] == "drift_detected"
+
+    try:
+        result = await diagnose_drift(_CTX, second["drift_event_id"], str(identity.org_id), str(identity.user_id))
+        assert result["status"] == "proposed"
+
+        # additive-schema drift on one column -> "schema_change:added"; the
+        # MockProvider always proposes a single impute_categorical step for
+        # this scenario -> "pipeline_patch:imputation" (test_trust.py's own
+        # structural_shape() case for exactly this shape).
+        match = await lookup("schema_change:added", "pipeline_patch:imputation")
+        assert match is not None
+        assert match.occurrences >= 1
+    finally:
+        # global_patterns has no org_id and nothing in this test's teardown
+        # cascades to it — clean up explicitly so repeated runs stay
+        # deterministic instead of accumulating occurrences across runs.
+        async with service_session() as db:
+            await db.execute(
+                text(
+                    "delete from public.global_patterns "
+                    "where pattern_signature = 'schema_change:added' "
+                    "  and fix_signature = 'pipeline_patch:imputation'"
+                )
+            )
+
+
+async def test_a_real_diagnosis_contributes_nothing_without_opting_in(identity):
+    # pattern_contribution_enabled defaults false — no _set_contribution call.
+    source_id, schedule_id, path = await _seed_scheduled_source(identity, auto_apply=False)
+    assert (await _tick(schedule_id, identity, source_id))["status"] == "baseline_recorded"
+
+    await _upload_and_wait(path, ADDITIVE_CSV)
+    second = await _tick(schedule_id, identity, source_id)
+    result = await diagnose_drift(_CTX, second["drift_event_id"], str(identity.org_id), str(identity.user_id))
+    assert result["status"] == "proposed"
+
+    assert await lookup("schema_change:added", "pipeline_patch:imputation") is None
 
 
 async def test_a_null_rate_shift_is_proposed_but_never_auto_applied(identity):

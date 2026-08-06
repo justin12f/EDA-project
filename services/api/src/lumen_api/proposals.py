@@ -26,6 +26,7 @@ from lumen_api.auth.dependencies import Identity, current_identity, require_role
 from lumen_api.billing.stripe_client import checkout_url_for_plan_change
 from lumen_api.db.session import user_session
 from lumen_api.errors import BadRequest, Conflict, Forbidden, NotFound
+from lumen_api.global_patterns import record_outcome
 from lumen_api.lineage import record_entity_dependency
 from lumen_api.trust import TRUST_ELIGIBLE_ROLES, record_decision, structural_shape
 
@@ -133,6 +134,18 @@ async def decide_proposal(
         raise Forbidden(f"Only a workspace owner can decide a '{row['kind']}' proposal")
 
     pattern = structural_shape(row["kind"], dict(row["spec"] or {}))
+    # ADR-0012: only a Sentinel-diagnosed pipeline_patch carries this — the
+    # structural shape of the *problem* its spec was written to fix, stamped
+    # in at propose time (sentinel.py's propose_patch). `pattern` above is
+    # already this same proposal's *fix* shape for pipeline_patch (both are
+    # `structural_shape("pipeline_patch", spec)`), so no second computation
+    # is needed to record an outcome. An older proposal, or any other kind,
+    # has no drift_pattern_signature and contributes nothing.
+    drift_pattern = (
+        dict(row["spec"] or {}).get("drift_pattern_signature")
+        if row["kind"] == "pipeline_patch"
+        else None
+    )
 
     if body.decision == "reject":
         async with user_session(identity.user_id) as db:
@@ -145,6 +158,8 @@ async def decide_proposal(
             )
             if identity.role in TRUST_ELIGIBLE_ROLES:
                 await record_decision(db, identity.org_id, pattern, approved=False)
+            if drift_pattern:
+                await record_outcome(db, identity.org_id, drift_pattern, pattern, applied=False)
         return {"id": str(proposal_id), "status": "rejected"}
 
     if row["kind"] == "plan_change":
@@ -168,6 +183,9 @@ async def decide_proposal(
     if identity.role in TRUST_ELIGIBLE_ROLES:
         async with user_session(identity.user_id) as db:
             await record_decision(db, identity.org_id, pattern, approved=True)
+    if drift_pattern:
+        async with user_session(identity.user_id) as db:
+            await record_outcome(db, identity.org_id, drift_pattern, pattern, applied=True)
     return result
 
 

@@ -142,6 +142,13 @@ export interface TrustPattern {
   last_decided_at: string | null;
 }
 
+// ADR-0012: a single org-wide opt-in. Consuming the shared pattern library
+// is unconditional for every org; contributing this org's own (stripped to
+// a structural signature) drift history to it is not.
+export interface PatternContributionSetting {
+  enabled: boolean;
+}
+
 // ADR-0009 §3: composed fresh from DriftEvent/Proposal state on every read,
 // never stored — see services/api/src/lumen_api/certification.py.
 export interface Certification {

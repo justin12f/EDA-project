@@ -41,6 +41,7 @@ from lumen_api.billing.quota import Decision, QuotaGate
 from lumen_api.context.store import ContextStore
 from lumen_api.datasets.store import HandleStore, SupabaseStorage
 from lumen_api.db.session import service_session, user_session
+from lumen_api.global_patterns import drift_signature, is_corroborated, lookup, record_occurrence
 from lumen_api.impact import compute_impact_report
 from lumen_api.llm import provider
 from lumen_api.profiling import profile_and_remember
@@ -374,6 +375,19 @@ async def diagnose_drift(
         confidence = _classify_confidence(
             event["kind"], event["details"].get("schema_changes", []), shadow
         )
+
+        # ADR-0012: a signature comparable across every org that has opted
+        # in, not just this one's own history. Computed regardless of this
+        # org's own contribution setting — consuming the shared library is
+        # free (§2) — and consulted only when structural confidence alone
+        # left this at 'low': a corroborated global pattern can raise the
+        # starting point to 'medium', never straight to 'high', and never
+        # skips the shadow run that already ran above it.
+        pattern_signature = drift_signature(event["kind"], event["details"])
+        fix_signature = structural_shape("pipeline_patch", {"steps": steps})
+        if confidence == "low" and is_corroborated(await lookup(pattern_signature, fix_signature)):
+            confidence = "medium"
+
         if confidence == "low":
             outcome["decision"] = "low_confidence"
             async with user_session(user_uuid) as db:
@@ -419,7 +433,16 @@ async def diagnose_drift(
                         "org": org_uuid,
                         "run": run_id,
                         "spec": json.dumps(
-                            {"rid": handle.rid, "steps": steps, "drift_event_id": drift_event_id}
+                            {
+                                "rid": handle.rid,
+                                "steps": steps,
+                                "drift_event_id": drift_event_id,
+                                # ADR-0012: stamped in now so decide_proposal can
+                                # record this fix's eventual accept/reject against
+                                # the same problem signature without a second
+                                # drift_events lookup.
+                                "drift_pattern_signature": pattern_signature,
+                            }
                         ),
                         "rationale": rationale,
                     },
@@ -432,6 +455,10 @@ async def diagnose_drift(
                 ),
                 {"proposal": proposal_id, "id": event_uuid},
             )
+            # ADR-0012: this occurrence — a fix of this shape was proposed
+            # for a problem of this shape — is a no-op unless this org has
+            # opted into contribution; see record_occurrence's own gate.
+            await record_occurrence(db, org_uuid, pattern_signature, fix_signature)
 
         # Synchronous, on purpose (ADR-0010 §4's Option D): this is exactly
         # the case that motivates it — a Sentinel patch appearing at 6am with

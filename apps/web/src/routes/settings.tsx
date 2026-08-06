@@ -3,7 +3,7 @@ import { createFileRoute, Link } from "@tanstack/react-router";
 
 import { ErrorBanner, FieldLabel, TextInput } from "../components/auth/AuthShell";
 import { apiDelete, apiGet, apiPost, apiPut } from "../lib/api/client";
-import type { ApiKey, ApiKeyCreated, TrustPattern } from "../lib/api/types";
+import type { ApiKey, ApiKeyCreated, PatternContributionSetting, TrustPattern } from "../lib/api/types";
 import { useRequireSession } from "../lib/hooks/useSession";
 
 export const Route = createFileRoute("/settings")({ component: SettingsPage });
@@ -61,6 +61,10 @@ function SettingsShell() {
             <section>
               <h2 className="label-eyebrow mb-3">Trust patterns</h2>
               <TrustPatternsManager />
+            </section>
+            <section>
+              <h2 className="label-eyebrow mb-3">Collective pattern library</h2>
+              <CollectiveMemorySetting />
             </section>
           </>
         )}
@@ -296,6 +300,63 @@ function TrustPatternsManager() {
             </li>
           ))}
         </ul>
+      )}
+    </div>
+  );
+}
+
+/**
+ * ADR-0012: opt-in, and only ever that — consuming the shared library needs
+ * no setting at all, every workspace already gets it. This is the one
+ * checkbox that decides whether this workspace's own (stripped-to-a-shape)
+ * drift history feeds back into it.
+ */
+function CollectiveMemorySetting() {
+  const [enabled, setEnabled] = useState<boolean | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    apiGet<PatternContributionSetting>("/v1/pattern-contribution")
+      .then((response) => setEnabled(response.enabled))
+      .catch(() => {});
+  }, []);
+
+  async function toggle() {
+    if (enabled === null) return;
+    setError(null);
+    try {
+      const response = await apiPut<PatternContributionSetting>("/v1/pattern-contribution", {
+        enabled: !enabled,
+      });
+      setEnabled(response.enabled);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not update this setting");
+    }
+  }
+
+  return (
+    <div className="space-y-3">
+      <p className="text-[13px] text-muted-foreground">
+        When a Sentinel diagnosis matches a drift shape seen elsewhere on the platform, it can use
+        that as a starting point — never this workspace&apos;s own data leaving it, and never
+        worth more than raising a &ldquo;low&rdquo; confidence to &ldquo;medium&rdquo; on its own.
+        What&apos;s shared, if you opt in, is only the abstract shape of a problem and the shape of
+        the fix that resolved it — no column name, no value, no workspace identity. The table
+        this lives in has no column to put one in.
+      </p>
+      <ErrorBanner message={error} />
+      {enabled === null ? (
+        <p className="text-[13px] text-muted-foreground">Loading…</p>
+      ) : (
+        <label className="flex items-center gap-2 text-[13px] text-foreground">
+          <input
+            type="checkbox"
+            checked={enabled}
+            onChange={toggle}
+            className="h-3.5 w-3.5 accent-ai"
+          />
+          Contribute this workspace&apos;s anonymized drift patterns to the shared library
+        </label>
       )}
     </div>
   );
