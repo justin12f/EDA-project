@@ -37,6 +37,7 @@ from lumen.sentinel import detect_drift
 from lumen_api.agents.registry import Tool, ToolRegistry, registered_steps
 from lumen_api.agents.runner import StreamingSink
 from lumen_api.apply_pipeline import apply_cleaning_pipeline
+from lumen_api.baselines import compute_and_remember_source_baseline, prepare_and_update_column_baselines
 from lumen_api.billing.quota import Decision, QuotaGate
 from lumen_api.context.store import ContextStore
 from lumen_api.datasets.store import HandleStore, SupabaseStorage
@@ -163,8 +164,64 @@ async def process_schedule(
     await _mark_run(schedule_uuid, cron)
 
     cold_start = baseline is None or "schema" not in baseline
+
+    # ADR-0013: every column's baseline updates every tick, cold start or
+    # not — a column needs its first observation recorded before it can
+    # ever become calibrated (nothing here looks anomalous until then;
+    # `NumericBaseline.is_within_band`/`categorical_shift` both no-op below
+    # `MIN_SAMPLE_SIZE`). `null_rate_baselines` is this scan's state
+    # *before* this tick's null rates fold in — exactly what `detect_drift`
+    # needs below, so a comparison is never made against a band this same
+    # scan just widened to include itself.
+    async with user_session(user_uuid) as db:
+        null_rate_baselines, value_findings = await prepare_and_update_column_baselines(
+            db, org_uuid, source_uuid, frame, handle.backend, handle.schema, handle.row_count, profiled.null_rates,
+        )
+        volume_finding = await compute_and_remember_source_baseline(db, org_uuid, source_uuid, handle.row_count)
+
+        # Alerts a person triages, not a shape diagnose_drift's patch-
+        # proposing prompt knows how to address — there is rarely a
+        # cleaning step for "this column's typical value moved" or "the
+        # table stopped growing." Recorded for the drift feed at the
+        # default status='detected' and never enqueued to diagnose_drift
+        # the way a schema/null-rate event is below.
+        if value_findings:
+            await db.execute(
+                text(
+                    "insert into public.drift_events "
+                    "(org_id, source_id, schedule_id, kind, severity, details) "
+                    "values (:org, :source, :schedule, 'value_drift', :severity, cast(:details as jsonb))"
+                ),
+                {
+                    "org": org_uuid,
+                    "source": source_uuid,
+                    "schedule": schedule_uuid,
+                    "severity": min(1.0, len(value_findings) * 0.3),
+                    "details": json.dumps({"findings": value_findings}, default=str),
+                },
+            )
+        if volume_finding:
+            await db.execute(
+                text(
+                    "insert into public.drift_events "
+                    "(org_id, source_id, schedule_id, kind, severity, details) "
+                    "values (:org, :source, :schedule, 'volume_freshness', :severity, cast(:details as jsonb))"
+                ),
+                {
+                    "org": org_uuid,
+                    "source": source_uuid,
+                    "schedule": schedule_uuid,
+                    "severity": _volume_severity(volume_finding),
+                    "details": json.dumps(volume_finding, default=str),
+                },
+            )
+
     result = None if cold_start else detect_drift(
-        baseline["schema"], handle.schema, baseline.get("null_rates", {}), profiled.null_rates
+        baseline["schema"],
+        handle.schema,
+        baseline.get("null_rates", {}),
+        profiled.null_rates,
+        null_rate_baselines=null_rate_baselines,
     )
 
     # ADR-0009: whatever is new or changed about this schema is also what the
@@ -271,6 +328,21 @@ def _drift_briefing(
     lines.append(f"\nCurrent schema: {json.dumps(schema)}")
     lines.append(f"Valid cleaning-pipeline step names: {', '.join(registered_steps(backend))}")
     return "\n".join(lines)
+
+
+def _volume_severity(finding: dict[str, Any]) -> float:
+    """How far past its own band this scan's row-count delta landed, scaled
+    to 0..1. `DEFAULT_Z` (3.0) is the band edge, so a delta that just barely
+    breached reads as low severity; one many multiples of the column's own
+    stdev past it reads as high. A zero-stdev baseline (every prior scan
+    saw the exact same delta) has no scale to measure against — a flat
+    mid-severity rather than a division by zero.
+    """
+    stdev = finding.get("baseline_stdev") or 0.0
+    if stdev <= 0:
+        return 0.5
+    z_actual = abs(finding["observed_delta"] - finding["baseline_mean"]) / stdev
+    return min(1.0, z_actual / 10.0)
 
 
 def _classify_confidence(

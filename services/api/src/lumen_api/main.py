@@ -10,6 +10,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from lumen_api import (
     api_keys,
+    baselines,
     certification,
     global_patterns,
     health,
@@ -84,6 +85,7 @@ def create_app() -> FastAPI:
     app.include_router(public.router)
     app.include_router(trust.router)
     app.include_router(global_patterns.router)
+    app.include_router(baselines.router)
 
     return app
 

@@ -6,7 +6,7 @@ from __future__ import annotations
 
 import pytest
 
-from lumen.sentinel import detect_drift, diff_schema, null_rate_deltas
+from lumen.sentinel import NumericBaseline, detect_drift, diff_schema, null_rate_deltas
 
 
 def test_an_unchanged_schema_has_no_diff():
@@ -126,3 +126,74 @@ def test_as_details_is_plain_json_safe_data():
     details = result.as_details()
     assert isinstance(details["schema_changes"], list)
     assert isinstance(details["schema_changes"][0], dict)
+
+
+# ── calibrated null-rate baselines (ADR-0013) ───────────────────────────────
+
+
+def _calibrated(*values: float) -> NumericBaseline:
+    baseline = NumericBaseline()
+    for value in values:
+        baseline = baseline.updated(value)
+    return baseline
+
+
+def test_a_stable_columns_baseline_flags_a_move_smaller_than_the_flat_threshold():
+    # A column that has always sat at ~2% null: a jump to 8% is a real
+    # deviation for *this* column even though it is under the flat 0.05
+    # (5-point) default the un-calibrated path would have ignored.
+    baseline = _calibrated(0.02, 0.02, 0.02, 0.02, 0.02, 0.02)
+    shifts = null_rate_deltas(
+        {"email": 0.02}, {"email": 0.08}, baselines={"email": baseline}
+    )
+    assert len(shifts) == 1
+    assert shifts[0].column == "email"
+
+
+def test_a_volatile_columns_baseline_tolerates_a_move_larger_than_the_flat_threshold():
+    # A column whose null rate has always swung between roughly 10% and
+    # 30% (e.g. an optional field only some sources populate): a reading of
+    # 30% is well past the flat 5-point threshold from a 15% starting
+    # point, but it is exactly the swing this column has always shown.
+    baseline = _calibrated(0.10, 0.30, 0.10, 0.30, 0.10, 0.30, 0.15)
+    shifts = null_rate_deltas(
+        {"discount_pct": 0.15}, {"discount_pct": 0.30}, baselines={"discount_pct": baseline}
+    )
+    assert shifts == []
+
+
+def test_a_column_without_a_baseline_keeps_the_flat_threshold_fallback():
+    baseline = _calibrated(0.02, 0.02)  # below MIN_SAMPLE_SIZE - not yet calibrated
+    shifts = null_rate_deltas(
+        {"email": 0.02, "country": 0.05},
+        {"email": 0.08, "country": 0.055},
+        baselines={"email": baseline},
+    )
+    # 'email': baseline exists but isn't calibrated yet -> flat threshold
+    # applies, and a 6-point move clears the default 0.05.
+    # 'country': no baseline entry at all -> flat threshold, 0.5-point move
+    # does not clear it.
+    assert [s.column for s in shifts] == ["email"]
+
+
+def test_detect_drift_threads_null_rate_baselines_through():
+    schema = {"id": "int64", "email": "string"}
+    baseline = _calibrated(0.02, 0.02, 0.02, 0.02, 0.02, 0.02)
+    result = detect_drift(
+        schema,
+        schema,
+        {"id": 0.0, "email": 0.02},
+        {"id": 0.0, "email": 0.08},
+        null_rate_baselines={"email": baseline},
+    )
+    assert result is not None
+    assert result.kind == "statistical_shift"
+    assert result.null_rate_shifts[0].column == "email"
+
+
+def test_detect_drift_with_no_baselines_argument_is_unchanged():
+    # The exact scenario test_null_rate_deltas_ignores_columns_below_threshold
+    # exercises directly - detect_drift's own call site must still see it.
+    schema = {"id": "int64"}
+    result = detect_drift(schema, schema, {"id": 0.10}, {"id": 0.12})
+    assert result is None

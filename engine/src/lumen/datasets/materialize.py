@@ -203,6 +203,204 @@ def duplicate_counts(frame: Any, backend: Backend | str, columns: list[str]) -> 
     return out
 
 
+def numeric_summary(frame: Any, backend: Backend | str, columns: list[str]) -> dict[str, dict[str, float]]:
+    """Mean, stdev, and non-null count per numeric column, in one pass — the
+    single-scan snapshot a `NumericBaseline` (ADR-0013) is updated with one
+    number (the mean) at a time. Stdev and count travel alongside for
+    display; the cross-scan baseline itself only ever consumes the mean.
+    """
+    backend = validate_backend(str(backend))
+    if not columns:
+        return {}
+
+    if backend == "pandas":
+        out: dict[str, dict[str, float]] = {}
+        for column in columns:
+            series = frame[column].dropna()
+            n = len(series)
+            out[column] = {
+                "mean": float(series.mean()) if n else 0.0,
+                "stdev": float(series.std(ddof=1)) if n > 1 else 0.0,
+                "count": n,
+            }
+        return out
+
+    if backend == "polars":
+        import polars as pl
+
+        lazy = frame.lazy() if hasattr(frame, "lazy") else frame
+        stats = lazy.select(
+            [
+                expression
+                for column in columns
+                for expression in (
+                    pl.col(column).mean().alias(f"{column}__mean"),
+                    pl.col(column).std().alias(f"{column}__std"),
+                    pl.col(column).drop_nulls().len().alias(f"{column}__n"),
+                )
+            ]
+        ).collect()
+        return {
+            column: {
+                "mean": float(stats[f"{column}__mean"][0] or 0.0),
+                "stdev": float(stats[f"{column}__std"][0] or 0.0),
+                "count": int(stats[f"{column}__n"][0]),
+            }
+            for column in columns
+        }
+
+    from pyspark.sql import functions as F
+
+    row = frame.select(
+        [
+            expression
+            for column in columns
+            for expression in (
+                F.avg(F.col(column)).alias(f"{column}__mean"),
+                F.stddev_samp(F.col(column)).alias(f"{column}__std"),
+                F.count(F.col(column)).alias(f"{column}__n"),
+            )
+        ]
+    ).collect()[0]
+    return {
+        column: {
+            "mean": float(row[f"{column}__mean"] or 0.0),
+            "stdev": float(row[f"{column}__std"] or 0.0),
+            "count": int(row[f"{column}__n"] or 0),
+        }
+        for column in columns
+    }
+
+
+def value_counts(frame: Any, backend: Backend | str, columns: list[str]) -> dict[str, dict[str, int]]:
+    """Frequency of each observed value, per categorical column — the raw
+    material a `CategoricalBaseline` (ADR-0013) tracks a rolling share of.
+    Read wholesale, the same "this product's dataset sizes make an exact
+    count affordable today" reasoning `column_values` already documents.
+    """
+    backend = validate_backend(str(backend))
+    out: dict[str, dict[str, int]] = {}
+
+    if backend == "pandas":
+        for column in columns:
+            out[column] = {str(k): int(v) for k, v in frame[column].dropna().value_counts().items()}
+        return out
+
+    if backend == "polars":
+        materialised = frame.collect() if hasattr(frame, "collect") else frame
+        for column in columns:
+            counted = materialised[column].drop_nulls().value_counts()
+            out[column] = {str(row[0]): int(row[1]) for row in counted.iter_rows()}
+        return out
+
+    for column in columns:
+        rows = frame.groupBy(column).count().collect()
+        out[column] = {str(row[column]): int(row["count"]) for row in rows if row[column] is not None}
+    return out
+
+
+def string_length_summary(frame: Any, backend: Backend | str, columns: list[str]) -> dict[str, dict[str, float]]:
+    """Mean/stdev/count of string length per column — half of a
+    `freeform_string` baseline (ADR-0013 §1). The other half (a
+    character-class signature) is computed in
+    `services/api/src/lumen_api/baselines.py` from a sample of the actual
+    values, not here, since it needs per-value inspection this per-column
+    aggregate does not.
+    """
+    backend = validate_backend(str(backend))
+    if not columns:
+        return {}
+
+    if backend == "pandas":
+        out: dict[str, dict[str, float]] = {}
+        for column in columns:
+            lengths = frame[column].dropna().astype(str).str.len()
+            n = len(lengths)
+            out[column] = {
+                "mean": float(lengths.mean()) if n else 0.0,
+                "stdev": float(lengths.std(ddof=1)) if n > 1 else 0.0,
+                "count": n,
+            }
+        return out
+
+    if backend == "polars":
+        import polars as pl
+
+        lazy = frame.lazy() if hasattr(frame, "lazy") else frame
+        stats = lazy.select(
+            [
+                expression
+                for column in columns
+                for expression in (
+                    pl.col(column).str.len_chars().mean().alias(f"{column}__mean"),
+                    pl.col(column).str.len_chars().std().alias(f"{column}__std"),
+                    pl.col(column).drop_nulls().len().alias(f"{column}__n"),
+                )
+            ]
+        ).collect()
+        return {
+            column: {
+                "mean": float(stats[f"{column}__mean"][0] or 0.0),
+                "stdev": float(stats[f"{column}__std"][0] or 0.0),
+                "count": int(stats[f"{column}__n"][0]),
+            }
+            for column in columns
+        }
+
+    from pyspark.sql import functions as F
+
+    row = frame.select(
+        [
+            expression
+            for column in columns
+            for expression in (
+                F.avg(F.length(F.col(column))).alias(f"{column}__mean"),
+                F.stddev_samp(F.length(F.col(column))).alias(f"{column}__std"),
+                F.count(F.col(column)).alias(f"{column}__n"),
+            )
+        ]
+    ).collect()[0]
+    return {
+        column: {
+            "mean": float(row[f"{column}__mean"] or 0.0),
+            "stdev": float(row[f"{column}__std"] or 0.0),
+            "count": int(row[f"{column}__n"] or 0),
+        }
+        for column in columns
+    }
+
+
+def latest_datetime(frame: Any, backend: Backend | str, columns: list[str]) -> dict[str, str | None]:
+    """The most recent value in each datetime column, as an ISO-ish string
+    — a `datetime` baseline (ADR-0013 §1) tracks how the *lag* between this
+    and "now" moves scan to scan, computed by the caller; this only reads
+    the raw max."""
+    backend = validate_backend(str(backend))
+    if not columns:
+        return {}
+
+    if backend == "pandas":
+        import pandas as pd
+
+        out: dict[str, str | None] = {}
+        for column in columns:
+            value = frame[column].max()
+            out[column] = None if pd.isna(value) else str(value)
+        return out
+
+    if backend == "polars":
+        import polars as pl
+
+        lazy = frame.lazy() if hasattr(frame, "lazy") else frame
+        stats = lazy.select([pl.col(c).max().alias(c) for c in columns]).collect()
+        return {column: (str(stats[column][0]) if stats[column][0] is not None else None) for column in columns}
+
+    from pyspark.sql import functions as F
+
+    row = frame.select([F.max(F.col(c)).alias(c) for c in columns]).collect()[0]
+    return {column: (str(row[column]) if row[column] is not None else None) for column in columns}
+
+
 def _tree_size(path: str) -> int:
     if os.path.isfile(path):
         return os.path.getsize(path)

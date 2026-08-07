@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import datetime as dt
+
 import pandas as pd
 import polars as pl
 import pytest
@@ -9,8 +11,12 @@ import pytest
 from lumen.datasets.materialize import (
     duplicate_counts,
     frame_schema,
+    latest_datetime,
     null_rates,
+    numeric_summary,
     read_parquet,
+    string_length_summary,
+    value_counts,
     write_parquet,
 )
 
@@ -135,3 +141,60 @@ def test_null_rates_survive_a_parquet_round_trip(tmp_path):
 
     rates = null_rates(read_parquet(path, "polars"), "polars")
     assert rates["country_code"] == pytest.approx(0.4)
+
+
+# ── baselines (ADR-0013) ────────────────────────────────────────────────────
+
+NUMERIC_DATA = {"amount": [10.0, 20.0, 30.0, 40.0, 50.0]}
+CATEGORY_DATA = {"country": ["US", "US", "US", "DE", "FR", None]}
+STRING_DATA = {"note": ["hi", "hello", "hey there", None, "yo"]}
+DATE_DATA = {"seen_at": [dt.date(2024, 1, 1), dt.date(2024, 1, 3), dt.date(2024, 1, 2)]}
+
+
+@pytest.mark.parametrize("backend", ["pandas", "polars"])
+def test_numeric_summary_computes_mean_and_stdev(backend):
+    frame = pd.DataFrame(NUMERIC_DATA) if backend == "pandas" else pl.DataFrame(NUMERIC_DATA)
+    summary = numeric_summary(frame, backend, ["amount"])
+    assert summary["amount"]["mean"] == pytest.approx(30.0)
+    assert summary["amount"]["stdev"] == pytest.approx(15.811, abs=1e-2)
+    assert summary["amount"]["count"] == 5
+
+
+def test_numeric_summary_of_an_empty_column_list_is_empty():
+    assert numeric_summary(pl.DataFrame(NUMERIC_DATA), "polars", []) == {}
+
+
+def test_both_backends_agree_on_numeric_summary():
+    from_pandas = numeric_summary(pd.DataFrame(NUMERIC_DATA), "pandas", ["amount"])
+    from_polars = numeric_summary(pl.DataFrame(NUMERIC_DATA), "polars", ["amount"])
+    assert from_pandas["amount"]["mean"] == pytest.approx(from_polars["amount"]["mean"])
+    assert from_pandas["amount"]["stdev"] == pytest.approx(from_polars["amount"]["stdev"])
+
+
+@pytest.mark.parametrize("backend", ["pandas", "polars"])
+def test_value_counts_ignores_nulls(backend):
+    frame = pd.DataFrame(CATEGORY_DATA) if backend == "pandas" else pl.DataFrame(CATEGORY_DATA)
+    counts = value_counts(frame, backend, ["country"])
+    assert counts["country"] == {"US": 3, "DE": 1, "FR": 1}
+
+
+@pytest.mark.parametrize("backend", ["pandas", "polars"])
+def test_string_length_summary_ignores_nulls(backend):
+    frame = pd.DataFrame(STRING_DATA) if backend == "pandas" else pl.DataFrame(STRING_DATA)
+    summary = string_length_summary(frame, backend, ["note"])
+    # 'hi'(2) 'hello'(5) 'hey there'(9) 'yo'(2) -> mean 4.5, n=4 (the null skipped)
+    assert summary["note"]["count"] == 4
+    assert summary["note"]["mean"] == pytest.approx(4.5)
+
+
+@pytest.mark.parametrize("backend", ["pandas", "polars"])
+def test_latest_datetime_reports_the_max_value(backend):
+    frame = pd.DataFrame(DATE_DATA) if backend == "pandas" else pl.DataFrame(DATE_DATA)
+    latest = latest_datetime(frame, backend, ["seen_at"])
+    assert latest["seen_at"] is not None
+    assert "2024-01-03" in latest["seen_at"]
+
+
+def test_latest_datetime_of_an_all_null_column_is_none():
+    frame = pl.DataFrame({"seen_at": [None, None]}, schema={"seen_at": pl.Date})
+    assert latest_datetime(frame, "polars", ["seen_at"]) == {"seen_at": None}

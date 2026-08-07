@@ -78,14 +78,71 @@ export interface NullRateShift {
   delta: number;
 }
 
+// ADR-0013: a single scan's breach of one column's own calibrated band —
+// what kind of value moved depends on baseline_kind (numeric/datetime/
+// freeform_string share the mean+stdev shape; categorical is a share move
+// or a brand-new category instead).
+export interface ValueDriftFinding {
+  column: string;
+  baseline_kind: "numeric" | "categorical" | "datetime" | "freeform_string";
+  check: "value";
+  observed?: number;
+  baseline_mean?: number;
+  baseline_stdev?: number;
+  shift_kind?: "new_category" | "share_shift";
+  category?: string;
+  current_share?: number;
+  baseline_share?: number | null;
+}
+
 export interface DriftEvent {
   id: string;
-  kind: "schema_change" | "statistical_shift" | (string & {});
+  kind: "schema_change" | "statistical_shift" | "value_drift" | "volume_freshness" | (string & {});
   severity: number;
-  details: { schema_changes?: SchemaChange[]; null_rate_shifts?: NullRateShift[] };
+  details: {
+    schema_changes?: SchemaChange[];
+    null_rate_shifts?: NullRateShift[];
+    // value_drift
+    findings?: ValueDriftFinding[];
+    // volume_freshness — these land directly on `details`, not nested
+    observed_delta?: number;
+    baseline_mean?: number;
+    baseline_stdev?: number;
+    row_count?: number;
+    previous_row_count?: number;
+  };
   status: "detected" | "diagnosing" | "proposed" | "resolved" | "dismissed";
   proposal_id: string | null;
   occurred_at: string;
+}
+
+// ADR-0013 §4/Action Item 6: what a column's baseline currently looks like,
+// and the manual override (never required) that beats it either way.
+export interface ColumnBaselineOverride {
+  z?: number;
+  deviation_threshold?: number;
+  new_category_share?: number;
+}
+
+export interface ColumnBaseline {
+  column: string;
+  baseline_kind: "numeric" | "categorical" | "datetime" | "freeform_string";
+  sample_size: number;
+  calibrated: boolean;
+  override: ColumnBaselineOverride | null;
+  computed_at: string | null;
+}
+
+export interface SourceBaselineSummary {
+  sample_size: number;
+  calibrated: boolean;
+  computed_at: string | null;
+}
+
+export interface BaselinesResponse {
+  columns: ColumnBaseline[];
+  source: SourceBaselineSummary | null;
+  min_sample_size: number;
 }
 
 export interface ProposalDecision {

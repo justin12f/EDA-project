@@ -20,6 +20,8 @@ from dataclasses import dataclass, field
 from difflib import SequenceMatcher
 from typing import Literal
 
+from lumen.sentinel.baseline import NumericBaseline
+
 # A rename guess below this similarity is more often noise than signal —
 # lower it and unrelated columns start pairing up; raise it and an obvious
 # rename (a dropped trailing underscore, a case change) stops being caught.
@@ -94,15 +96,37 @@ class NullRateShift:
 
 
 def null_rate_deltas(
-    old: dict[str, float], new: dict[str, float], threshold: float = 0.05
+    old: dict[str, float],
+    new: dict[str, float],
+    threshold: float = 0.05,
+    *,
+    baselines: dict[str, NumericBaseline] | None = None,
 ) -> list[NullRateShift]:
-    """Columns whose null rate moved by more than `threshold` (absolute),
-    either direction. Restricted to columns present in both profiles — a
-    column that appeared or disappeared is `diff_schema`'s finding, not this
-    one's; a column cannot have "drifted null" if it did not exist before."""
+    """Columns whose null rate moved outside what's normal for *that*
+    column, either direction. Restricted to columns present in both
+    profiles — a column that appeared or disappeared is `diff_schema`'s
+    finding, not this one's; a column cannot have "drifted null" if it did
+    not exist before.
+
+    ADR-0013 §3: `baselines` (a column's own calibrated `NumericBaseline`,
+    tracking its null rate scan to scan) replaces the flat `threshold` as
+    the default gate for any column that has one and is calibrated — a
+    volatile column's band is wider, a stable one's narrower, both derived
+    from that column's own history rather than one number picked for every
+    column in every org. A column with no baseline yet, or too little
+    history to trust one, keeps the original flat-threshold behavior — the
+    conservative fallback Action Item 3 asks for, and exactly what makes
+    this signature-compatible with every existing caller that never passes
+    `baselines` at all.
+    """
     shifts = []
     for col in sorted(set(old) & set(new)):
         delta = new[col] - old[col]
+        baseline = baselines.get(col) if baselines else None
+        if baseline is not None and baseline.is_calibrated():
+            if not baseline.is_within_band(new[col]):
+                shifts.append(NullRateShift(column=col, previous=old[col], current=new[col], delta=delta))
+            continue
         if abs(delta) >= threshold:
             shifts.append(NullRateShift(column=col, previous=old[col], current=new[col], delta=delta))
     return shifts
@@ -129,12 +153,20 @@ def detect_drift(
     new_null_rates: dict[str, float],
     *,
     null_rate_threshold: float = 0.05,
+    null_rate_baselines: dict[str, NumericBaseline] | None = None,
 ) -> DriftResult | None:
     """The one entry point a scheduled tick calls. `None` means the tick found
     nothing worth a `DriftEvent` row — the common case, and the reason this
-    whole module has to be free: most ticks against a healthy source end here."""
+    whole module has to be free: most ticks against a healthy source end here.
+
+    `null_rate_baselines` is ADR-0013's addition, optional and additive: omit
+    it (as every pre-ADR-0013 caller does) and this behaves exactly as it
+    always has, the flat `null_rate_threshold` for every column.
+    """
     schema_changes = diff_schema(old_schema, new_schema)
-    null_shifts = null_rate_deltas(old_null_rates, new_null_rates, null_rate_threshold)
+    null_shifts = null_rate_deltas(
+        old_null_rates, new_null_rates, null_rate_threshold, baselines=null_rate_baselines
+    )
 
     if not schema_changes and not null_shifts:
         return None
