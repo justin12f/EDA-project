@@ -12,8 +12,8 @@ from __future__ import annotations
 import re
 from typing import Any
 
-from lumen.architect.spec import SqlType
-from lumen.datasets.materialize import duplicate_counts, null_rates, row_count
+from lumen.architect.spec import Evidence, ForeignKeySpec, SqlType, TableSpec
+from lumen.datasets.materialize import column_values, duplicate_counts, null_rates, row_count
 
 # Exact dtype strings, checked before the prefix rules below. Ordering
 # matters: "int64" must not be matched by a naive "int" prefix rule that
@@ -130,3 +130,103 @@ def select_primary_key(
         f"'{column}' is unique and complete across every row, and is the first "
         f"such column in the table."
     )
+
+
+# Below this share of child values present in the parent, a match is
+# coincidence rather than a relationship. Chosen conservative on purpose:
+# a missed key costs a line on a diagram, a false one costs a human's trust
+# in every other line.
+CONTAINMENT_FLOOR = 0.95
+
+
+def _names_suggest_a_key(child_column: str, parent_table: str, parent_column: str) -> bool:
+    singular = parent_table[:-1] if parent_table.endswith("s") else parent_table
+    return child_column in {
+        f"{singular}_{parent_column}",
+        f"{parent_table}_{parent_column}",
+        parent_column if child_column != parent_column else "",
+    } or child_column == f"{singular}_id"
+
+
+def detect_foreign_keys(
+    frames: dict[str, Any],
+    backend: str,
+    tables: tuple[TableSpec, ...],
+    semantic_pairs: list[tuple[str, str, str, str]] | None = None,
+) -> list[ForeignKeySpec]:
+    """Find relationships between tables by value containment.
+
+    The classic algorithm: a child column references a parent when every one
+    of its values exists in the parent's primary key. `column_values` and the
+    set arithmetic are what `impact.py::_match_rate` already does for
+    ADR-0010's cross-source match rate, applied to a different question.
+
+    `semantic_pairs` carries ADR-0009's canonical entities in as
+    `(child_table, child_column, parent_table, parent_column)` tuples. The
+    engine never learns what a canonical entity is; it just weighs the hint.
+    """
+    semantic = set(semantic_pairs or ())
+    parents = [
+        (table.name, table.primary_key[0])
+        for table in tables
+        if table.primary_key and len(table.primary_key) == 1
+    ]
+
+    found: list[ForeignKeySpec] = []
+    for child in tables:
+        child_frame = frames.get(child.name)
+        if child_frame is None:
+            continue
+
+        for parent_table, parent_column in parents:
+            # A self-reference is a real pattern (org charts, threaded
+            # comments) but it needs its own handling on replace and its own
+            # UI treatment, so v1 declines rather than half-supporting it.
+            if parent_table == child.name:
+                continue
+            parent_frame = frames.get(parent_table)
+            if parent_frame is None:
+                continue
+
+            parent_values = column_values(parent_frame, backend, parent_column)
+            if not parent_values:
+                continue
+
+            for column in child.columns:
+                if column.name == parent_column and child.name == parent_table:
+                    continue
+                if child.primary_key and column.name in child.primary_key:
+                    continue
+
+                child_values = column_values(child_frame, backend, column.name)
+                if not child_values:
+                    continue
+
+                containment = len(child_values & parent_values) / len(child_values)
+                if containment < CONTAINMENT_FLOOR:
+                    continue
+
+                evidence = [Evidence.STRUCTURAL]
+                if _names_suggest_a_key(column.name, parent_table, parent_column):
+                    evidence.append(Evidence.NAMING)
+                if (child.name, column.name, parent_table, parent_column) in semantic:
+                    evidence.append(Evidence.SEMANTIC)
+
+                found.append(
+                    ForeignKeySpec(
+                        from_table=child.name,
+                        from_column=column.name,
+                        to_table=parent_table,
+                        to_column=parent_column,
+                        containment=containment,
+                        enforced=containment == 1.0,
+                        evidence=tuple(evidence),
+                        rationale=(
+                            f"{containment:.1%} of values in "
+                            f"{child.name}.{column.name} exist in "
+                            f"{parent_table}.{parent_column}, which is that "
+                            f"table's primary key."
+                        ),
+                    )
+                )
+    return found
