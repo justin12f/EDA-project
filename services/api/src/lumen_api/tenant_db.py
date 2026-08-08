@@ -102,3 +102,31 @@ async def tenant_session(org_id: uuid.UUID) -> AsyncIterator[AsyncSession]:
         except Exception:
             await session.rollback()
             raise
+
+
+async def ensure_tenant_schema(org_id: uuid.UUID) -> None:
+    """Create this org's role and schemas if they are missing.
+
+    Lazy and idempotent rather than part of signup, because orgs already
+    exist without these objects and a migration cannot create a role per
+    future org. Runs at the head of every ingestion job. Safe under
+    concurrency: every statement is IF NOT EXISTS or wrapped in the
+    duplicate_object guard every migration in this repo already uses.
+    """
+    schema = tenant_schema_name(org_id)
+    raw = tenant_raw_schema_name(org_id)
+    role = tenant_role_name(org_id)
+
+    engine = get_tenant_engine()
+    async with engine.begin() as conn:
+        await conn.execute(
+            text(
+                f"DO $$ BEGIN CREATE ROLE \"{role}\" NOLOGIN; "
+                f"EXCEPTION WHEN duplicate_object THEN NULL; END $$"
+            )
+        )
+        for name in (schema, raw):
+            await conn.execute(text(f'CREATE SCHEMA IF NOT EXISTS "{name}" AUTHORIZATION "{role}"'))
+            await conn.execute(text(f'GRANT ALL ON SCHEMA "{name}" TO "{role}"'))
+        # The connecting role must be able to SET ROLE to it.
+        await conn.execute(text(f'GRANT "{role}" TO CURRENT_USER'))
