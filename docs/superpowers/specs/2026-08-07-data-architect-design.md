@@ -24,7 +24,7 @@ This design introduces an agent that **plans, creates, and administers a real re
 
 ## 2. Decisions
 
-Ten decisions were taken during design. Each is binding on the plan.
+Twelve decisions were taken during design. Each is binding on the plan.
 
 | # | Decision | Rationale |
 |---|---|---|
