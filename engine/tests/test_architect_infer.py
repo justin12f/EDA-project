@@ -77,3 +77,56 @@ def test_an_unknown_dtype_falls_back_to_text():
     """Falling back is right: a column we cannot type is still a column the
     customer wants to see, and text loses nothing that was in the file."""
     assert infer_sql_type("SomeFutureType") == (SqlType.TEXT, None)
+
+
+# ── primary key selection ───────────────────────────────────────────────
+
+import polars as pl  # noqa: E402
+
+from lumen.architect.infer import select_primary_key  # noqa: E402
+
+
+def test_a_column_named_id_wins_over_other_candidates():
+    frame = pl.DataFrame({"code": ["a", "b"], "id": [1, 2]})
+    key, rationale = select_primary_key(frame, "polars", ["code", "id"])
+    assert key == ("id",)
+    assert "id" in rationale
+
+
+def test_an_id_suffixed_column_wins_when_there_is_no_bare_id():
+    frame = pl.DataFrame({"name": ["a", "b"], "order_id": [1, 2]})
+    key, _ = select_primary_key(frame, "polars", ["name", "order_id"])
+    assert key == ("order_id",)
+
+
+def test_the_leftmost_unique_column_wins_when_no_name_hints():
+    frame = pl.DataFrame({"a": [1, 2], "b": [3, 4]})
+    key, _ = select_primary_key(frame, "polars", ["a", "b"])
+    assert key == ("a",)
+
+
+def test_a_column_with_duplicates_is_not_a_candidate():
+    frame = pl.DataFrame({"id": [1, 1], "code": ["x", "y"]})
+    key, _ = select_primary_key(frame, "polars", ["id", "code"])
+    assert key == ("code",)
+
+
+def test_a_column_with_nulls_is_not_a_candidate():
+    frame = pl.DataFrame({"id": [1, None], "code": ["x", "y"]})
+    key, _ = select_primary_key(frame, "polars", ["id", "code"])
+    assert key == ("code",)
+
+
+def test_no_viable_key_returns_none_with_an_explanation():
+    """The rationale is shown to a human deciding whether to accept the
+    schema, so it has to read as a reason, not a stack trace."""
+    frame = pl.DataFrame({"a": [1, 1], "b": [2, 2]})
+    key, rationale = select_primary_key(frame, "polars", ["a", "b"])
+    assert key is None
+    assert "no column" in rationale.lower()
+
+
+def test_an_empty_frame_returns_none():
+    frame = pl.DataFrame({"a": []})
+    key, _ = select_primary_key(frame, "polars", ["a"])
+    assert key is None

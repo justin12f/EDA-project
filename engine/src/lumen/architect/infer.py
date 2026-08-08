@@ -10,8 +10,10 @@ names readable and write the rationale prose.
 from __future__ import annotations
 
 import re
+from typing import Any
 
 from lumen.architect.spec import SqlType
+from lumen.datasets.materialize import duplicate_counts, null_rates, row_count
 
 # Exact dtype strings, checked before the prefix rules below. Ordering
 # matters: "int64" must not be matched by a naive "int" prefix rule that
@@ -80,3 +82,51 @@ def infer_sql_type(dtype: str) -> tuple[SqlType, str | None]:
         return SqlType.UUID, None
 
     return SqlType.TEXT, None
+
+
+def select_primary_key(
+    frame: Any, backend: str, columns: list[str]
+) -> tuple[tuple[str, ...] | None, str]:
+    """Choose a single-column primary key, or explain why there isn't one.
+
+    Single-column only in v1. A composite key is a modelling judgment — which
+    combination is *the* identity, rather than merely unique together — and
+    D2's conservative posture says a human makes that call, not an inference
+    rule. The returned rationale is shown to that human, so it is written as
+    an explanation rather than a trace.
+    """
+    if not columns:
+        return None, "The table has no columns."
+
+    if row_count(frame, backend) == 0:
+        return None, "The table is empty, so no column can be shown to be unique."
+
+    rates = null_rates(frame, backend)
+    duplicates = duplicate_counts(frame, backend, list(columns))
+
+    candidates = [
+        column
+        for column in columns
+        if duplicates.get(column, 1) == 0 and rates.get(column, 1.0) == 0.0
+    ]
+    if not candidates:
+        return None, (
+            "No column is both unique and complete, so no primary key was declared. "
+            "Every column either repeats a value or has gaps."
+        )
+
+    for preferred, why in (
+        (lambda c: c == "id", "it is named 'id'"),
+        (lambda c: c.endswith("_id"), "its name identifies it as a key"),
+    ):
+        for column in candidates:
+            if preferred(column):
+                return (column,), (
+                    f"'{column}' is unique and complete across every row, and {why}."
+                )
+
+    column = candidates[0]
+    return (column,), (
+        f"'{column}' is unique and complete across every row, and is the first "
+        f"such column in the table."
+    )
