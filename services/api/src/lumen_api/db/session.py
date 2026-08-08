@@ -16,6 +16,11 @@ Three entry points, and the names are the whole safety story:
 
     engine                  raw connections for health checks.
 
+    tenant_session(org_id)  lives in lumen_api.tenant_db, not this module,
+                            because it connects to a different instance
+                            entirely. Customer data only; it can reach no
+                            table defined in this database.
+
 `SET LOCAL` is deliberate: the setting dies with the transaction, so a pooled
 connection can never hand one tenant's identity to the next borrower. This is
 also why the DSN must point at Supabase's *session* pooler (5432) and not the

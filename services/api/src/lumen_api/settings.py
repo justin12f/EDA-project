@@ -79,6 +79,22 @@ class Settings(BaseSettings):
 
     database_url: str = "postgresql+asyncpg://postgres:postgres@127.0.0.1:54322/postgres"
 
+    # ── Tenant database (ADR-0024) ────────────────────────────────────────────
+    #
+    # ADR-0024: customer data lives on its own Postgres instance, never in
+    # the Supabase database that holds organizations, api_keys and
+    # subscriptions. Unset means the Architect is disabled, which is the
+    # correct state for a checkout that has not provisioned one.
+    tenant_database_url: SecretStr | None = None
+    # Above this row count a table is read through DuckDB rather than
+    # polars (spec §3.7). A compute choice only — results are identical
+    # either side, which a parity test enforces.
+    duckdb_row_threshold: int = 5_000_000
+
+    @property
+    def has_tenant_db(self) -> bool:
+        return self.tenant_database_url is not None
+
     # ── LLM ─────────────────────────────────────────────────────────────────
     llm_mode: LLMMode = "auto"
     anthropic_api_key: SecretStr | None = None
