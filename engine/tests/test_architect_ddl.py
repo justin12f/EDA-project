@@ -84,3 +84,135 @@ def test_every_result_matches_the_validation_pattern():
 
     for raw in ["orders", "Customer ID", "2024", "select", "a" * 200, "ñoño"]:
         assert re.fullmatch(r"[a-z_][a-z0-9_]*", sanitize_identifier(raw))
+
+
+# ── DDL rendering ───────────────────────────────────────────────────────
+
+import uuid  # noqa: E402
+
+from lumen.architect.ddl import render_ddl, render_replace  # noqa: E402
+from lumen.architect.spec import (  # noqa: E402
+    ColumnSpec,
+    Evidence,
+    ForeignKeySpec,
+    SchemaSpec,
+    SqlType,
+    TableSpec,
+)
+
+_SRC = uuid.uuid4()
+
+
+def _customers() -> TableSpec:
+    return TableSpec(
+        name="customers",
+        source_id=_SRC,
+        columns=(
+            ColumnSpec(name="id", source_column="id", sql_type=SqlType.TEXT, nullable=False),
+            ColumnSpec(name="amount", source_column="amount", sql_type=SqlType.NUMERIC, type_arg="12,2"),
+        ),
+        primary_key=("id",),
+        pk_rationale="",
+    )
+
+
+def _orders() -> TableSpec:
+    return TableSpec(
+        name="orders",
+        source_id=_SRC,
+        columns=(
+            ColumnSpec(name="id", source_column="id", sql_type=SqlType.TEXT, nullable=False),
+            ColumnSpec(name="customer_id", source_column="customer_id", sql_type=SqlType.TEXT),
+        ),
+        primary_key=("id",),
+        pk_rationale="",
+    )
+
+
+def _fk(enforced: bool, containment: float) -> ForeignKeySpec:
+    return ForeignKeySpec(
+        from_table="orders",
+        from_column="customer_id",
+        to_table="customers",
+        to_column="id",
+        containment=containment,
+        enforced=enforced,
+        evidence=(Evidence.STRUCTURAL,),
+        rationale="",
+    )
+
+
+def test_create_schema_comes_first():
+    statements = render_ddl(SchemaSpec(tables=(_customers(),)), "tenant_abc")
+    assert statements[0] == 'CREATE SCHEMA IF NOT EXISTS "tenant_abc"'
+
+
+def test_a_table_renders_with_quoted_identifiers_and_real_types():
+    statements = render_ddl(SchemaSpec(tables=(_customers(),)), "tenant_abc")
+    assert statements[1] == (
+        'CREATE TABLE IF NOT EXISTS "tenant_abc"."customers" (\n'
+        '  "id" text NOT NULL,\n'
+        '  "amount" numeric(12,2)\n'
+        ')'
+    )
+
+
+def test_a_primary_key_renders_as_its_own_constraint():
+    statements = render_ddl(SchemaSpec(tables=(_customers(),)), "tenant_abc")
+    assert any(
+        s == 'ALTER TABLE "tenant_abc"."customers" '
+             'ADD CONSTRAINT "customers_pkey" PRIMARY KEY ("id")'
+        for s in statements
+    )
+
+
+def test_an_enforced_key_is_deferrable():
+    """SET CONSTRAINTS ALL DEFERRED only works on constraints declared
+    DEFERRABLE, and D6's replace-in-one-transaction depends on it."""
+    spec = SchemaSpec(tables=(_customers(), _orders()), foreign_keys=(_fk(True, 1.0),))
+    statements = render_ddl(spec, "tenant_abc")
+    fk = [s for s in statements if "FOREIGN KEY" in s]
+    assert len(fk) == 1
+    assert fk[0] == (
+        'ALTER TABLE "tenant_abc"."orders" '
+        'ADD CONSTRAINT "orders_customer_id_fkey" '
+        'FOREIGN KEY ("customer_id") REFERENCES "tenant_abc"."customers" ("id") '
+        'DEFERRABLE INITIALLY IMMEDIATE'
+    )
+
+
+def test_an_observed_key_emits_no_ddl_at_all():
+    spec = SchemaSpec(tables=(_customers(), _orders()), foreign_keys=(_fk(False, 0.97),))
+    statements = render_ddl(spec, "tenant_abc")
+    assert not any("FOREIGN KEY" in s for s in statements)
+
+
+def test_a_deprecated_column_is_still_created():
+    """D7 keeps deprecated columns; dropping them is what it forbids."""
+    table = TableSpec(
+        name="orders",
+        source_id=_SRC,
+        columns=(
+            ColumnSpec(name="id", source_column="id", sql_type=SqlType.TEXT, nullable=False),
+            ColumnSpec(name="legacy", source_column="legacy", sql_type=SqlType.TEXT, deprecated=True),
+        ),
+        primary_key=("id",),
+        pk_rationale="",
+    )
+    statements = render_ddl(SchemaSpec(tables=(table,)), "tenant_abc")
+    assert '"legacy" text' in statements[1]
+
+
+def test_render_replace_defers_constraints_before_deleting():
+    spec = SchemaSpec(tables=(_customers(), _orders()), foreign_keys=(_fk(True, 1.0),))
+    statements = render_replace(spec, "tenant_abc", "customers")
+    assert statements == [
+        "SET CONSTRAINTS ALL DEFERRED",
+        'DELETE FROM "tenant_abc"."customers"',
+    ]
+
+
+def test_no_rendered_statement_ever_contains_drop():
+    spec = SchemaSpec(tables=(_customers(), _orders()), foreign_keys=(_fk(True, 1.0),))
+    for statement in render_ddl(spec, "tenant_abc") + render_replace(spec, "tenant_abc", "customers"):
+        assert "DROP" not in statement.upper()
