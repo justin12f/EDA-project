@@ -18,6 +18,7 @@ from typing import Any
 import polars as pl
 from sqlalchemy import text
 
+from lumen.architect.adapters.postgres import PostgresAdapter
 from lumen.architect.ddl import render_ddl, sanitize_identifier
 from lumen.architect.spec import (
     ColumnSpec,
@@ -416,3 +417,66 @@ async def apply_schema(
             )
 
     return {"tables": list(loaded), "rows": loaded, "schema": schema}
+
+
+async def current_spec(org_id: uuid.UUID, user_id: uuid.UUID) -> SchemaSpec:
+    """The schema currently applied on the tenant instance, as a SchemaSpec.
+
+    The same assembly `PostgresAdapter.discover()` performs against a
+    customer's own database, pointed at our own tenant schema instead — to
+    the adapter, a customer database and ours are the same shape. Every
+    discovered column, key and relationship is DECLARED evidence, because
+    it was read from the database's own information_schema, not inferred.
+    """
+    dsn = get_settings().tenant_database_url.get_secret_value()
+    structure = await PostgresAdapter(dsn, tenant_schema_name(org_id)).discover()
+
+    async with user_session(user_id) as db:
+        sources = (
+            await db.execute(
+                text(
+                    "select id, table_name from public.data_sources "
+                    "where org_id = :org and table_name is not null"
+                ),
+                {"org": org_id},
+            )
+        ).mappings().all()
+    source_of = {r["table_name"]: r["id"] for r in sources}
+
+    tables = tuple(
+        TableSpec(
+            name=table.name,
+            source_id=source_of.get(table.name, uuid.uuid4()),
+            source_table=table.name,
+            primary_key=table.primary_key,
+            pk_rationale="",
+            columns=tuple(
+                ColumnSpec(
+                    name=column.name,
+                    source_column=column.name,
+                    sql_type=column.sql_type,
+                    type_arg=column.type_arg,
+                    nullable=column.nullable,
+                )
+                for column in table.columns
+            ),
+        )
+        for table in structure.tables
+    )
+
+    keys = tuple(
+        ForeignKeySpec(
+            from_table=table.name,
+            from_column=from_column,
+            to_table=to_table,
+            to_column=to_column,
+            containment=1.0,
+            enforced=True,
+            evidence=(Evidence.DECLARED,),
+            rationale="Declared by the currently applied schema.",
+        )
+        for table in structure.tables
+        for from_column, to_table, to_column in table.foreign_keys
+    )
+
+    return SchemaSpec(tables=tables, foreign_keys=keys)

@@ -17,8 +17,9 @@ from typing import Any
 from sqlalchemy import text
 
 from lumen.architect.adapters.file import FileAdapter
+from lumen.architect.migrate import classify_migration, render_migration
 from lumen.readers.exceptions import ReaderError
-from lumen_api.architect import design_schema, enrich_spec, propose_schema
+from lumen_api.architect import current_spec, design_schema, enrich_spec, propose_schema
 from lumen_api.datasets.store import SupabaseStorage
 from lumen_api.db.session import user_session
 from lumen_api.settings import get_settings
@@ -28,6 +29,7 @@ from lumen_api.tenant_db import (
     tenant_schema_name,
     tenant_session,
 )
+from lumen_api.trust import is_auto_apply_eligible, structural_shape
 
 SUPPORTED = (".csv", ".parquet", ".json", ".xlsx", ".xls")
 
@@ -182,3 +184,51 @@ async def refresh_source(
         return {"status": "constraint_violation", "table": table}
 
     return {"status": "refreshed", "table": table}
+
+
+async def evolve_schema(
+    ctx: dict[str, Any], source_id: str, org_id: str, acting_user_id: str
+) -> dict[str, Any]:
+    """Compare a re-staged source against its applied schema and migrate.
+
+    Two gates, and only one of them is negotiable. A reversible plan may
+    auto-apply if this org has earned trust in that shape (ADR-0011); a
+    plan with any irreversible step is always a proposal, at any trust
+    level, because ADR-0017 §3 makes irreversibility a ceiling no learned
+    signal may raise.
+    """
+    source_uuid, org_uuid, user_uuid = (
+        uuid.UUID(source_id), uuid.UUID(org_id), uuid.UUID(acting_user_id)
+    )
+
+    staged = await ingest_to_staging(ctx, source_id, org_id, acting_user_id)
+    if staged["status"] != "staged":
+        return staged
+
+    current = await current_spec(org_uuid, user_uuid)
+    proposed = await design_schema(org_uuid, user_uuid, source_uuid)
+    plan = classify_migration(current, proposed)
+
+    if not plan.steps:
+        return await refresh_source(ctx, source_id, org_id, acting_user_id)
+
+    shape = structural_shape("schema_migration", {"steps": [vars(s) for s in plan.steps]})
+
+    trusted = False
+    if plan.reversible:
+        async with user_session(user_uuid) as db:
+            trusted = await is_auto_apply_eligible(db, org_uuid, shape)
+
+    if not (plan.reversible and trusted):
+        spec = await enrich_spec(proposed)
+        proposal_id = await propose_schema(
+            org_uuid, user_uuid, source_uuid, spec, kind="schema_migration"
+        )
+        return {"status": "proposed", "proposal_id": str(proposal_id), "shape": shape}
+
+    async with tenant_session(org_uuid) as db:
+        for statement in render_migration(plan, tenant_schema_name(org_uuid)):
+            await db.execute(text(statement))
+
+    await refresh_source(ctx, source_id, org_id, acting_user_id)
+    return {"status": "applied", "shape": shape, "steps": len(plan.steps)}
