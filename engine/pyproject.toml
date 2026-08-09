@@ -15,6 +15,10 @@ dependencies = [
   "openai>=1.55",
   "asyncpg>=0.30",
   "aiomysql>=0.2",
+  "duckdb>=1.1",
+  # read_database_uri's default engine — without it, the polars read path
+  # of sql_read.py raises ModuleNotFoundError at the first real call.
+  "connectorx>=0.3",
 ]
 
 [project.optional-dependencies]
