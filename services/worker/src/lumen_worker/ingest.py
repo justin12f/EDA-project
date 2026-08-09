@@ -17,9 +17,12 @@ from typing import Any
 from sqlalchemy import text
 
 from lumen.architect.adapters.file import FileAdapter
+from lumen.architect.adapters.mysql import MySQLAdapter
+from lumen.architect.adapters.postgres import PostgresAdapter
 from lumen.architect.migrate import classify_migration, render_migration
 from lumen.readers.exceptions import ReaderError
 from lumen_api.architect import current_spec, design_schema, enrich_spec, propose_schema
+from lumen_api.credentials import decrypt_dsn
 from lumen_api.datasets.store import SupabaseStorage
 from lumen_api.db.session import user_session
 from lumen_api.settings import get_settings
@@ -244,3 +247,55 @@ async def evolve_schema(
 
     await refresh_source(ctx, source_id, org_id, acting_user_id)
     return {"status": "applied", "shape": shape, "steps": len(plan.steps)}
+
+
+async def import_tables(
+    ctx: dict[str, Any], source_id: str, org_id: str, acting_user_id: str
+) -> dict[str, Any]:
+    """Copy the selected tables from a connected database into staging."""
+    source_uuid, org_uuid, user_uuid = (
+        uuid.UUID(source_id), uuid.UUID(org_id), uuid.UUID(acting_user_id)
+    )
+    await ensure_tenant_schema(org_uuid)
+
+    async with user_session(user_uuid) as db:
+        row = (
+            await db.execute(
+                text(
+                    "select kind, dsn_encrypted, discovered_structure, imported_tables "
+                    "from public.data_sources where id = :id"
+                ),
+                {"id": source_uuid},
+            )
+        ).mappings().first()
+    if row is None or not row["dsn_encrypted"]:
+        return {"status": "skipped", "reason": "not a connected database source"}
+
+    dsn = decrypt_dsn(row["dsn_encrypted"])
+    schema = dict(row["discovered_structure"] or {}).get("schema", "public")
+    adapter = (
+        PostgresAdapter(dsn, schema) if str(row["kind"]) == "postgres"
+        else MySQLAdapter(dsn, schema)
+    )
+    await adapter.discover()
+
+    connection = get_settings().tenant_database_url.get_secret_value()
+    raw = tenant_raw_schema_name(org_uuid)
+    copied: dict[str, int] = {}
+
+    for table in list(row["imported_tables"] or []):
+        frame = await adapter.read(table)
+        materialised = frame.collect() if hasattr(frame, "collect") else frame
+        # Namespaced by source id, same as ingest_to_staging: two connected
+        # databases (or a connected database and a CSV) could otherwise
+        # both produce a table named e.g. "users" and silently overwrite
+        # each other in staging before design ever runs.
+        materialised.write_database(
+            table_name=f"{raw}.{raw_table_name(source_uuid, table)}",
+            connection=connection,
+            if_table_exists="replace",
+        )
+        copied[table] = materialised.height
+
+    await ctx["redis"].enqueue_job("design_schema_job", source_id, org_id, acting_user_id)
+    return {"status": "imported", "tables": copied}

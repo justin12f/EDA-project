@@ -20,6 +20,7 @@ from lumen_api import (
     runs,
     schedules,
     sources,
+    sources_db,
     trust,
     usage,
 )
@@ -77,6 +78,7 @@ def create_app() -> FastAPI:
     app.include_router(me.router)
     app.include_router(usage.router)
     app.include_router(sources.router)
+    app.include_router(sources_db.router)
     app.include_router(runs.router)
     app.include_router(proposals.router)
     app.include_router(schedules.router)

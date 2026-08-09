@@ -14,7 +14,7 @@ from arq.connections import RedisSettings
 
 from lumen_api.settings import get_settings
 from lumen_worker.glossary import propose_entity_mapping
-from lumen_worker.ingest import design_schema_job, ingest_to_staging
+from lumen_worker.ingest import design_schema_job, import_tables, ingest_to_staging
 from lumen_worker.sentinel import diagnose_drift, dispatch_due_schedules, process_schedule
 
 
@@ -31,6 +31,7 @@ class WorkerSettings:
         propose_entity_mapping,
         ingest_to_staging,
         design_schema_job,
+        import_tables,
     ]
     cron_jobs = [
         # Ticks every 15 minutes and enqueues whatever `data_source_schedules`
