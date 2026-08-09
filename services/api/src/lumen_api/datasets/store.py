@@ -25,9 +25,11 @@ import httpx
 from sqlalchemy import text
 
 from lumen.datasets.materialize import read_parquet, write_parquet
+from lumen.datasets.sql_read import read_table
 from lumen_api.db.session import user_session
 from lumen_api.errors import NotFound
 from lumen_api.settings import get_settings
+from lumen_api.tenant_db import tenant_schema_name
 
 HANDLE_TTL = timedelta(days=7)
 
@@ -229,10 +231,43 @@ class HandleStore:
         )
 
     async def resolve(self, rid: str) -> Any:
-        """Return a backend-native frame for the handle."""
-        handle = await self.get(rid)
-        payload = await self._storage.download(handle.object_path)
+        """Return a backend-native frame for the handle.
 
+        A handle with a `source_id` whose source has an applied schema
+        (`data_sources.table_name` set) reads the tenant table directly —
+        SQL is the source of truth (D3), and this returns the table's
+        *current* contents rather than the exact bytes stored under `rid`,
+        the same "latest = current" convention `latest_for_source` already
+        documents. Everything else — every cleaning-pipeline output,
+        since `apply_cleaning_pipeline` never sets `source_id` on the
+        handle it writes, or a source not yet applied — still downloads
+        its own Parquet snapshot, because that data was never mirrored
+        into the tenant instance at all.
+        """
+        handle = await self.get(rid)
+
+        if handle.source_id is not None:
+            settings = get_settings()
+            if settings.has_tenant_db:
+                async with user_session(self._user_id) as db:
+                    row = (
+                        await db.execute(
+                            text(
+                                "select table_name, row_count from public.data_sources "
+                                "where id = :id"
+                            ),
+                            {"id": handle.source_id},
+                        )
+                    ).mappings().first()
+                if row is not None and row["table_name"]:
+                    return read_table(
+                        settings.tenant_database_url.get_secret_value(),
+                        tenant_schema_name(handle.org_id),
+                        row["table_name"],
+                        row_count=row["row_count"],
+                    )
+
+        payload = await self._storage.download(handle.object_path)
         directory = tempfile.mkdtemp(prefix="lumen-")
         local = os.path.join(directory, f"{rid}.parquet")
         with open(local, "wb") as file:
