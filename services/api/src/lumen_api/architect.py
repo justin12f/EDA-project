@@ -10,7 +10,9 @@ keyless MockProvider path working end to end.
 
 from __future__ import annotations
 
+import json
 import uuid
+from dataclasses import replace
 from typing import Any
 
 import polars as pl
@@ -20,7 +22,9 @@ from lumen.architect.ddl import sanitize_identifier
 from lumen.architect.infer import detect_foreign_keys, infer_sql_type, select_primary_key
 from lumen.architect.spec import ColumnSpec, SchemaSpec, TableSpec
 from lumen.datasets.materialize import frame_schema
+from lumen.llm.base import ChatMessage
 from lumen_api.db.session import user_session
+from lumen_api.llm import provider
 from lumen_api.settings import get_settings
 from lumen_api.tenant_db import tenant_raw_schema_name, tenant_schema_name
 
@@ -157,3 +161,58 @@ async def design_schema(
     spec = SchemaSpec(tables=table_tuple, foreign_keys=tuple(keys))
     spec.validate()
     return spec
+
+
+_ENRICH_PROMPT = """\
+You are given a database schema that was designed deterministically from a \
+customer's data. Improve only the human-facing prose.
+
+Return JSON of the form:
+  {"tables": {"<table>": {"pk_rationale": "<one clear sentence>"}}}
+
+Rules:
+- Do not rename anything. Do not add or remove tables or columns.
+- Do not mention types, thresholds, or percentages.
+- Write for a business user reading a schema for the first time.
+
+Schema:
+"""
+
+
+async def enrich_spec(spec: SchemaSpec) -> SchemaSpec:
+    """Better prose from the model, or the spec exactly as it came in.
+
+    Deliberately impossible to make load-bearing. Every failure mode —
+    provider down, quota denied, MockProvider running, malformed JSON,
+    a model trying to rename a table — returns the deterministic spec.
+    That is what lets a deployment with no API key still produce a real
+    database, and it is why the model is not on the critical path.
+    """
+    summary = {
+        table.name: {
+            "columns": [c.name for c in table.columns],
+            "primary_key": list(table.primary_key or ()),
+        }
+        for table in spec.tables
+    }
+
+    try:
+        response = await provider(tier="fast").complete(
+            [ChatMessage(role="user", content=_ENRICH_PROMPT + json.dumps(summary, indent=2))],
+            [],
+        )
+        payload = json.loads(response.text)
+        improvements = payload["tables"]
+    except Exception:  # noqa: BLE001 — every failure is the same non-event
+        return spec
+
+    tables = tuple(
+        replace(table, pk_rationale=str(improvements[table.name]["pk_rationale"]))
+        if isinstance(improvements.get(table.name), dict)
+        and improvements[table.name].get("pk_rationale")
+        else table
+        for table in spec.tables
+    )
+    # Structure is never taken from the model — only the prose field is
+    # substituted, on tables that already existed.
+    return replace(spec, tables=tables)
