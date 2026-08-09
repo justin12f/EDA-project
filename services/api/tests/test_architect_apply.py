@@ -15,7 +15,13 @@ from lumen_api.auth.dependencies import Identity
 from lumen_api.db.session import user_session
 from lumen_api.proposals import DecisionRequest, decide_proposal
 from lumen_api.settings import get_settings
-from lumen_api.tenant_db import ensure_tenant_schema, tenant_raw_schema_name, tenant_schema_name, tenant_session
+from lumen_api.tenant_db import (
+    ensure_tenant_schema,
+    raw_table_name,
+    tenant_raw_schema_name,
+    tenant_schema_name,
+    tenant_session,
+)
 
 pytestmark = [
     pytest.mark.integration,
@@ -96,7 +102,7 @@ async def _stage(identity: Identity, table: str, frame: pl.DataFrame) -> uuid.UU
         )
     dsn = get_settings().tenant_database_url.get_secret_value()
     frame.write_database(
-        table_name=f"{tenant_raw_schema_name(identity.org_id)}.{table}",
+        table_name=f"{tenant_raw_schema_name(identity.org_id)}.{raw_table_name(source_id, table)}",
         connection=dsn,
         if_table_exists="replace",
     )

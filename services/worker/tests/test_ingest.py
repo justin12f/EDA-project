@@ -14,7 +14,7 @@ from lumen_api.auth.dependencies import Identity
 from lumen_api.datasets.store import SupabaseStorage
 from lumen_api.db.session import user_session
 from lumen_api.settings import get_settings
-from lumen_api.tenant_db import tenant_raw_schema_name, tenant_schema_name, tenant_session
+from lumen_api.tenant_db import raw_table_name, tenant_raw_schema_name, tenant_schema_name, tenant_session
 from lumen_worker.ingest import ingest_to_staging
 
 pytestmark = [
@@ -113,8 +113,16 @@ async def test_a_csv_lands_in_staging(identity):
     assert result["status"] == "staged"
     assert result["rows"] == 2
 
+    # The raw table is namespaced by source id (raw_table_name), not by
+    # "orders" alone — two sources named "orders.csv" must never collide in
+    # staging — so it has to be looked up by that name, not queried
+    # unqualified and left to search_path to resolve.
     async with tenant_session(identity.org_id) as db:
-        count = (await db.execute(text("select count(*) from orders"))).scalar_one()
+        count = (
+            await db.execute(
+                text(f'select count(*) from "{raw_table_name(source_id, "orders")}"')
+            )
+        ).scalar_one()
     assert count == 2
 
 

@@ -1,5 +1,11 @@
-"""resolve() reads SQL now. The contract is unchanged, which is the point:
-ADR-0008 through ADR-0013 all consume a DataFrame and none of them change."""
+"""Testing items 11 and 13: a foreign key that crosses between two of the
+customer's own databases, and the layout choice round-tripping.
+
+This is the test that proves D11 is real rather than decorative. Postgres
+enforces a foreign key across schemas within a database and never across
+databases — putting every source of an org in one database is precisely
+what makes this possible.
+"""
 
 from __future__ import annotations
 
@@ -15,7 +21,7 @@ from lumen_api.architect import apply_schema, design_schema
 from lumen_api.auth.dependencies import Identity
 from lumen_api.db.session import user_session
 from lumen_api.settings import get_settings
-from lumen_api.tenant_db import ensure_tenant_schema, raw_table_name, tenant_raw_schema_name
+from lumen_api.tenant_db import ensure_tenant_schema, raw_table_name, tenant_raw_schema_name, tenant_session
 
 pytestmark = [
     pytest.mark.integration,
@@ -26,11 +32,6 @@ pytestmark = [
 
 # identity and _stage are copied from test_architect_design.py — a
 # cross-file import doesn't work in this package (see the note there).
-# ingest_to_staging itself lives in lumen_worker, which services/api cannot
-# import (the dependency runs the other way: lumen-worker depends on
-# lumen-api, not vice versa) — _stage() writes straight to the raw schema,
-# the same shortcut test_architect_design.py and test_architect_apply.py
-# already take for this exact reason.
 
 
 def _admin_headers() -> dict[str, str]:
@@ -44,10 +45,10 @@ def _create_user() -> uuid.UUID:
         f"{settings.supabase_url}/auth/v1/admin/users",
         headers=_admin_headers(),
         json={
-            "email": f"lumen-substrate-{uuid.uuid4().hex[:12]}@example.com",
+            "email": f"lumen-crosskey-{uuid.uuid4().hex[:12]}@example.com",
             "password": uuid.uuid4().hex + "Aa1!",
             "email_confirm": True,
-            "user_metadata": {"display_name": "Substrate Tester", "org_name": "Substrate Org"},
+            "user_metadata": {"display_name": "Cross Key Tester", "org_name": "Cross Key Org"},
         },
         timeout=30,
     )
@@ -102,36 +103,41 @@ async def _stage(identity: Identity, table: str, frame: pl.DataFrame) -> uuid.UU
     return source_id
 
 
-@pytest_asyncio.fixture
-async def applied_customers(identity):
-    source_id = await _stage(identity, "customers", pl.DataFrame({"id": ["c1", "c2"]}))
-    spec = await design_schema(identity.org_id, identity.user_id, source_id)
-    await apply_schema(identity.org_id, identity.user_id, spec)
-    return source_id
-
-
-async def test_resolve_returns_the_applied_table(identity, applied_customers):
-    from lumen_api.datasets.store import HandleStore
-
-    # The plan's own sketch of this test called latest_for_source() without
-    # ever creating a handle — dataset_handles rows only exist once
-    # something calls put(), the way agents/registry.py's read_source tool
-    # does with source_id set. Reproducing that here: apply_schema() alone
-    # writes nothing to dataset_handles.
-    store = HandleStore(identity.org_id, identity.user_id)
-    await store.put(
-        pl.DataFrame({"id": ["c1", "c2"]}), label="customers", source_id=applied_customers
+async def test_a_key_spans_two_separately_connected_sources(identity):
+    """`customers` arrives from one source and `orders` from another. The
+    relationship between them must be enforced, not merely drawn."""
+    await _stage(identity, "customers", pl.DataFrame({"id": ["c1", "c2"]}))
+    orders_id = await _stage(
+        identity, "orders", pl.DataFrame({"id": ["o1"], "customer_id": ["c1"]})
     )
 
-    handle = await store.latest_for_source(applied_customers)
-    frame = await store.resolve(handle.rid)
+    spec = await design_schema(identity.org_id, identity.user_id, orders_id)
+    await apply_schema(identity.org_id, identity.user_id, spec)
 
-    materialised = frame.collect() if hasattr(frame, "collect") else frame
-    assert materialised.height > 0
+    key = next(k for k in spec.foreign_keys if k.from_table == "orders")
+    assert key.to_table == "customers"
+    assert key.enforced is True
+    # The two tables came from two different data_sources rows.
+    assert {t.source_id for t in spec.tables} != {orders_id}
+
+    with pytest.raises(Exception) as caught:
+        async with tenant_session(identity.org_id) as db:
+            await db.execute(
+                text("insert into orders (id, customer_id) values ('o2', 'ghost')")
+            )
+    assert "foreign key" in str(caught.value).lower()
 
 
-async def test_the_orphan_modules_are_gone():
-    with pytest.raises(ModuleNotFoundError):
-        __import__("lumen.database.postgres_manager")
-    with pytest.raises(ModuleNotFoundError):
-        __import__("lumen.agents.postgres_admin_agent")
+async def test_two_sources_with_the_same_table_name_do_not_overwrite(identity):
+    await _stage(identity, "users", pl.DataFrame({"id": ["a"]}))
+    second = await _stage(identity, "users", pl.DataFrame({"id": ["b"], "extra": [1]}))
+
+    spec = await design_schema(identity.org_id, identity.user_id, second)
+    names = {t.name for t in spec.tables}
+    assert len(names) == 2, f"one source overwrote the other: {names}"
+
+
+async def test_the_layout_is_recorded_on_the_spec(identity):
+    source_id = await _stage(identity, "customers", pl.DataFrame({"id": ["c1"]}))
+    spec = await design_schema(identity.org_id, identity.user_id, source_id)
+    assert spec.layout == "merged"

@@ -216,3 +216,36 @@ def test_no_rendered_statement_ever_contains_drop():
     spec = SchemaSpec(tables=(_customers(), _orders()), foreign_keys=(_fk(True, 1.0),))
     for statement in render_ddl(spec, "tenant_abc") + render_replace(spec, "tenant_abc", "customers"):
         assert "DROP" not in statement.upper()
+
+
+# ── multi-source naming (§3.6) ──────────────────────────────────────────
+
+from lumen.architect.ddl import qualify_table_name  # noqa: E402
+
+
+def test_a_name_without_a_collision_keeps_its_own_name():
+    """The customer uploaded orders.csv; they should see 'orders'. Prefixing
+    everything defensively would make every table unrecognisable to prevent
+    a collision that usually does not happen."""
+    assert qualify_table_name("orders", "crm", taken=set()) == "orders"
+
+
+def test_a_collision_takes_the_source_alias_as_a_prefix():
+    assert qualify_table_name("users", "crm", taken={"users"}) == "crm__users"
+
+
+def test_a_collision_with_no_alias_falls_back_to_a_numeric_suffix():
+    assert qualify_table_name("users", None, taken={"users"}) == "users_2"
+
+
+def test_a_prefixed_name_that_also_collides_gets_a_suffix():
+    assert qualify_table_name("users", "crm", taken={"users", "crm__users"}) == "crm__users_2"
+
+
+def test_the_alias_is_sanitised_too():
+    assert qualify_table_name("users", "CRM Prod!", taken={"users"}) == "crm_prod__users"
+
+
+def test_the_result_still_fits_the_identifier_limit():
+    result = qualify_table_name("t" * 60, "a" * 60, taken={"t" * 60})
+    assert len(result.encode("utf-8")) <= 63

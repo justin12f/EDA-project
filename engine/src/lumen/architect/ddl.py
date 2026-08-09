@@ -165,3 +165,42 @@ def render_replace(spec: SchemaSpec, schema: str, table: str) -> list[str]:
         "SET CONSTRAINTS ALL DEFERRED",
         f"DELETE FROM {_quote(schema)}.{_quote(table)}",
     ]
+
+
+def qualify_table_name(table: str, alias: str | None, *, taken: set[str]) -> str:
+    """A table's name in the merged schema, prefixed only on collision.
+
+    §3.6's rule, and the reason it is "only on collision": the customer
+    uploaded `orders.csv` and should see `orders`. Prefixing every table
+    defensively would make all of them unrecognisable in order to prevent a
+    collision that usually never happens.
+    """
+    base = sanitize_identifier(table)
+    if base not in taken:
+        return base
+
+    if alias:
+        # Built from the two already-sanitised halves rather than by
+        # sanitising "alias__table" as one string: sanitize_identifier
+        # collapses runs of underscores, which would turn the double
+        # underscore into a single one and lose the visual distinction
+        # between a prefix and an ordinary underscore in a table name.
+        prefixed = _truncate_bytes(
+            f"{sanitize_identifier(alias)}__{base}", MAX_IDENTIFIER_BYTES
+        )
+        if prefixed not in taken:
+            return prefixed
+        # A numeric suffix here, not a second sanitize_identifier() pass:
+        # that would run the double-underscore prefix straight into the
+        # same collapsing regex this function exists to avoid, silently
+        # turning "crm__users" into "crm_users" — indistinguishable from
+        # an unprefixed name, and no longer matching what "taken" holds.
+        suffix = 2
+        while True:
+            room = MAX_IDENTIFIER_BYTES - len(f"_{suffix}".encode("utf-8"))
+            candidate = f"{_truncate_bytes(prefixed, room)}_{suffix}"
+            if candidate not in taken:
+                return candidate
+            suffix += 1
+
+    return sanitize_identifier(table, taken=taken)

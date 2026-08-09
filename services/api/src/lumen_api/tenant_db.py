@@ -38,6 +38,22 @@ def tenant_raw_schema_name(org_id: uuid.UUID) -> str:
     return f"{tenant_schema_name(org_id)}_raw"
 
 
+def raw_table_name(source_id: uuid.UUID, alias: str) -> str:
+    """The physical name of one source's table inside the raw staging
+    schema — prefixed by the source's own id, not merely by its alias.
+
+    Two sources can share a human-facing name (two different uploads both
+    named `users.csv`). Without this prefix, the second source's raw write
+    would land on the exact same physical Postgres table as the first —
+    `write_database(..., if_table_exists="replace")` doesn't append or
+    error, it overwrites — silently destroying the first source's staged
+    data before `design_schema()` ever runs. `source_id.hex` is always
+    32 lowercase hex characters, so the `__` separator can never be
+    ambiguous with anything a caller supplies as `alias`.
+    """
+    return f"{source_id.hex}__{alias}"
+
+
 def tenant_role_name(org_id: uuid.UUID) -> str:
     return f"{tenant_schema_name(org_id)}_role"
 

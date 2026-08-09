@@ -25,6 +25,7 @@ from lumen_api.db.session import user_session
 from lumen_api.settings import get_settings
 from lumen_api.tenant_db import (
     ensure_tenant_schema,
+    raw_table_name,
     tenant_raw_schema_name,
     tenant_schema_name,
     tenant_session,
@@ -92,9 +93,13 @@ async def ingest_to_staging(
 
     materialised = frame.collect() if hasattr(frame, "collect") else frame
     table = os.path.splitext(source["name"])[0]
+    # Namespaced by source id, not by alias alone: two sources named
+    # "users.csv" would otherwise write to the exact same physical raw
+    # table and silently overwrite each other before design ever ran.
+    raw_table = raw_table_name(source_uuid, table)
 
     materialised.write_database(
-        table_name=f"{tenant_raw_schema_name(org_uuid)}.{table}",
+        table_name=f"{tenant_raw_schema_name(org_uuid)}.{raw_table}",
         connection=get_settings().tenant_database_url.get_secret_value(),
         if_table_exists="replace",
     )
@@ -148,7 +153,7 @@ async def refresh_source(
     async with user_session(user_uuid) as db:
         row = (
             await db.execute(
-                text("select table_name from public.data_sources where id = :id"),
+                text("select name, table_name from public.data_sources where id = :id"),
                 {"id": source_uuid},
             )
         ).mappings().first()
@@ -156,6 +161,13 @@ async def refresh_source(
     if not table:
         # Never promoted — the data is in staging and that is correct.
         return {"status": "staged_only", "reason": "this source has no approved schema yet"}
+
+    # The raw table this source landed in is named by its own id, not by
+    # `table` — `table` is data_sources.table_name, the *modelled* name a
+    # collision may have qualified (e.g. "crm__users"); the raw name never
+    # changes once staged.
+    alias = os.path.splitext(row["name"])[0]
+    raw_table = raw_table_name(source_uuid, alias)
 
     schema = tenant_schema_name(org_uuid)
     raw = tenant_raw_schema_name(org_uuid)
@@ -165,7 +177,7 @@ async def refresh_source(
             await db.execute(text("SET CONSTRAINTS ALL DEFERRED"))
             await db.execute(text(f'DELETE FROM "{schema}"."{table}"'))
             await db.execute(
-                text(f'INSERT INTO "{schema}"."{table}" SELECT * FROM "{raw}"."{table}"')
+                text(f'INSERT INTO "{schema}"."{table}" SELECT * FROM "{raw}"."{raw_table}"')
             )
     except Exception as exc:  # noqa: BLE001 — see the docstring
         async with user_session(user_uuid) as db:

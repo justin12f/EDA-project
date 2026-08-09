@@ -19,7 +19,7 @@ import polars as pl
 from sqlalchemy import text
 
 from lumen.architect.adapters.postgres import PostgresAdapter
-from lumen.architect.ddl import render_ddl, sanitize_identifier
+from lumen.architect.ddl import qualify_table_name, render_ddl, sanitize_identifier
 from lumen.architect.spec import (
     ColumnSpec,
     Evidence,
@@ -77,11 +77,21 @@ async def _semantic_pairs(org_id: uuid.UUID, user_id: uuid.UUID) -> list[tuple[s
     return pairs
 
 
-async def _staged_tables(org_id: uuid.UUID) -> dict[str, pl.DataFrame]:
-    """Every table currently in this org's staging schema.
+async def _staged_tables(
+    org_id: uuid.UUID,
+) -> list[tuple[uuid.UUID, str, str, pl.DataFrame]]:
+    """Every table currently in this org's staging schema, as
+    (source_id, alias, raw_table_name, frame).
 
     Read wholesale because FK detection is inherently cross-table — a
     relationship cannot be found by looking at one source in isolation.
+
+    `source_id` is parsed straight off the raw table's own physical name —
+    `raw_table_name()` prefixes every staged table with the id of the
+    source that produced it, precisely so two sources sharing a
+    human-facing alias (two uploads both named "users.csv") never land on
+    the same physical table. Which source a staged table belongs to is
+    therefore a fact read off its name, never a guess.
     """
     dsn = get_settings().tenant_database_url.get_secret_value()
     raw = tenant_raw_schema_name(org_id)
@@ -93,38 +103,51 @@ async def _staged_tables(org_id: uuid.UUID) -> dict[str, pl.DataFrame]:
         ),
         uri=dsn,
     )
-    return {
-        name: pl.read_database_uri(query=f'select * from "{raw}"."{name}"', uri=dsn)
-        for name in names["table_name"].to_list()
-    }
+
+    staged: list[tuple[uuid.UUID, str, str, pl.DataFrame]] = []
+    for physical_name in names["table_name"].to_list():
+        source_hex, separator, alias = physical_name.partition("__")
+        if not separator:
+            continue  # not one of ours — shouldn't happen, but never crash discovery on it
+        try:
+            source_id = uuid.UUID(hex=source_hex)
+        except ValueError:
+            continue
+        frame = pl.read_database_uri(
+            query=f'select * from "{raw}"."{physical_name}"', uri=dsn
+        )
+        staged.append((source_id, alias, physical_name, frame))
+    return staged
 
 
 async def design_schema(
     org_id: uuid.UUID, user_id: uuid.UUID, source_id: uuid.UUID
 ) -> SchemaSpec:
-    """Design the modelled schema for this org, including `source_id`.
+    """Design the modelled schema for this org, covering every staged source.
 
     Returns the whole org's spec rather than one table's, because a foreign
     key is a statement about two tables and cannot be designed from one.
+    `source_id` names the source that triggered this design but is not
+    otherwise read — every staged table now carries its own real source id,
+    parsed directly off its raw table's name (`_staged_tables`), so nothing
+    here needs a "which source is this" fallback keyed on `source_id`
+    anymore. Kept in the signature because every caller across this plan
+    already passes it, and a design job is always triggered by one source
+    landing in staging even though what it returns covers the whole org.
     """
-    async with user_session(user_id) as db:
-        sources = (
-            await db.execute(
-                text(
-                    "select id, table_name from public.data_sources "
-                    "where org_id = :org and table_name is not null"
-                ),
-                {"org": org_id},
-            )
-        ).mappings().all()
-    source_of = {r["table_name"]: r["id"] for r in sources}
-
-    frames = await _staged_tables(org_id)
+    staged = await _staged_tables(org_id)
 
     tables: list[TableSpec] = []
+    frame_by_raw_name: dict[str, pl.DataFrame] = {}
     taken_tables: set[str] = set()
-    for raw_name, frame in sorted(frames.items()):
-        table_name = sanitize_identifier(raw_name, taken=taken_tables)
+    for staged_source_id, alias, raw_name, frame in sorted(staged, key=lambda t: t[1]):
+        frame_by_raw_name[raw_name] = frame
+        # alias doubles as the collision-prefix candidate (§3.6): for a
+        # single CSV upload, "the table's own name" and "the source that
+        # produced it" are the same string by construction. Two sources
+        # that share an alias still end up distinct — "users__users" is an
+        # odd-looking but valid, unique qualified name.
+        table_name = qualify_table_name(alias, alias, taken=taken_tables)
         taken_tables.add(table_name)
 
         taken_columns: set[str] = set()
@@ -149,7 +172,7 @@ async def design_schema(
         tables.append(
             TableSpec(
                 name=table_name,
-                source_id=source_of.get(raw_name, source_id),
+                source_id=staged_source_id,
                 columns=tuple(columns),
                 primary_key=tuple(renamed[k] for k in key) if key else None,
                 pk_rationale=rationale,
@@ -159,7 +182,7 @@ async def design_schema(
 
     table_tuple = tuple(tables)
     renamed_frames = {
-        table.name: frames[table.source_table].rename(
+        table.name: frame_by_raw_name[table.source_table].rename(
             {c.source_column: c.name for c in table.columns}
         )
         for table in table_tuple
