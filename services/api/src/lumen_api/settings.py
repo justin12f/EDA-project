@@ -95,6 +95,11 @@ class Settings(BaseSettings):
     def has_tenant_db(self) -> bool:
         return self.tenant_database_url is not None
 
+    # Fernet key for customer database credentials. Distinct from every
+    # Supabase key on purpose: this one encrypts data belonging to the
+    # customer, not access to our own infrastructure.
+    credential_encryption_key: SecretStr | None = None
+
     # ── LLM ─────────────────────────────────────────────────────────────────
     llm_mode: LLMMode = "auto"
     anthropic_api_key: SecretStr | None = None

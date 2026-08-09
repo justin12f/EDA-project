@@ -948,6 +948,7 @@ source = { editable = "." }
 dependencies = [
     { name = "arq" },
     { name = "asyncpg" },
+    { name = "cryptography" },
     { name = "fastapi" },
     { name = "httpx" },
     { name = "lumen-engine", extra = ["embeddings"] },
@@ -976,6 +977,7 @@ requires-dist = [
     { name = "arq", specifier = ">=0.26" },
     { name = "asgi-lifespan", marker = "extra == 'dev'", specifier = ">=2.1" },
     { name = "asyncpg", specifier = ">=0.30" },
+    { name = "cryptography", specifier = ">=43" },
     { name = "fastapi", specifier = ">=0.115" },
     { name = "httpx", specifier = ">=0.28" },
     { name = "lumen-engine", extras = ["embeddings"], editable = "../../engine" },
