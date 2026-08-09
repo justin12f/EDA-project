@@ -82,6 +82,23 @@ def structural_shape(kind: str, spec: dict[str, Any]) -> str:
         return "plan_change:tier_change"
     if kind == "member_role_change":
         return "member_role_change:role_change"
+    if kind == "schema_design":
+        count = len(spec.get("tables") or [])
+        if count == 0:
+            return "schema_design:empty"
+        return f"schema_design:{count}_table" + ("s" if count != 1 else "")
+    if kind == "schema_migration":
+        steps = spec.get("steps") or []
+        if not steps:
+            return "schema_migration:empty"
+        # Any irreversible step makes the whole migration destructive. Trust
+        # is granted per shape, so a shape that could hide an irreversible
+        # step would let one ride in on the strength of the reversible ones.
+        if any(not step.get("reversible", False) for step in steps):
+            return "schema_migration:destructive"
+        if any(step.get("kind") == "widen_type" for step in steps):
+            return "schema_migration:type_widening"
+        return "schema_migration:additive"
     return f"{kind}:unclassified"
 
 

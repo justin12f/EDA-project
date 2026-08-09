@@ -216,3 +216,101 @@ async def enrich_spec(spec: SchemaSpec) -> SchemaSpec:
     # Structure is never taken from the model — only the prose field is
     # substituted, on tables that already existed.
     return replace(spec, tables=tables)
+
+
+async def propose_schema(
+    org_id: uuid.UUID,
+    user_id: uuid.UUID,
+    source_id: uuid.UUID,
+    spec: SchemaSpec,
+    kind: str = "schema_design",
+) -> uuid.UUID:
+    """Write the spec as a Proposal for a human to accept.
+
+    Non-negotiable #2: every mutating agent action produces one of these.
+    Creating a customer's database is unambiguously mutating.
+    """
+    spec.validate()
+
+    async with user_session(user_id) as db:
+        run_id = (
+            await db.execute(
+                text(
+                    "insert into public.runs "
+                    "(org_id, source_id, thread_id, kind, status, backend, created_by) "
+                    "values (:org, :source, gen_random_uuid(), 'architect', 'succeeded', "
+                    "        'polars', :user) returning id"
+                ),
+                {"org": org_id, "source": source_id, "user": user_id},
+            )
+        ).scalar_one()
+
+        proposal_id = (
+            await db.execute(
+                text(
+                    "insert into public.proposals "
+                    "(org_id, run_id, thread_id, author_agent, kind, spec, rationale) "
+                    "values (:org, :run, :run, 'architect', :kind, cast(:spec as jsonb), "
+                    "        :rationale) returning id"
+                ),
+                {
+                    "org": org_id,
+                    "run": run_id,
+                    "kind": kind,
+                    "spec": json.dumps(_spec_to_json(spec)),
+                    "rationale": _describe(spec),
+                },
+            )
+        ).scalar_one()
+    return proposal_id
+
+
+def _spec_to_json(spec: SchemaSpec) -> dict[str, Any]:
+    return {
+        "layout": spec.layout,
+        "tables": [
+            {
+                "name": t.name,
+                "source_id": str(t.source_id),
+                "source_table": t.source_table,
+                "primary_key": list(t.primary_key or ()),
+                "pk_rationale": t.pk_rationale,
+                "columns": [
+                    {
+                        "name": c.name,
+                        "source_column": c.source_column,
+                        "sql_type": c.sql_type.value,
+                        "type_arg": c.type_arg,
+                        "nullable": c.nullable,
+                        "deprecated": c.deprecated,
+                    }
+                    for c in t.columns
+                ],
+            }
+            for t in spec.tables
+        ],
+        "foreign_keys": [
+            {
+                "from_table": k.from_table,
+                "from_column": k.from_column,
+                "to_table": k.to_table,
+                "to_column": k.to_column,
+                "containment": k.containment,
+                "enforced": k.enforced,
+                "evidence": [e.value for e in k.evidence],
+                "rationale": k.rationale,
+            }
+            for k in spec.foreign_keys
+        ],
+    }
+
+
+def _describe(spec: SchemaSpec) -> str:
+    enforced = sum(1 for k in spec.foreign_keys if k.enforced)
+    observed = len(spec.foreign_keys) - enforced
+    parts = [f"{len(spec.tables)} table{'s' if len(spec.tables) != 1 else ''}"]
+    if enforced:
+        parts.append(f"{enforced} enforced relationship{'s' if enforced != 1 else ''}")
+    if observed:
+        parts.append(f"{observed} observed relationship{'s' if observed != 1 else ''}")
+    return "A database with " + ", ".join(parts) + "."

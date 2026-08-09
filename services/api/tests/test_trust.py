@@ -102,3 +102,54 @@ class TestWilsonLowerBound:
         for approvals, rejections in ((0, 5), (5, 0), (1, 1), (1000, 1)):
             score = wilson_lower_bound(approvals, rejections)
             assert 0.0 <= score <= 1.0
+
+
+# ── ADR-0024 schema kinds ───────────────────────────────────────────────
+
+
+class TestSchemaShapes:
+    def test_a_single_table_design_is_named_by_its_count(self):
+        spec = {"tables": [{"name": "orders"}]}
+        assert structural_shape("schema_design", spec) == "schema_design:1_table"
+
+    def test_several_tables_pluralise(self):
+        spec = {"tables": [{"name": "orders"}, {"name": "customers"}]}
+        assert structural_shape("schema_design", spec) == "schema_design:2_tables"
+
+    def test_a_design_with_no_tables_is_its_own_shape(self):
+        assert structural_shape("schema_design", {"tables": []}) == "schema_design:empty"
+
+    def test_an_additive_migration(self):
+        spec = {"steps": [{"kind": "add_column", "reversible": True}]}
+        assert structural_shape("schema_migration", spec) == "schema_migration:additive"
+
+    def test_a_widening_migration(self):
+        spec = {"steps": [{"kind": "widen_type", "reversible": True}]}
+        assert structural_shape("schema_migration", spec) == "schema_migration:type_widening"
+
+    def test_any_irreversible_step_makes_the_whole_migration_destructive(self):
+        """One narrowing step among ten additive ones is still destructive.
+        Trust is granted per shape, so a shape that can hide an irreversible
+        step would let one be auto-applied on the strength of the others."""
+        spec = {
+            "steps": [
+                {"kind": "add_column", "reversible": True},
+                {"kind": "narrow_type", "reversible": False},
+            ]
+        }
+        assert structural_shape("schema_migration", spec) == "schema_migration:destructive"
+
+    def test_a_mixed_reversible_migration_reports_the_widening(self):
+        spec = {
+            "steps": [
+                {"kind": "add_column", "reversible": True},
+                {"kind": "widen_type", "reversible": True},
+            ]
+        }
+        assert structural_shape("schema_migration", spec) == "schema_migration:type_widening"
+
+    def test_the_shape_never_contains_a_table_or_column_name(self):
+        spec = {"tables": [{"name": "customer_ssns"}, {"name": "salaries"}]}
+        shape = structural_shape("schema_design", spec)
+        assert "customer_ssns" not in shape
+        assert "salaries" not in shape
