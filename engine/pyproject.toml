@@ -13,6 +13,7 @@ dependencies = [
   # lumen.llm falls back to the deterministic MockProvider.
   "anthropic>=0.40",
   "openai>=1.55",
+  "asyncpg>=0.30",
 ]
 
 [project.optional-dependencies]
