@@ -14,7 +14,7 @@ from lumen_api.auth.dependencies import Identity
 from lumen_api.datasets.store import SupabaseStorage
 from lumen_api.db.session import user_session
 from lumen_api.settings import get_settings
-from lumen_api.tenant_db import tenant_raw_schema_name, tenant_session
+from lumen_api.tenant_db import tenant_raw_schema_name, tenant_schema_name, tenant_session
 from lumen_worker.ingest import ingest_to_staging
 
 pytestmark = [
@@ -165,3 +165,52 @@ async def test_a_source_with_no_file_is_skipped(identity):
         {"redis": _FakeRedis()}, str(source_id), str(identity.org_id), str(identity.user_id)
     )
     assert result["status"] == "skipped"
+
+
+# ── the design job ──────────────────────────────────────────────────────
+
+from lumen_worker.ingest import design_schema_job  # noqa: E402
+
+
+async def test_the_design_job_creates_an_awaiting_review_proposal(identity):
+    source_id = await _seed(identity, "customers.csv", b"id,name\nc1,Acme\nc2,Globex\n")
+    ctx = {"redis": _FakeRedis()}
+    await ingest_to_staging(ctx, str(source_id), str(identity.org_id), str(identity.user_id))
+
+    result = await design_schema_job(
+        ctx, str(source_id), str(identity.org_id), str(identity.user_id)
+    )
+    assert result["status"] == "proposed"
+
+    async with user_session(identity.user_id) as db:
+        row = (
+            await db.execute(
+                text(
+                    "select kind, status from public.proposals where id = :id"
+                ),
+                {"id": uuid.UUID(result["proposal_id"])},
+            )
+        ).mappings().first()
+    assert row["kind"] == "schema_design"
+    assert str(row["status"]) == "awaiting_review"
+
+
+async def test_nothing_is_created_in_the_modelled_schema_before_acceptance(identity):
+    """D4: staging is immediate, promotion is approved. A table appearing
+    before a human said yes would break the whole propose-then-apply spine."""
+    source_id = await _seed(identity, "customers.csv", b"id\nc1\n")
+    ctx = {"redis": _FakeRedis()}
+    await ingest_to_staging(ctx, str(source_id), str(identity.org_id), str(identity.user_id))
+    await design_schema_job(ctx, str(source_id), str(identity.org_id), str(identity.user_id))
+
+    async with tenant_session(identity.org_id) as db:
+        count = (
+            await db.execute(
+                text(
+                    "select count(*) from information_schema.tables "
+                    "where table_schema = :schema"
+                ),
+                {"schema": tenant_schema_name(identity.org_id)},
+            )
+        ).scalar_one()
+    assert count == 0

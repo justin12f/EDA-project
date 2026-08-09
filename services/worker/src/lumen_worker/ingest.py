@@ -17,6 +17,7 @@ from sqlalchemy import text
 
 from lumen.architect.adapters.file import FileAdapter
 from lumen.readers.exceptions import ReaderError
+from lumen_api.architect import design_schema, enrich_spec, propose_schema
 from lumen_api.datasets.store import SupabaseStorage
 from lumen_api.db.session import user_session
 from lumen_api.settings import get_settings
@@ -92,3 +93,22 @@ async def ingest_to_staging(
 
     await ctx["redis"].enqueue_job("design_schema_job", source_id, org_id, acting_user_id)
     return {"status": "staged", "table": table, "rows": materialised.height}
+
+
+async def design_schema_job(
+    ctx: dict[str, Any], source_id: str, org_id: str, acting_user_id: str
+) -> dict[str, Any]:
+    """Design a schema over everything in staging and propose it.
+
+    Creates nothing in the modelled schema — that happens only when a human
+    accepts the proposal (D4).
+    """
+    source_uuid, org_uuid, user_uuid = (
+        uuid.UUID(source_id), uuid.UUID(org_id), uuid.UUID(acting_user_id)
+    )
+
+    spec = await design_schema(org_uuid, user_uuid, source_uuid)
+    spec = await enrich_spec(spec)
+    proposal_id = await propose_schema(org_uuid, user_uuid, source_uuid, spec)
+
+    return {"status": "proposed", "proposal_id": str(proposal_id), "tables": len(spec.tables)}

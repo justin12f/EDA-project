@@ -20,6 +20,7 @@ from lumen_api.auth.dependencies import Identity, current_identity
 from lumen_api.datasets.store import SupabaseStorage
 from lumen_api.db.session import user_session
 from lumen_api.errors import BadRequest, NotFound, UnsupportedMedia
+from lumen_api.queue import enqueue_job
 
 router = APIRouter(prefix="/v1/sources", tags=["sources"])
 
@@ -114,6 +115,11 @@ async def upload_source(
                 "user": identity.user_id,
             },
         )
+
+    # The API never blocks on ingestion. The row exists, the file is in
+    # Storage, and the customer sees the source immediately; staging and
+    # design happen on the worker.
+    await enqueue_job("ingest_to_staging", str(source_id), str(identity.org_id), str(identity.user_id))
 
     return {
         "id": str(source_id),
