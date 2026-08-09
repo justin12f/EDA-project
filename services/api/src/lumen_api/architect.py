@@ -18,15 +18,28 @@ from typing import Any
 import polars as pl
 from sqlalchemy import text
 
-from lumen.architect.ddl import sanitize_identifier
+from lumen.architect.ddl import render_ddl, sanitize_identifier
+from lumen.architect.spec import (
+    ColumnSpec,
+    Evidence,
+    ForeignKeySpec,
+    SchemaSpec,
+    SqlType,
+    TableSpec,
+)
 from lumen.architect.infer import detect_foreign_keys, infer_sql_type, select_primary_key
-from lumen.architect.spec import ColumnSpec, SchemaSpec, TableSpec
 from lumen.datasets.materialize import frame_schema
 from lumen.llm.base import ChatMessage
 from lumen_api.db.session import user_session
+from lumen_api.lineage import record_schema_table_dependency
 from lumen_api.llm import provider
 from lumen_api.settings import get_settings
-from lumen_api.tenant_db import tenant_raw_schema_name, tenant_schema_name
+from lumen_api.tenant_db import (
+    ensure_tenant_schema,
+    tenant_raw_schema_name,
+    tenant_schema_name,
+    tenant_session,
+)
 
 BACKEND = "polars"
 
@@ -314,3 +327,92 @@ def _describe(spec: SchemaSpec) -> str:
     if observed:
         parts.append(f"{observed} observed relationship{'s' if observed != 1 else ''}")
     return "A database with " + ", ".join(parts) + "."
+
+
+def _spec_from_json(payload: dict[str, Any]) -> SchemaSpec:
+    tables = tuple(
+        TableSpec(
+            name=t["name"],
+            source_id=uuid.UUID(t["source_id"]),
+            source_table=t.get("source_table"),
+            primary_key=tuple(t["primary_key"]) or None,
+            pk_rationale=t.get("pk_rationale", ""),
+            columns=tuple(
+                ColumnSpec(
+                    name=c["name"],
+                    source_column=c["source_column"],
+                    sql_type=SqlType(c["sql_type"]),
+                    type_arg=c.get("type_arg"),
+                    nullable=c.get("nullable", True),
+                    deprecated=c.get("deprecated", False),
+                )
+                for c in t["columns"]
+            ),
+        )
+        for t in payload["tables"]
+    )
+    keys = tuple(
+        ForeignKeySpec(
+            from_table=k["from_table"],
+            from_column=k["from_column"],
+            to_table=k["to_table"],
+            to_column=k["to_column"],
+            containment=k["containment"],
+            enforced=k["enforced"],
+            evidence=tuple(Evidence(e) for e in k["evidence"]),
+            rationale=k.get("rationale", ""),
+        )
+        for k in payload.get("foreign_keys", [])
+    )
+    return SchemaSpec(tables=tables, foreign_keys=keys, layout=payload.get("layout", "merged"))
+
+
+async def apply_schema(
+    org_id: uuid.UUID, user_id: uuid.UUID, spec: SchemaSpec
+) -> dict[str, Any]:
+    """Create the schema, load it from staging, then record it.
+
+    Two sessions, in this order on purpose (spec §3.2). No transaction spans
+    the instances, so one of them must go first — and writing the
+    control-plane record LAST means a crash leaves an applied schema with a
+    proposal still marked accepted, never a record of a schema that does not
+    exist. Reconciliation is a re-run of discovery, which is authoritative.
+    """
+    await ensure_tenant_schema(org_id)
+    schema = tenant_schema_name(org_id)
+    raw = tenant_raw_schema_name(org_id)
+
+    loaded: dict[str, int] = {}
+    async with tenant_session(org_id) as db:
+        for statement in render_ddl(spec, schema):
+            await db.execute(text(statement))
+
+        await db.execute(text("SET CONSTRAINTS ALL DEFERRED"))
+        for table in spec.tables:
+            columns = ", ".join(f'"{c.name}"' for c in table.columns)
+            source = ", ".join(f'"{c.source_column}"' for c in table.columns)
+            await db.execute(text(f'DELETE FROM "{schema}"."{table.name}"'))
+            await db.execute(
+                text(
+                    f'INSERT INTO "{schema}"."{table.name}" ({columns}) '
+                    f'SELECT {source} FROM "{raw}"."{table.source_table}"'
+                )
+            )
+            loaded[table.name] = (
+                await db.execute(text(f'SELECT count(*) FROM "{schema}"."{table.name}"'))
+            ).scalar_one()
+
+    async with user_session(user_id) as db:
+        for table in spec.tables:
+            await db.execute(
+                text(
+                    "update public.data_sources set table_name = :table, row_count = :rows "
+                    "where id = :id"
+                ),
+                {"table": table.name, "rows": loaded[table.name], "id": table.source_id},
+            )
+            await record_schema_table_dependency(
+                db, org_id, table.source_id, [c.source_column for c in table.columns],
+            )
+
+    return {"tables": list(loaded), "rows": loaded, "schema": schema}

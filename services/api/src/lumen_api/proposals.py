@@ -168,6 +168,8 @@ async def decide_proposal(
         result = await _apply_member_role_change(proposal_id, row, identity)
     elif row["kind"] == "entity_mapping":
         result = await _apply_entity_mapping(proposal_id, row, identity)
+    elif row["kind"] in ("schema_design", "schema_migration"):
+        result = await _apply_schema_proposal(proposal_id, row, identity)
     elif row["kind"] in _PIPELINE_KINDS:
         result = await _apply_cleaning_pipeline(proposal_id, row, identity)
     else:
@@ -376,3 +378,26 @@ async def _apply_entity_mapping(proposal_id: uuid.UUID, row: Any, identity: Iden
             "members": members,
         },
     }
+
+
+async def _apply_schema_proposal(
+    proposal_id: uuid.UUID, row: Any, identity: Identity
+) -> dict[str, Any]:
+    """ADR-0024. The DDL runs on the tenant instance; the proposal's own
+    status update is a control-plane write and therefore a second session."""
+    from lumen_api.architect import _spec_from_json, apply_schema
+
+    outcome = await apply_schema(
+        identity.org_id, identity.user_id, _spec_from_json(dict(row["spec"] or {}))
+    )
+
+    async with user_session(identity.user_id) as db:
+        await db.execute(
+            text(
+                "update public.proposals set status = 'applied', decided_by = :user, "
+                "       decided_at = now() where id = :id"
+            ),
+            {"user": identity.user_id, "id": proposal_id},
+        )
+
+    return {"id": str(proposal_id), "status": "applied", **outcome}

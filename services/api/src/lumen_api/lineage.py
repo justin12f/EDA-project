@@ -1,11 +1,13 @@
 """ArtifactDependency: a lineage registry, not a graph engine (ADR-0010).
 
 "Who reads what," written transactionally by the code that already knows the
-dependency at creation time — never inferred later by parsing a spec. Two
+dependency at creation time — never inferred later by parsing a spec. Three
 write sites today: a source's currently-applied pipeline
-(`apply_pipeline.py`) and an approved canonical entity's members
-(`proposals.py`'s entity_mapping accept). `analysis_widget` is a reserved
-`artifact_kind` with no writer yet — see the migration's own note on why.
+(`apply_pipeline.py`), an approved canonical entity's members
+(`proposals.py`'s entity_mapping accept), and a source's currently-modelled
+table (`architect.py`'s `apply_schema`, ADR-0024). `analysis_widget` is a
+reserved `artifact_kind` with no writer yet — see the migration's own note
+on why.
 """
 
 from __future__ import annotations
@@ -90,4 +92,43 @@ async def record_entity_dependency(
             "values (:org, 'canonical_entity', :artifact, :source, :columns)"
         ),
         {"org": org_id, "artifact": entity_id, "source": source_id, "columns": [column]},
+    )
+
+
+async def record_schema_table_dependency(
+    db: AsyncSession,
+    org_id: uuid.UUID,
+    source_id: uuid.UUID,
+    columns: list[str],
+) -> None:
+    """A source has exactly one *current* modelled table — replace, don't
+    accumulate, the same reasoning `replace_pipeline_dependency` uses.
+
+    Unlike `pipeline` (artifact_id = the accepted proposal) or
+    `canonical_entity` (artifact_id = the entity's own row), a modelled
+    table has no pre-existing uuid of its own — `SchemaSpec.TableSpec` is
+    embedded in the proposal's spec, never a row. A fresh id is generated
+    per call, same as a fresh proposal id would be.
+    """
+    await db.execute(
+        text(
+            "delete from public.artifact_dependencies "
+            "where org_id = :org and artifact_kind = 'schema_table' and source_id = :source"
+        ),
+        {"org": org_id, "source": source_id},
+    )
+    if not columns:
+        return
+    await db.execute(
+        text(
+            "insert into public.artifact_dependencies "
+            "(org_id, artifact_kind, artifact_id, source_id, columns) "
+            "values (:org, 'schema_table', :artifact, :source, :columns)"
+        ),
+        {
+            "org": org_id,
+            "artifact": uuid.uuid4(),
+            "source": source_id,
+            "columns": columns,
+        },
     )
