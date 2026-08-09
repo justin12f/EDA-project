@@ -7,6 +7,7 @@ from lumen.architect.adapters.base import (
     SourceAdapter,
 )
 from lumen.architect.adapters.file import FileAdapter
+from lumen.architect.adapters.mysql import MySQLAdapter
 from lumen.architect.adapters.postgres import PostgresAdapter
 
 __all__ = [
@@ -14,6 +15,7 @@ __all__ = [
     "DiscoveredStructure",
     "DiscoveredTable",
     "FileAdapter",
+    "MySQLAdapter",
     "PostgresAdapter",
     "SourceAdapter",
 ]
